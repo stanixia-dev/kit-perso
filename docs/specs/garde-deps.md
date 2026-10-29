@@ -100,7 +100,7 @@ test ! -e docs/specs/garde-deps.md && grep -q '^Statut : livrée$' docs/specs/ar
 - [x] L2 — Tests hors réseau par fixtures (étape 11)
   Fichiers : tests/test_hooks.sh, tests/fixtures/garde-deps.json
   Fait quand : 19 assertions vertes — `test "$(bash tests/test_hooks.sh | grep -c '^OK    garde-deps')" -ge 19 && bash tests/test_hooks.sh`
-- [ ] L3 — Contrôle des dépendances par le relecteur (étape 12)
+- [x] L3 — Contrôle des dépendances par le relecteur (étape 12)
   Fichiers : agents/relecteur.md
   Fait quand : la puce est présente — `grep -q '^- Dépendances :' agents/relecteur.md && grep -q 'requirements\*.txt' agents/relecteur.md && claude plugin validate --strict . && bash tests/test_hooks.sh`
 - [ ] L4 — CI et suivi dans livrer (étapes 13-14)
