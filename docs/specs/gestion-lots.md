@@ -108,7 +108,7 @@ test ! -e docs/specs/gestion-lots.md && grep -q '^Statut : livrée$' docs/specs/
 - [x] L4 — Documenter la fonctionnalité et passer en 0.2.0 (étapes 4-6)
   Fichiers : README.md, CHANGELOG.md, .claude-plugin/plugin.json
   Fait quand : la doc et la version sont à jour — `grep -q '^## Flux avec lots' README.md && grep -q '^## 0.2.0' CHANGELOG.md && grep -q '"version": "0.2.0"' .claude-plugin/plugin.json && claude plugin validate --strict .`
-- [ ] L5 — Clôturer les specs : statut et critères cochés au dernier commit (étapes 8-10)
+- [x] L5 — Clôturer les specs : statut et critères cochés au dernier commit (étapes 8-10)
   Fichiers : agents/specs.md, agents/codeur.md, agents/relecteur.md
   Fait quand : la clôture est présente — `grep -q 'Statut : en cours' agents/specs.md && grep -q '^- Clôture :' agents/codeur.md && grep -q '^- Clôture :' agents/relecteur.md && bash tests/test_hooks.sh`
 - [ ] L6 — Archiver les specs, documenter, puis clôturer et archiver cette spec (étapes 11-17)

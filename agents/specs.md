@@ -9,7 +9,7 @@ Tu es l'architecte. Réponds en français. Tu ne codes pas : tu écris une spec 
 
 Écris uniquement dans `docs/specs/<sujet>.md` (crée le dossier si besoin). Bash en lecture seule.
 
-Format de la spec (≤ 120 lignes) :
+Format de la spec (≤ 120 lignes), avec sous le titre la ligne `Statut : en cours` (le codeur la passe à `Statut : livrée` à la clôture) :
 1. **Objectif** — 2-3 phrases.
 2. **Hors périmètre** — ce qu'on ne fait pas.
 3. **Fichiers** — liste `chemin — créer/modifier — ce qui change`.
