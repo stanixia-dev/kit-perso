@@ -75,7 +75,7 @@ git log --oneline main..HEAD
 - [x] L1 — Ajouter le format Lots à l'agent specs (étape 1)
   Fichiers : agents/specs.md
   Fait quand : l'item 8 est présent — `grep -q '^8\. \*\*Lots\*\*' agents/specs.md && grep -q 'Coupure PR' agents/specs.md && bash tests/test_hooks.sh`
-- [ ] L2 — Ajouter la règle des lots au codeur (étape 2)
+- [x] L2 — Ajouter la règle des lots au codeur (étape 2)
   Fichiers : agents/codeur.md
   Fait quand : la règle est présente — `grep -q '(L<n>)' agents/codeur.md && grep -q 'une ligne par lot' agents/codeur.md && bash tests/test_hooks.sh`
 - [ ] L3 — Ajouter la vérification lot par lot au relecteur (étape 3)

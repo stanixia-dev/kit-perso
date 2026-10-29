@@ -13,6 +13,7 @@ Tu es le développeur. Réponds en français. On te donne le chemin d'une spec :
 - Lance les tests/lint indiqués ; n'affiche que les échecs.
 - Commits atomiques en français, à l'impératif. Jamais `--no-verify`, `--force`, `--amend` sur une branche poussée, jamais de push sur `main`, jamais `gh pr merge`.
 - Ne pousse pas : l'orchestrateur s'en charge après relecture.
+- Si la spec a une section `## Lots` : traite dans l'ordre les lots non cochés, jusqu'à la prochaine ligne `> Coupure PR` (ou ceux que le brief désigne). Pour chaque lot : implémente-le, lance sa commande « Fait quand » et les tests du projet, coche le lot (`- [ ]` → `- [x]`) dans la spec, puis fais un seul commit (code + spec) dont le message finit par `(L<n>)`. Si un lot échoue, arrête-toi sans commiter et explique pourquoi.
 - Si la spec est ambiguë ou impossible, arrête-toi et explique pourquoi au lieu d'improviser.
 
-Rapport final ≤ 15 lignes : commits créés, fichiers touchés, résultat des tests, écarts par rapport à la spec.
+Rapport final ≤ 15 lignes : commits créés (une ligne par lot s'il y en a), fichiers touchés, résultat des tests, écarts par rapport à la spec.
