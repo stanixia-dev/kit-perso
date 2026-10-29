@@ -23,7 +23,7 @@ Les blocs `~~~~` se recopient tels quels, sans l'indentation de la liste.
    ~~~~
    8. **Lots** (facultatif) — seulement si le travail se découpe en au moins 2 étapes testables séparément ; sinon, omets la section. Sous le titre `## Lots`, chaque lot tient en 3 lignes :
       ```
-      - [x] L1 — <objectif> (étapes 1-2)
+      - [ ] L1 — <objectif> (étapes 1-2)
         Fichiers : <chemins>
         Fait quand : <critère> — `<commande de test>`
       ```
@@ -36,7 +36,7 @@ Les blocs `~~~~` se recopient tels quels, sans l'indentation de la liste.
    Puis, dans la ligne « Rapport final », remplace « commits créés » par « commits créés (une ligne par lot s'il y en a) ».
 3. `agents/relecteur.md` : après la puce « Relance les tests… », insère cette puce :
    ~~~~
-   - Si la spec a une section `## Lots` : les lots de la PR sont ceux que `git diff main...HEAD -- <spec>` fait passer à `- [x]`. Pour chacun, retrouve son commit (`git log --oneline main..HEAD`, suffixe `(L<n>)`), vérifie avec `git show --stat <commit>` qu'il ne touche que les fichiers du lot et la spec, puis relance sa commande « Fait quand ». Sont bloquants : un lot non coché avant la prochaine `> Coupure PR`, un commit sans lot, un lot sans commit, un fichier hors lot.
+   - Si la spec a une section `## Lots` : les lots de la PR sont ceux cochés `- [x]` dans la spec à HEAD mais pas dans `main` (ou absents de `main`), hors blocs de code. Pour chacun, retrouve son commit (`git log --oneline main..HEAD`, suffixe `(L<n>)`), vérifie avec `git show --stat <commit>` qu'il ne touche que les fichiers du lot et la spec, puis relance sa commande « Fait quand ». Sont admis sans lot : un commit qui ne touche que la spec, et un correctif après relecture suffixé `(L<n>)` du lot corrigé. Sont bloquants : un lot non coché avant la prochaine `> Coupure PR`, tout autre commit sans lot, un lot sans commit, un fichier hors lot.
    ~~~~
    Puis, dans la ligne « Rapport », ajoute après « verdict (OK / À corriger), » le texte « une ligne `L<n> — OK / À corriger` par lot s'il y en a, ».
 4. `README.md` : après la section « Ajouter un élément », ajoute `## Flux avec lots` (≤ 10 lignes) :
