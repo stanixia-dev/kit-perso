@@ -17,7 +17,7 @@ SAUTE = {
             "--extra", "--index", "--default-index", "--package"},
 }
 OSV_ECO = {"crates": "crates.io", "npm": "npm", "pypi": "PyPI"}
-OK = {"mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "zlib", "0bsd", "unlicense"}
+OK = {"mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "zlib", "0bsd", "unlicense", "cc0-1.0"}
 CLASSIFIERS = {
     "MIT License": "MIT", "Apache Software License": "Apache-2.0", "BSD License": "BSD-3-Clause",
     "ISC License (ISCL)": "ISC", "zlib/libpng License": "Zlib", "The Unlicense (Unlicense)": "Unlicense",
@@ -25,19 +25,129 @@ CLASSIFIERS = {
 }
 ALIAS = {"apache 2.0": "Apache-2.0", "apache license 2.0": "Apache-2.0", "apache-2": "Apache-2.0", "bsd": "BSD-3-Clause"}
 
-def segments(cmd):
-    # Découpe sur ; && || | et retours ligne (approximatif mais suffisant)
-    for seg in re.split(r"\|\||&&|[;|\n]", cmd):
-        try:
-            toks = shlex.split(seg)
-        except ValueError:
-            toks = seg.split()
-        # saute les affectations VAR=val et les préfixes courants
-        while toks and (re.match(r"^\w+=", toks[0]) or toks[0] in ("env", "command", "exec", "time", "nohup")
-                        or toks[0].rsplit("/", 1)[-1] == "rtk" or (toks[0] in ("bypass", "proxy") and len(toks) > 1)):
+class Illisible(Exception):
+    """Commande qui semble ajouter un paquet mais ne peut pas être analysée : bloquée (pas de fail-open)."""
+
+SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
+AJOUT = re.compile(r"\b(cargo\s+add|npm\s+(install|i|add)|pnpm\s+add|yarn\s+add|pip3?\s+install"
+                   r"|uv\s+add|uv\s+pip\s+install|python3?\s+-m\s+pip\s+install)\b")
+PROFONDEUR_MAX = 8
+
+def substitutions(s):
+    """Corps des $( … ) et `…` hors apostrophes (ils s'exécutent aussi entre guillemets doubles)."""
+    out, i, n, sq = [], 0, len(s), False
+    while i < n:
+        c = s[i]
+        if sq:
+            sq = c != "'"
+        elif c == "\\":
+            i += 1
+        elif c == "'":
+            sq = True
+        elif c == "`":
+            j = i + 1
+            while j < n and s[j] != "`":
+                j += 2 if s[j] == "\\" else 1
+            if j >= n:
+                raise Illisible("substitution `…` non fermée")
+            out.append(s[i + 1:j])
+            i = j
+        elif s.startswith("$(", i):
+            j, prof = i + 2, 1
+            while j < n and prof:
+                prof += (s[j] == "(") - (s[j] == ")")
+                j += 1
+            if prof:
+                raise Illisible("substitution $( … ) non fermée")
+            out.append(s[i + 2:j - 1])
+            i = j - 1
+        i += 1
+    return out
+
+def jetons(cmd):
+    lex = shlex.shlex(cmd.replace("\n", " ; "), posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    return list(lex)
+
+def separateur(t):
+    return bool(t) and all(c in ";&|()" for c in t)
+
+def redirection(t):
+    return bool(t) and all(c in "<>&|;()" for c in t) and ("<" in t or ">" in t)
+
+def decoupe(toks):
+    seg = []
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if redirection(t):
+            if seg and seg[-1].isdigit():
+                seg.pop()
+            i += 2
+            continue
+        if separateur(t):
+            if seg:
+                yield seg
+            seg = []
+        else:
+            seg.append(t)
+        i += 1
+    if seg:
+        yield seg
+
+def sans_prefixe(toks):
+    """Saute affectations VAR=val, env (et ses options) et préfixes courants."""
+    while toks:
+        t = toks[0]
+        if t == "env":
             toks = toks[1:]
-        if toks:
-            yield toks
+            while toks and (toks[0].startswith("-") or re.match(r"^\w+=", toks[0])):
+                toks = toks[2:] if toks[0] in ("-u", "-C", "-S", "--unset", "--chdir") else toks[1:]
+        elif (re.match(r"^\w+=", t) or t in ("command", "exec", "time", "nohup")
+              or t.rsplit("/", 1)[-1] == "rtk" or (t in ("bypass", "proxy") and len(toks) > 1)):
+            toks = toks[1:]
+        else:
+            break
+    return toks
+
+def script_shell(toks):
+    """Script passé à `sh -c` / `bash -lc` / `eval`, ou None."""
+    base = toks[0].rsplit("/", 1)[-1]
+    if base == "eval":
+        return " ".join(toks[1:]) or None
+    if base not in SHELLS:
+        return None
+    i = 1
+    while i < len(toks) and toks[i][:1] in "-+" and len(toks[i]) > 1:
+        t = toks[i]
+        if not t.startswith("--") and "c" in t[1:]:
+            return toks[i + 1] if i + 1 < len(toks) else None
+        i += 2 if t in ("-o", "+o") else 1
+    return None
+
+def analyse(cmd, prof=0):
+    """[(registre, nom, version)] ajoutés par cmd, y compris dans les -c, sous-shells et substitutions."""
+    if prof > PROFONDEUR_MAX:
+        raise Illisible("imbrication trop profonde")
+    out = []
+    try:
+        corps = substitutions(cmd)
+        segs = list(decoupe(jetons(cmd)))
+    except (ValueError, Illisible) as e:
+        if AJOUT.search(cmd):
+            raise Illisible(f"commande non analysable ({e}) qui semble ajouter un paquet")
+        return []
+    for c in corps:
+        out += analyse(c, prof + 1)
+    for toks in segs:
+        toks = sans_prefixe(toks)
+        if not toks:
+            continue
+        out += paquets(toks)
+        sc = script_shell(toks)
+        if sc:
+            out += analyse(sc, prof + 1)
+    return out
 
 # ---------- extraction des paquets ----------
 
@@ -104,14 +214,7 @@ def paquets(toks):
     return res
 
 def tous_paquets(cmd):
-    out = []
-    for toks in segments(cmd):
-        out += paquets(toks)
-        if toks[0].rsplit("/", 1)[-1] in ("bash", "sh", "zsh") and "-c" in toks:
-            k = toks.index("-c")
-            if k + 1 < len(toks):
-                out += tous_paquets(toks[k + 1])
-    return out
+    return list(dict.fromkeys(analyse(cmd)))
 
 # ---------- réseau ----------
 
@@ -291,7 +394,12 @@ def examine(registre, nom, exact, blocs, avert):
 def main():
     data = json.load(sys.stdin)
     cmd = (data.get("tool_input") or {}).get("command", "")
-    pqs = tous_paquets(cmd)
+    try:
+        pqs = tous_paquets(cmd)
+    except Illisible as e:
+        print(f"⛔ Bloqué par garde-deps : {e}.\nReformule la commande plus simplement (une commande par appel, "
+              "sans imbrication) ou demande à l'utilisateur d'ajouter lui-même le paquet.", file=sys.stderr)
+        sys.exit(2)
     if not pqs:
         sys.exit(0)
     blocs, avert = [], []
