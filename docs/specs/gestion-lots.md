@@ -23,7 +23,7 @@ Les blocs `~~~~` se recopient tels quels, sans l'indentation de la liste.
    ~~~~
    8. **Lots** (facultatif) — seulement si le travail se découpe en au moins 2 étapes testables séparément ; sinon, omets la section. Sous le titre `## Lots`, chaque lot tient en 3 lignes :
       ```
-      - [ ] L1 — <objectif> (étapes 1-2)
+      - [x] L1 — <objectif> (étapes 1-2)
         Fichiers : <chemins>
         Fait quand : <critère> — `<commande de test>`
       ```
@@ -72,7 +72,7 @@ git log --oneline main..HEAD
 (aucune)
 
 ## Lots
-- [ ] L1 — Ajouter le format Lots à l'agent specs (étape 1)
+- [x] L1 — Ajouter le format Lots à l'agent specs (étape 1)
   Fichiers : agents/specs.md
   Fait quand : l'item 8 est présent — `grep -q '^8\. \*\*Lots\*\*' agents/specs.md && grep -q 'Coupure PR' agents/specs.md && bash tests/test_hooks.sh`
 - [ ] L2 — Ajouter la règle des lots au codeur (étape 2)
