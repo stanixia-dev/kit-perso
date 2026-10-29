@@ -77,12 +77,12 @@ Faire du dépôt `stanixia-dev/kit-perso` à la fois un plugin Claude Code et sa
 - Chaque ajout : montée MINEURE + CHANGELOG + `claude plugin validate --strict .` vert.
 
 ## 6. Critères d'acceptation
-- [ ] `claude plugin validate --strict .` et `claude plugin validate --strict .claude-plugin/plugin.json` sortent en code 0.
-- [ ] `bash tests/test_hooks.sh` sort en code 0, 5 cas `OK`.
-- [ ] Agents et scripts identiques aux originaux (`cmp` silencieux, cf. Tests).
-- [ ] `hooks/hooks.json` ne contient ni `$HOME` ni `/home/dev` ; aucun fichier du dépôt ne contient de token, mot de passe ou e-mail personnel.
-- [ ] Aucun dossier `commands/`, aucun `__pycache__` suivi par git ; `~/.claude` inchangé.
-- [ ] README ≥ 40 mots avec la ligne `/plugin install kit-perso --marketplace stanixia-dev/kit-perso`.
+- [x] `claude plugin validate --strict .` et `claude plugin validate --strict .claude-plugin/plugin.json` sortent en code 0.
+- [x] `bash tests/test_hooks.sh` sort en code 0, 5 cas `OK`.
+- [x] Agents et scripts identiques aux originaux (`cmp` silencieux, cf. Tests).
+- [x] `hooks/hooks.json` ne contient ni `$HOME` ni `/home/dev` ; aucun fichier du dépôt ne contient de token, mot de passe ou e-mail personnel.
+- [x] Aucun dossier `commands/`, aucun `__pycache__` suivi par git ; `~/.claude` inchangé.
+- [x] README ≥ 40 mots avec la ligne `/plugin install kit-perso --marketplace stanixia-dev/kit-perso`.
 
 ## 7. Tests
 ```bash

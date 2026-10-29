@@ -75,7 +75,7 @@ Les blocs `~~~~` se recopient tels quels, sans l'indentation de la liste.
 - [x] `agents/specs.md` contient l'item 8 avec le gabarit à 3 lignes et la règle `> Coupure PR` au-delà de 5 lots.
 - [x] `agents/codeur.md` impose : un commit par lot, suffixe `(L<n>)`, case cochée dans le même commit, arrêt sans commit si un lot échoue.
 - [x] `agents/relecteur.md` délimite les lots de la PR par le diff de la spec, liste les 4 cas bloquants et ajoute une ligne par lot au rapport.
-- [x] Une spec sans `## Lots` ne déclenche aucune règle de lots : chaque ajout de L1-L3 commence par « Si la spec a une section `## Lots` » ou porte la mention « facultatif » ; seules la clôture et l'archivage (L5-L6) valent pour toute spec.
+- [x] Une spec sans `## Lots` ne déclenche aucune règle de lots : chaque ajout de L1-L3 est conditionné (« Si la spec a une section `## Lots` », « facultatif » ou « s'il y en a ») ; seules la clôture et l'archivage (L5-L6) valent pour toute spec.
 - [x] `agents/specs.md` impose `Statut : en cours` sous le titre, un sujet absent de `docs/specs/archives/` et des « Fait quand » sans chemin de spec ; `skills/livrer/SKILL.md` lie la spec archivée quand le chemin donné n'existe plus.
 - [x] `agents/codeur.md` clôture dans le dernier commit (critères remplis cochés, `Statut : livrée`, ligne ajoutée si absente) et archive dans ce même commit par `git mv`, seulement dans la dernière PR.
 - [x] `agents/relecteur.md` retrouve la spec dans `docs/specs/` ou `archives/`, et bloque si statut, cases et emplacement ne concordent pas.
