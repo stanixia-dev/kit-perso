@@ -44,7 +44,7 @@ puis redémarrer Claude Code. Pour développer sans installer : `claude --plugin
 
 ## Contrôle des dépendances
 
-Le hook `garde-deps` examine les ajouts directs de paquets (cargo, npm/pnpm/yarn, pip/uv) et bloque : licence non permissive (hors MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD, Unlicense), faille OSV connue, paquet déprécié ou version yanked, dernière publication de plus de 2 ans.
+Le hook `garde-deps` examine les ajouts directs de paquets (cargo, npm/pnpm/yarn, pip/uv) et bloque : licence non permissive (hors MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD, Unlicense, CC0-1.0), faille OSV connue, paquet déprécié ou version yanked, dernière publication de plus de 2 ans.
 Il avertit pour MPL/LGPL, les avis RustSec informatifs et les registres injoignables (fail-open hors réseau).
 Un paquet refusé, c'est l'utilisateur qui l'ajoute lui-même s'il l'accepte. Le relecteur applique les mêmes règles aux manifestes du diff.
 
