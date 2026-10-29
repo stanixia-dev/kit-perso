@@ -198,5 +198,51 @@
    ]
   }
  },
- "osv-pypi-mpl": {}
+ "osv-pypi-mpl": {},
+ "crates-gpl-pkg": {
+  "crate": {
+   "max_stable_version": "1.0.0",
+   "newest_version": "1.0.0"
+  },
+  "versions": [
+   {
+    "num": "1.0.0",
+    "license": "GPL-3.0-only",
+    "yanked": false,
+    "created_at": "2026-06-01T00:00:00Z"
+   }
+  ]
+ },
+ "osv-crates-gpl-pkg": {},
+ "crates-cc0": {
+  "crate": {
+   "max_stable_version": "1.0.0",
+   "newest_version": "1.0.0"
+  },
+  "versions": [
+   {
+    "num": "1.0.0",
+    "license": "MIT AND CC0-1.0",
+    "yanked": false,
+    "created_at": "2026-06-01T00:00:00Z"
+   }
+  ]
+ },
+ "osv-crates-cc0": {},
+ "pypi-gpl-pkg": {
+  "info": {
+   "version": "1.0.0",
+   "license_expression": "GPL-3.0-only",
+   "classifiers": []
+  },
+  "releases": {
+   "1.0.0": [
+    {
+     "yanked": false,
+     "upload_time_iso_8601": "2026-06-01T00:00:00Z"
+    }
+   ]
+  }
+ },
+ "osv-pypi-gpl-pkg": {}
 }

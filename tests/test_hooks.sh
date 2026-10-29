@@ -15,15 +15,16 @@ sortie_rappel() {
 }
 
 DEPS_ENV="GARDE_DEPS_FIXTURES=tests/fixtures/garde-deps.json GARDE_DEPS_AUJOURDHUI=2026-10-29"
+json_cmd() { local c=${1//\\/\\\\}; printf '{"tool_input":{"command":"%s"}}' "${c//\"/\\\"}"; }
 code_deps() { # $1 = commande
-  printf '{"tool_input":{"command":"%s"}}' "$1" | env $DEPS_ENV python3 hooks/garde-deps.py >/dev/null 2>&1
+  json_cmd "$1" | env $DEPS_ENV python3 hooks/garde-deps.py >/dev/null 2>&1
   echo $?
 }
 sortie_deps() {
-  printf '{"tool_input":{"command":"%s"}}' "$1" | env $DEPS_ENV python3 hooks/garde-deps.py 2>/dev/null
+  json_cmd "$1" | env $DEPS_ENV python3 hooks/garde-deps.py 2>/dev/null
 }
 erreur_deps() {
-  printf '{"tool_input":{"command":"%s"}}' "$1" | env $DEPS_ENV python3 hooks/garde-deps.py 2>&1 >/dev/null
+  json_cmd "$1" | env $DEPS_ENV python3 hooks/garde-deps.py 2>&1 >/dev/null
 }
 
 [ "$(code_garde 'git push origin main')" = 2 ] && ok "garde-git bloque git push origin main" || ko "garde-git push main"
@@ -34,11 +35,16 @@ sortie_rappel 'gh pr create --fill' | grep -q '/clear' && ok "rappel-clear aprè
 
 # garde-deps : "commande|attendu" (0 = passe sans sortie, 2 = bloque)
 for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
-         'npm install' 'pip install -r requirements.txt' 'pip install -e .' 'npm i ./local' 'cargo add --path ../x'; do
+         'npm install' 'pip install -r requirements.txt' 'pip install -e .' 'npm i ./local' 'cargo add --path ../x' \
+         'cargo add cc0' "bash -c 'echo \"a && npm i gpl-pkg\"'" "bash -c 'ls && echo ok'" "git commit -m 'doc: npm i gpl-pkg \`npm i gpl-pkg\`'" 'cargo add bon 2>&1 | tail -1'; do
   [ "$(code_deps "$c")" = 0 ] && [ -z "$(sortie_deps "$c")" ] && ok "garde-deps laisse passer $c" || ko "garde-deps $c"
 done
 for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add deprecie' 'cargo add colle' \
-         'cargo add retire@0.1.0' 'pip install vieux' 'ls && npm i gpl-pkg' "bash -c 'npm i gpl-pkg'"; do
+         'cargo add retire@0.1.0' 'pip install vieux' 'ls && npm i gpl-pkg' "bash -c 'npm i gpl-pkg'" \
+         "bash -c 'cd x && npm i gpl-pkg'" 'sh -c "pip install gpl-pkg"' '(cargo add gpl-pkg)' 'echo $(npm i gpl-pkg)' \
+         'echo `npm i gpl-pkg`' "bash -lc 'npm i gpl-pkg'" "zsh -c 'ls; npm i gpl-pkg'" 'env FOO=1 npm i gpl-pkg' \
+         'echo "$(npm i gpl-pkg)"' "bash -c \"sh -c 'npm i gpl-pkg'\"" \
+         "bash -c 'npm i gpl-pkg" 'echo "ok; npm i gpl-pkg'; do
   [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"
 done
 [ "$(code_deps 'cargo add faille@1.2.3')" = 2 ] && erreur_deps 'cargo add faille@1.2.3' | grep -q 'RUSTSEC-2099-0001' \
