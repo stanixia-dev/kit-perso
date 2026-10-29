@@ -1,5 +1,5 @@
 # Spec — garde-deps
-Statut : en cours
+Statut : livrée
 
 ## 1. Objectif
 Version 0.3.0 de kit-perso. Un hook `garde-deps` bloque l'ajout d'un paquet (cargo, npm/pnpm/yarn, pip/uv) dont la licence n'est pas permissive, qui a une faille OSV connue, qui est déprécié ou yanked, ou dont la dernière version a plus de 2 ans. Le relecteur applique les mêmes règles aux manifestes du diff ; une CI GitHub minimale lance `tests/test_hooks.sh`, et `livrer` la suit.
@@ -69,14 +69,14 @@ Version 0.3.0 de kit-perso. Un hook `garde-deps` bloque l'ajout d'un paquet (car
 17. (L5) Clôture selon `agents/codeur.md` (critères cochés, `Statut : livrée`, `git mv` vers `docs/specs/archives/garde-deps.md`) dans le commit de L5.
 
 ## 5. Critères d'acceptation
-- [ ] Les trois sorties (blocage sur stderr + `exit 2`, avertissement JSON + `exit 0`, silence) suivent l'étape 9 ; aucune requête réseau si la commande n'ajoute aucun paquet ou si `GARDE_DEPS_FIXTURES` est défini.
-- [ ] Les 6 causes de blocage (licence, faille, déprécié, yanked, > 2 ans, version inconnue) et le fail-open (injoignable, exception) sont implémentés.
-- [ ] `hooks/hooks.json` déclare garde-deps sans `onFailure` ; `garde-git.py` et `rappel-clear.py` sont inchangés (`git diff --stat main...HEAD`).
-- [ ] `tests/test_hooks.sh` contient au moins 19 assertions garde-deps, toutes vertes, sans réseau.
-- [ ] `agents/relecteur.md` contient la puce « Dépendances » de l'étape 12.
-- [ ] `tests.yml` épingle `actions/checkout` par SHA, `permissions: contents: read` ; `livrer` suit la CI et signale un échec.
-- [ ] README, CHANGELOG `## 0.3.0` et `plugin.json` `0.3.0` à jour ; `claude plugin validate --strict .` vert.
-- [ ] 5 commits suffixés `(L1)` à `(L5)` ; spec archivée et livrée.
+- [x] Les trois sorties (blocage sur stderr + `exit 2`, avertissement JSON + `exit 0`, silence) suivent l'étape 9 ; aucune requête réseau si la commande n'ajoute aucun paquet ou si `GARDE_DEPS_FIXTURES` est défini.
+- [x] Les 6 causes de blocage (licence, faille, déprécié, yanked, > 2 ans, version inconnue) et le fail-open (injoignable, exception) sont implémentés.
+- [x] `hooks/hooks.json` déclare garde-deps sans `onFailure` ; `garde-git.py` et `rappel-clear.py` sont inchangés (`git diff --stat main...HEAD`).
+- [x] `tests/test_hooks.sh` contient au moins 19 assertions garde-deps, toutes vertes, sans réseau.
+- [x] `agents/relecteur.md` contient la puce « Dépendances » de l'étape 12.
+- [x] `tests.yml` épingle `actions/checkout` par SHA, `permissions: contents: read` ; `livrer` suit la CI et signale un échec.
+- [x] README, CHANGELOG `## 0.3.0` et `plugin.json` `0.3.0` à jour ; `claude plugin validate --strict .` vert.
+- [x] 5 commits suffixés `(L1)` à `(L5)` ; spec archivée et livrée.
 
 ## 6. Tests
 ```
@@ -106,6 +106,6 @@ test ! -e docs/specs/garde-deps.md && grep -q '^Statut : livrée$' docs/specs/ar
 - [x] L4 — CI et suivi dans livrer (étapes 13-14)
   Fichiers : .github/workflows/tests.yml, skills/livrer/SKILL.md
   Fait quand : action épinglée, suivi présent — `grep -Eq 'uses: actions/checkout@[0-9a-f]{40} # ' .github/workflows/tests.yml && grep -q 'bash tests/test_hooks.sh' .github/workflows/tests.yml && grep -q 'gh pr checks --watch' skills/livrer/SKILL.md && claude plugin validate --strict . && bash tests/test_hooks.sh`
-- [ ] L5 — Doc, 0.3.0, clôture et archivage (étapes 15-17)
+- [x] L5 — Doc, 0.3.0, clôture et archivage (étapes 15-17)
   Fichiers : README.md, CHANGELOG.md, .claude-plugin/plugin.json
   Fait quand : doc et version à jour — `grep -q '^## Contrôle des dépendances' README.md && grep -q '3 hooks' README.md && grep -q '^## 0.3.0' CHANGELOG.md && grep -q '"version": "0.3.0"' .claude-plugin/plugin.json && claude plugin validate --strict . && bash tests/test_hooks.sh`

@@ -1,6 +1,6 @@
 # kit-perso
 
-Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks de garde-fous git (garde-git, rappel-clear) et les skills (livrer) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
+Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, rappel-clear) et les skills (livrer) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
 
 ## Installation
 
@@ -17,7 +17,7 @@ Ou en deux temps dans une session :
 /plugin install kit-perso@kit-perso
 ```
 
-Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 1 skill, 2 hooks. Les agents s'appellent `kit-perso:codeur`, etc. ; le skill `/kit-perso:livrer`.
+Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 1 skill, 3 hooks. Les agents s'appellent `kit-perso:codeur`, etc. ; le skill `/kit-perso:livrer`.
 
 ## Mise à jour
 
@@ -42,7 +42,13 @@ puis redémarrer Claude Code. Pour développer sans installer : `claude --plugin
 - Hook : script dans `hooks/`, déclaré dans `hooks/hooks.json` via `${CLAUDE_PLUGIN_ROOT}`, cas ajouté à `tests/test_hooks.sh`.
 - Chaque ajout : montée MINEURE, entrée au CHANGELOG, et `claude plugin validate --strict .` vert.
 
-Tests : `bash tests/test_hooks.sh`.
+## Contrôle des dépendances
+
+Le hook `garde-deps` examine les ajouts directs de paquets (cargo, npm/pnpm/yarn, pip/uv) et bloque : licence non permissive (hors MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD, Unlicense), faille OSV connue, paquet déprécié ou version yanked, dernière publication de plus de 2 ans.
+Il avertit pour MPL/LGPL, les avis RustSec informatifs et les registres injoignables (fail-open hors réseau).
+Un paquet refusé, c'est l'utilisateur qui l'ajoute lui-même s'il l'accepte. Le relecteur applique les mêmes règles aux manifestes du diff.
+
+Tests : `bash tests/test_hooks.sh`, hors réseau (réponses simulées dans `tests/fixtures/garde-deps.json`) ; la CI GitHub les lance sur chaque PR et push sur `main`.
 
 ## Flux avec lots
 
