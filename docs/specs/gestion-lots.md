@@ -81,6 +81,6 @@ git log --oneline main..HEAD
 - [x] L3 — Ajouter la vérification lot par lot au relecteur (étape 3)
   Fichiers : agents/relecteur.md
   Fait quand : la vérification est présente — `grep -q 'git show --stat' agents/relecteur.md && grep -q 'L<n> — OK' agents/relecteur.md && bash tests/test_hooks.sh`
-- [ ] L4 — Documenter la fonctionnalité et passer en 0.2.0 (étapes 4-6)
+- [x] L4 — Documenter la fonctionnalité et passer en 0.2.0 (étapes 4-6)
   Fichiers : README.md, CHANGELOG.md, .claude-plugin/plugin.json
   Fait quand : la doc et la version sont à jour — `grep -q '^## Flux avec lots' README.md && grep -q '^## 0.2.0' CHANGELOG.md && grep -q '"version": "0.2.0"' .claude-plugin/plugin.json && claude plugin validate --strict .`

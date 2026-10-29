@@ -44,6 +44,13 @@ puis redémarrer Claude Code. Pour développer sans installer : `claude --plugin
 
 Tests : `bash tests/test_hooks.sh`.
 
+## Flux avec lots
+
+À utiliser quand la spec se découpe en lots testables séparément ; sinon, le flux reste inchangé. Le format est l'item 8 de `agents/specs.md`.
+
+- Un lot = un commit vert sur `claude/<sujet>`, coché dans la spec ; une seule PR ; un seul relecteur, à la fin.
+- Avec `> Coupure PR` : livrer la première PR, attendre que l'utilisateur la fusionne, faire `/clear`, puis créer `claude/<sujet>-2` depuis `main` à jour ; le codeur reprend aux lots non cochés (les cases cochées sont arrivées dans `main` avec la fusion).
+
 ## Bascule depuis ~/.claude
 
 1. Installer le plugin (voir ci-dessus) et vérifier avec `claude plugin details`.
