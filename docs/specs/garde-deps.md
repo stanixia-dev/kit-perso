@@ -103,7 +103,7 @@ test ! -e docs/specs/garde-deps.md && grep -q '^Statut : livrée$' docs/specs/ar
 - [x] L3 — Contrôle des dépendances par le relecteur (étape 12)
   Fichiers : agents/relecteur.md
   Fait quand : la puce est présente — `grep -q '^- Dépendances :' agents/relecteur.md && grep -q 'requirements\*.txt' agents/relecteur.md && claude plugin validate --strict . && bash tests/test_hooks.sh`
-- [ ] L4 — CI et suivi dans livrer (étapes 13-14)
+- [x] L4 — CI et suivi dans livrer (étapes 13-14)
   Fichiers : .github/workflows/tests.yml, skills/livrer/SKILL.md
   Fait quand : action épinglée, suivi présent — `grep -Eq 'uses: actions/checkout@[0-9a-f]{40} # ' .github/workflows/tests.yml && grep -q 'bash tests/test_hooks.sh' .github/workflows/tests.yml && grep -q 'gh pr checks --watch' skills/livrer/SKILL.md && claude plugin validate --strict . && bash tests/test_hooks.sh`
 - [ ] L5 — Doc, 0.3.0, clôture et archivage (étapes 15-17)
