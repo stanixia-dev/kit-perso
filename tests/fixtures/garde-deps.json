@@ -1,0 +1,202 @@
+{
+ "crates-bon": {
+  "crate": {
+   "max_stable_version": "1.0.0",
+   "newest_version": "1.0.0"
+  },
+  "versions": [
+   {
+    "num": "1.0.0",
+    "license": "MIT OR Apache-2.0",
+    "yanked": false,
+    "created_at": "2026-06-01T00:00:00Z"
+   }
+  ]
+ },
+ "osv-crates-bon": {},
+ "npm-@scope__ok": {
+  "dist-tags": {
+   "latest": "1.0.0"
+  },
+  "versions": {
+   "1.0.0": {
+    "license": "ISC"
+   }
+  },
+  "time": {
+   "created": "2020-01-01T00:00:00Z",
+   "modified": "2026-06-01T00:00:00Z",
+   "1.0.0": "2026-06-01T00:00:00Z"
+  }
+ },
+ "osv-npm-@scope__ok": {},
+ "crates-mixte": {
+  "crate": {
+   "max_stable_version": "1.0.0",
+   "newest_version": "1.0.0"
+  },
+  "versions": [
+   {
+    "num": "1.0.0",
+    "license": "(GPL-3.0 OR MIT) AND Apache-2.0",
+    "yanked": false,
+    "created_at": "2026-06-01T00:00:00Z"
+   }
+  ]
+ },
+ "osv-crates-mixte": {},
+ "npm-gpl-pkg": {
+  "dist-tags": {
+   "latest": "1.0.0"
+  },
+  "versions": {
+   "1.0.0": {
+    "license": "GPL-3.0-only"
+   }
+  },
+  "time": {
+   "created": "2020-01-01T00:00:00Z",
+   "modified": "2026-06-01T00:00:00Z",
+   "1.0.0": "2026-06-01T00:00:00Z"
+  }
+ },
+ "osv-npm-gpl-pkg": {},
+ "npm-sanslicence": {
+  "dist-tags": {
+   "latest": "1.0.0"
+  },
+  "versions": {
+   "1.0.0": {}
+  },
+  "time": {
+   "created": "2020-01-01T00:00:00Z",
+   "modified": "2026-06-01T00:00:00Z",
+   "1.0.0": "2026-06-01T00:00:00Z"
+  }
+ },
+ "osv-npm-sanslicence": {},
+ "npm-prive": {
+  "dist-tags": {
+   "latest": "1.0.0"
+  },
+  "versions": {
+   "1.0.0": {
+    "license": "UNLICENSED"
+   }
+  },
+  "time": {
+   "created": "2020-01-01T00:00:00Z",
+   "modified": "2026-06-01T00:00:00Z",
+   "1.0.0": "2026-06-01T00:00:00Z"
+  }
+ },
+ "osv-npm-prive": {},
+ "npm-deprecie": {
+  "dist-tags": {
+   "latest": "1.0.0"
+  },
+  "versions": {
+   "1.0.0": {
+    "license": "MIT",
+    "deprecated": "remplacé par autre"
+   }
+  },
+  "time": {
+   "created": "2020-01-01T00:00:00Z",
+   "modified": "2026-06-01T00:00:00Z",
+   "1.0.0": "2026-06-01T00:00:00Z"
+  }
+ },
+ "osv-npm-deprecie": {},
+ "crates-colle": {
+  "crate": {
+   "max_stable_version": "1.0.0",
+   "newest_version": "1.0.0"
+  },
+  "versions": [
+   {
+    "num": "1.0.0",
+    "license": "MIT AND GPL-2.0",
+    "yanked": false,
+    "created_at": "2026-06-01T00:00:00Z"
+   }
+  ]
+ },
+ "osv-crates-colle": {},
+ "crates-retire": {
+  "crate": {
+   "max_stable_version": "0.2.0",
+   "newest_version": "0.1.0"
+  },
+  "versions": [
+   {
+    "num": "0.1.0",
+    "license": "MIT",
+    "yanked": true,
+    "created_at": "2026-06-01T00:00:00Z"
+   },
+   {
+    "num": "0.2.0",
+    "license": "MIT",
+    "yanked": false,
+    "created_at": "2026-06-01T00:00:00Z"
+   }
+  ]
+ },
+ "osv-crates-retire": {},
+ "pypi-vieux": {
+  "info": {
+   "version": "1.0.0",
+   "license_expression": "MIT",
+   "classifiers": []
+  },
+  "releases": {
+   "1.0.0": [
+    {
+     "yanked": false,
+     "upload_time_iso_8601": "2020-01-01T00:00:00Z"
+    }
+   ]
+  }
+ },
+ "osv-pypi-vieux": {},
+ "crates-faille": {
+  "crate": {
+   "max_stable_version": "1.2.3",
+   "newest_version": "1.2.3"
+  },
+  "versions": [
+   {
+    "num": "1.2.3",
+    "license": "MIT",
+    "yanked": false,
+    "created_at": "2026-06-01T00:00:00Z"
+   }
+  ]
+ },
+ "osv-crates-faille": {
+  "vulns": [
+   {
+    "id": "RUSTSEC-2099-0001"
+   }
+  ]
+ },
+ "pypi-mpl": {
+  "info": {
+   "version": "1.0.0",
+   "license_expression": null,
+   "classifiers": [
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)"
+   ]
+  },
+  "releases": {
+   "1.0.0": [
+    {
+     "yanked": false,
+     "upload_time_iso_8601": "2026-06-01T00:00:00Z"
+    }
+   ]
+  }
+ },
+ "osv-pypi-mpl": {}
+}

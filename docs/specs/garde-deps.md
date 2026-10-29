@@ -97,7 +97,7 @@ test ! -e docs/specs/garde-deps.md && grep -q '^Statut : livrée$' docs/specs/ar
 - [x] L1 — Hook garde-deps et déclaration (étapes 1-10)
   Fichiers : hooks/garde-deps.py, hooks/hooks.json
   Fait quand : silencieux hors ajout, fail-open sans réseau — `python3 -m py_compile hooks/garde-deps.py && [ -z "$(printf '{"tool_input":{"command":"ls"}}' | python3 hooks/garde-deps.py)" ] && printf '{"tool_input":{"command":"cargo add serde"}}' | GARDE_DEPS_FIXTURES=/dev/null python3 hooks/garde-deps.py | grep -q 'vérification impossible' && grep -q 'garde-deps.py' hooks/hooks.json && claude plugin validate --strict . && bash tests/test_hooks.sh`
-- [ ] L2 — Tests hors réseau par fixtures (étape 11)
+- [x] L2 — Tests hors réseau par fixtures (étape 11)
   Fichiers : tests/test_hooks.sh, tests/fixtures/garde-deps.json
   Fait quand : 19 assertions vertes — `test "$(bash tests/test_hooks.sh | grep -c '^OK    garde-deps')" -ge 19 && bash tests/test_hooks.sh`
 - [ ] L3 — Contrôle des dépendances par le relecteur (étape 12)
