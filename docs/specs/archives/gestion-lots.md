@@ -1,5 +1,5 @@
 # Spec — gestion de lots
-Statut : en cours
+Statut : livrée
 
 ## 1. Objectif
 Permettre de découper une spec en lots livrés l'un après l'autre sur la même branche : un lot = un commit vert, coché dans la spec. Il reste une seule PR et un seul passage du relecteur. Une petite spec n'a pas de section Lots et le flux actuel ne change pas. Toute spec, avec ou sans lots, porte un statut (`en cours` → `livrée`), se clôture dans le dernier commit du codeur et part alors dans `docs/specs/archives/`.
@@ -72,17 +72,17 @@ Les blocs `~~~~` se recopient tels quels, sans l'indentation de la liste.
 17. (L6) Clôture de cette spec, dans le commit de L6 et dans cet ordre : a) étapes 11-16 ; b) commande « Fait quand » de L6 ; c) coche L6 et tous les critères de la section 5 (ceux sur le log, le diff et l'archivage se cochent par anticipation : le relecteur les vérifie avec la section 6), et remplace `Statut : en cours` par `Statut : livrée` ; d) `mkdir -p docs/specs/archives && git mv docs/specs/gestion-lots.md docs/specs/archives/gestion-lots.md`, puis ajoute `Statut : livrée` sous le titre de `docs/specs/plugin-kit-perso.md` et `git mv` vers `docs/specs/archives/plugin-kit-perso.md` ; e) `git add` des fichiers du lot et des deux specs archivées, commit suffixé `(L6)` ; f) dernière commande de la section 6. Aucun « Fait quand » ne cite la spec : tous restent valides après le déplacement.
 
 ## 5. Critères d'acceptation
-- [ ] `agents/specs.md` contient l'item 8 avec le gabarit à 3 lignes et la règle `> Coupure PR` au-delà de 5 lots.
-- [ ] `agents/codeur.md` impose : un commit par lot, suffixe `(L<n>)`, case cochée dans le même commit, arrêt sans commit si un lot échoue.
-- [ ] `agents/relecteur.md` délimite les lots de la PR par le diff de la spec, liste les 4 cas bloquants et ajoute une ligne par lot au rapport.
-- [ ] Une spec sans `## Lots` ne déclenche aucune règle de lots : chaque ajout de L1-L3 commence par « Si la spec a une section `## Lots` » ou porte la mention « facultatif » ; seules la clôture et l'archivage (L5-L6) valent pour toute spec.
-- [ ] `agents/specs.md` impose `Statut : en cours` sous le titre, un sujet absent de `docs/specs/archives/` et des « Fait quand » sans chemin de spec ; `skills/livrer/SKILL.md` lie la spec archivée quand le chemin donné n'existe plus.
-- [ ] `agents/codeur.md` clôture dans le dernier commit (critères remplis cochés, `Statut : livrée`, ligne ajoutée si absente) et archive dans ce même commit par `git mv`, seulement dans la dernière PR.
-- [ ] `agents/relecteur.md` retrouve la spec dans `docs/specs/` ou `archives/`, et bloque si statut, cases et emplacement ne concordent pas.
-- [ ] README (`## Flux avec lots`, `## Clôture et archivage`), CHANGELOG (`## 0.2.0` à 2 puces, pas de `## 0.3.0`) et `plugin.json` (`0.2.0`) sont à jour.
-- [ ] `git log --oneline main..HEAD` montre 6 commits suffixés `(L1)` à `(L6)`, plus le correctif `042b624` suffixé `(L3)` ; seuls les commits qui ne touchent que la spec n'ont pas de suffixe, et les 6 lots ci-dessous sont cochés.
-- [ ] Les fichiers listés en Hors périmètre sont inchangés : `git diff --stat main...HEAD` ne liste que les 7 fichiers de la section 3, `docs/specs/archives/gestion-lots.md` et le déplacement de `plugin-kit-perso.md` vers `docs/specs/archives/`.
-- [ ] Cette spec est clôturée et archivée : la dernière commande de la section 6 réussit.
+- [x] `agents/specs.md` contient l'item 8 avec le gabarit à 3 lignes et la règle `> Coupure PR` au-delà de 5 lots.
+- [x] `agents/codeur.md` impose : un commit par lot, suffixe `(L<n>)`, case cochée dans le même commit, arrêt sans commit si un lot échoue.
+- [x] `agents/relecteur.md` délimite les lots de la PR par le diff de la spec, liste les 4 cas bloquants et ajoute une ligne par lot au rapport.
+- [x] Une spec sans `## Lots` ne déclenche aucune règle de lots : chaque ajout de L1-L3 commence par « Si la spec a une section `## Lots` » ou porte la mention « facultatif » ; seules la clôture et l'archivage (L5-L6) valent pour toute spec.
+- [x] `agents/specs.md` impose `Statut : en cours` sous le titre, un sujet absent de `docs/specs/archives/` et des « Fait quand » sans chemin de spec ; `skills/livrer/SKILL.md` lie la spec archivée quand le chemin donné n'existe plus.
+- [x] `agents/codeur.md` clôture dans le dernier commit (critères remplis cochés, `Statut : livrée`, ligne ajoutée si absente) et archive dans ce même commit par `git mv`, seulement dans la dernière PR.
+- [x] `agents/relecteur.md` retrouve la spec dans `docs/specs/` ou `archives/`, et bloque si statut, cases et emplacement ne concordent pas.
+- [x] README (`## Flux avec lots`, `## Clôture et archivage`), CHANGELOG (`## 0.2.0` à 2 puces, pas de `## 0.3.0`) et `plugin.json` (`0.2.0`) sont à jour.
+- [x] `git log --oneline main..HEAD` montre 6 commits suffixés `(L1)` à `(L6)`, plus le correctif `042b624` suffixé `(L3)` ; seuls les commits qui ne touchent que la spec n'ont pas de suffixe, et les 6 lots ci-dessous sont cochés.
+- [x] Les fichiers listés en Hors périmètre sont inchangés : `git diff --stat main...HEAD` ne liste que les 7 fichiers de la section 3, `docs/specs/archives/gestion-lots.md` et le déplacement de `plugin-kit-perso.md` vers `docs/specs/archives/`.
+- [x] Cette spec est clôturée et archivée : la dernière commande de la section 6 réussit.
 
 ## 6. Tests
 ```
@@ -111,6 +111,6 @@ test ! -e docs/specs/gestion-lots.md && grep -q '^Statut : livrée$' docs/specs/
 - [x] L5 — Clôturer les specs : statut et critères cochés au dernier commit (étapes 8-10)
   Fichiers : agents/specs.md, agents/codeur.md, agents/relecteur.md
   Fait quand : la clôture est présente — `grep -q 'Statut : en cours' agents/specs.md && grep -q '^- Clôture :' agents/codeur.md && grep -q '^- Clôture :' agents/relecteur.md && bash tests/test_hooks.sh`
-- [ ] L6 — Archiver les specs, documenter, puis clôturer et archiver cette spec (étapes 11-17)
+- [x] L6 — Archiver les specs, documenter, puis clôturer et archiver cette spec (étapes 11-17)
   Fichiers : agents/specs.md, agents/codeur.md, agents/relecteur.md, skills/livrer/SKILL.md, README.md, CHANGELOG.md, docs/specs/plugin-kit-perso.md
   Fait quand : l'archivage est en place — `test "$(grep -l 'docs/specs/archives/' agents/specs.md agents/codeur.md agents/relecteur.md skills/livrer/SKILL.md | wc -l)" = 4 && grep -q '^## Clôture et archivage' README.md && grep -q 'archives' CHANGELOG.md && ! grep -q '^## 0.3' CHANGELOG.md && claude plugin validate --strict . && bash tests/test_hooks.sh`

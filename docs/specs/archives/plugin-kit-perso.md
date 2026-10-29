@@ -1,4 +1,5 @@
 # Spec — plugin Claude Code « kit-perso »
+Statut : livrée
 
 ## 1. Objectif
 Faire du dépôt `stanixia-dev/kit-perso` à la fois un plugin Claude Code et sa propre marketplace, pour centraliser agents, skills et hooks personnels et les installer sur tout projet via `/plugin marketplace add stanixia-dev/kit-perso` puis `/plugin install kit-perso@kit-perso`. On y migre les 4 agents et les 2 hooks de `~/.claude`, on ajoute un skill d'exemple et une convention d'ajout.

@@ -15,6 +15,7 @@ Tu es le développeur. Réponds en français. On te donne le chemin d'une spec :
 - Ne pousse pas : l'orchestrateur s'en charge après relecture.
 - Si la spec a une section `## Lots` : traite dans l'ordre les lots non cochés, jusqu'à la prochaine ligne `> Coupure PR` (ou ceux que le brief désigne). Pour chaque lot : implémente-le, lance sa commande « Fait quand » et les tests du projet, coche le lot (`- [ ]` → `- [x]`) dans la spec, puis fais un seul commit (code + spec) dont le message finit par `(L<n>)`. Si un lot échoue, arrête-toi sans commiter et explique pourquoi.
 - Clôture : dans le commit qui coche le dernier lot de la spec (ou, sans `## Lots`, dans ton dernier commit), coche aussi les critères d'acceptation remplis et remplace `Statut : en cours` par `Statut : livrée` (ajoute la ligne sous le titre si elle manque). Si un critère n'est pas rempli, laisse-le décoché, garde `Statut : en cours` et signale-le.
+- Archivage : dans ce même commit, si la spec passe à `livrée`, après les tests et la mise à jour des cases et du statut, fais `mkdir -p docs/specs/archives && git mv docs/specs/<sujet>.md docs/specs/archives/<sujet>.md`, puis `git add` le nouveau chemin et commite. Avec `> Coupure PR`, seule la PR du dernier lot archive. Si le chemin de spec reçu n'existe plus, cherche-la dans `docs/specs/archives/`.
 - Si la spec est ambiguë ou impossible, arrête-toi et explique pourquoi au lieu d'improviser.
 
 Rapport final ≤ 15 lignes : commits créés (une ligne par lot s'il y en a), fichiers touchés, résultat des tests, écarts par rapport à la spec.
