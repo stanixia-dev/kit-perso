@@ -4,13 +4,13 @@ Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il 
 
 ## Installation
 
-En une ligne (portée utilisateur, tous projets) :
+En une ligne depuis le terminal (portée utilisateur, tous projets) :
 
 ```
-/plugin install kit-perso --marketplace stanixia-dev/kit-perso
+claude plugin install kit-perso --marketplace stanixia-dev/kit-perso
 ```
 
-Ou en deux temps :
+Ou en deux temps dans une session :
 
 ```
 /plugin marketplace add stanixia-dev/kit-perso
