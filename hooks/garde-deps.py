@@ -11,7 +11,8 @@ DEBUT = time.monotonic()
 
 SAUTE = {
     "cargo": {"-F", "--features", "-p", "--package", "--rename", "--registry", "--manifest-path", "--target"},
-    "npm": {"--registry", "--prefix", "-w", "--workspace", "--omit", "--tag"},
+    "npm": {"--registry", "--prefix", "-w", "--workspace", "--omit", "--include", "--tag", "--cache", "--userconfig",
+            "--loglevel", "-C", "--dir", "--cwd", "-F", "--filter"},
     "pip": {"-r", "--requirement", "-e", "--editable", "-c", "--constraint", "-i", "--index-url",
             "--extra-index-url", "-f", "--find-links", "-t", "--target", "--prefix", "--group", "--optional",
             "--extra", "--index", "--default-index", "--package"},
@@ -29,12 +30,98 @@ class Illisible(Exception):
     """Commande qui semble ajouter un paquet mais ne peut pas être analysée : bloquée (pas de fail-open)."""
 
 SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
-AJOUT = re.compile(r"\b(cargo\s+add|npm\s+(install|i|add)|pnpm\s+add|yarn\s+add|pip3?\s+install"
-                   r"|uv\s+add|uv\s+pip\s+install|python3?\s+-m\s+pip\s+install)\b")
+AJOUT = re.compile(r"\b(cargo\s+add|(npm|pnpm|yarn)\s+(\S+\s+){0,4}?(install|i|add)|pip[\d.]*\s+install"
+                   r"|uv\s+add|uv\s+pip\s+install|python[\d.]*\s+(\S+\s+)*?-m\s*pip\s+install)\b")
 PROFONDEUR_MAX = 8
+MOTS_CLES = {"{", "}", "!", "if", "then", "else", "elif", "do", "while", "until", "for", "case"}
+OPT_VALEUR = {
+    "timeout": {"-s", "-k", "--signal", "--kill-after"},
+    "nice": {"-n", "--adjustment"},
+    "sudo": {"-u", "-g", "-C", "-h", "-p", "-r", "-t", "-U", "-D", "-R", "-T", "--user", "--group", "--host",
+             "--prompt", "--role", "--type", "--chdir"},
+    "xargs": {"-I", "-n", "-P", "-L", "-s", "-d", "-E", "-a", "-J", "--max-args", "--max-procs", "--max-lines",
+              "--delimiter", "--arg-file", "--eof"},
+    "exec": {"-a"},
+    "command": set(), "time": set(), "nohup": set(),
+}
+HEREDOC = re.compile(r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|\\?([A-Za-z_]\w*))")
+RECEVEUR_SHELL = re.compile(r"(?<![\w.-])(bash|sh|zsh|dash|ksh|eval|source)(?![\w.-])")
 
-def substitutions(s):
-    """Corps des $( … ) et `…` hors apostrophes (ils s'exécutent aussi entre guillemets doubles)."""
+def premier_heredoc(s, debut=0):
+    """Match du premier `<<DELIM` (hors `<<<`) situé dans du code, pas dans une chaîne (sauf dans un $( … ))."""
+    frames, i, n = [["c", 0]], 0, len(s)
+    while i < n:
+        c, k = s[i], frames[-1][0]
+        if c == "\\":
+            i += 2
+            continue
+        if c == "`":
+            j = s.find("`", i + 1)
+            i = n if j < 0 else j
+        elif k == "d":
+            if c == '"':
+                frames.pop()
+            elif s.startswith("$(", i):
+                frames.append(["c", 0])
+                i += 1
+        elif c == "'":
+            j = s.find("'", i + 1)
+            i = n if j < 0 else j
+        elif c == '"':
+            frames.append(["d", 0])
+        elif s.startswith("$(", i):
+            frames.append(["c", 0])
+            i += 1
+        elif c == "(":
+            frames[-1][1] += 1
+        elif c == ")":
+            if frames[-1][1]:
+                frames[-1][1] -= 1
+            elif len(frames) > 1:
+                frames.pop()
+        elif s.startswith("<<", i):
+            if s.startswith("<<<", i):
+                i += 3
+                continue
+            m = HEREDOC.match(s, i)
+            if m and i >= debut:
+                return m
+            i += 2
+            continue
+        i += 1
+    return None
+
+def retire_heredocs(s):
+    """(commande sans corps de heredoc, [(corps, reçu par un shell, délimiteur cité)]).
+    Un heredoc sans ligne délimiteur est laissé tel quel (donc analysé)."""
+    extras, debut = [], 0
+    while True:
+        m = premier_heredoc(s, debut)
+        if not m:
+            return s, extras
+        delim = next(g for g in m.group(2, 3, 4) if g is not None)
+        cite = m.group(4) is None or s[m.start(4) - 1] == "\\"
+        nl = s.find("\n", m.end())
+        corps = None
+        pos = nl + 1
+        while nl >= 0 and pos <= len(s):
+            fin = s.find("\n", pos)
+            fin = len(s) if fin < 0 else fin
+            ligne = s[pos:fin]
+            if (ligne.lstrip("\t") if m.group(1) else ligne) == delim:
+                corps = s[nl + 1:pos]
+                break
+            pos = fin + 1
+        if corps is None:
+            debut = m.end()
+            continue
+        entete = s[s.rfind("\n", 0, m.start()) + 1:m.start()] + s[m.end():nl]
+        extras.append((corps, bool(RECEVEUR_SHELL.search(entete)), cite))
+        s = s[:m.start()] + s[m.end():nl] + s[fin:]
+        debut = m.start()
+
+def substitutions(s, apostrophes=True):
+    """Corps des $( … ), <( … ), >( … ) et `…` hors apostrophes (ils s'exécutent aussi entre guillemets doubles)."""
     out, i, n, sq = [], 0, len(s), False
     while i < n:
         c = s[i]
@@ -42,7 +129,7 @@ def substitutions(s):
             sq = c != "'"
         elif c == "\\":
             i += 1
-        elif c == "'":
+        elif c == "'" and apostrophes:
             sq = True
         elif c == "`":
             j = i + 1
@@ -52,7 +139,7 @@ def substitutions(s):
                 raise Illisible("substitution `…` non fermée")
             out.append(s[i + 1:j])
             i = j
-        elif s.startswith("$(", i):
+        elif s.startswith(("$(", "<(", ">("), i):
             j, prof = i + 2, 1
             while j < n and prof:
                 prof += (s[j] == "(") - (s[j] == ")")
@@ -95,43 +182,86 @@ def decoupe(toks):
     if seg:
         yield seg
 
+def saute_options(toks, valeur):
+    """Retire toks[0] et ses options (`valeur` : celles qui prennent un argument séparé)."""
+    i = 1
+    while i < len(toks) and toks[i].startswith("-") and len(toks[i]) > 1:
+        if toks[i] == "--":
+            i += 1
+            break
+        i += 2 if toks[i] in valeur else 1
+    return toks[i:]
+
 def sans_prefixe(toks):
-    """Saute affectations VAR=val, env (et ses options) et préfixes courants."""
+    """Saute mots-clés shell, affectations VAR=val, env (et ses options, dont -S) et préfixes courants."""
     while toks:
         t = toks[0]
-        if t == "env":
+        base = t.rsplit("/", 1)[-1]
+        if t in MOTS_CLES:
+            toks = toks[1:]
+        elif base == "env":
             toks = toks[1:]
             while toks and (toks[0].startswith("-") or re.match(r"^\w+=", toks[0])):
-                toks = toks[2:] if toks[0] in ("-u", "-C", "-S", "--unset", "--chdir") else toks[1:]
-        elif (re.match(r"^\w+=", t) or t in ("command", "exec", "time", "nohup")
-              or t.rsplit("/", 1)[-1] == "rtk" or (t in ("bypass", "proxy") and len(toks) > 1)):
+                o = toks[0]
+                if o in ("-S", "--split-string") and len(toks) > 1:
+                    script, toks = toks[1], toks[2:]
+                elif o.startswith("--split-string=") or (o.startswith("-S") and len(o) > 2):
+                    script, toks = o.split("=", 1)[1] if o.startswith("--") else o[2:], toks[1:]
+                else:
+                    toks = toks[2:] if o in ("-u", "-C", "--unset", "--chdir") else toks[1:]
+                    continue
+                try:
+                    toks = shlex.split(script) + toks
+                except ValueError as e:
+                    raise Illisible(f"env -S illisible ({e})")
+                break
+        elif base in OPT_VALEUR:
+            toks = saute_options(toks, OPT_VALEUR[base])
+            if base == "timeout":
+                toks = toks[1:]
+        elif re.match(r"^\w+=", t) or base == "rtk" or (t in ("bypass", "proxy") and len(toks) > 1):
             toks = toks[1:]
         else:
             break
     return toks
 
-def script_shell(toks):
-    """Script passé à `sh -c` / `bash -lc` / `eval`, ou None."""
+def appel_shell(toks):
+    """('c', script) pour `sh -c` / `bash -lc` / `eval`, ('stdin', None) si un shell lit son script sur stdin, sinon None."""
     base = toks[0].rsplit("/", 1)[-1]
     if base == "eval":
-        return " ".join(toks[1:]) or None
+        return ("c", " ".join(toks[1:])) if len(toks) > 1 else None
     if base not in SHELLS:
         return None
-    i = 1
+    i, stdin = 1, False
     while i < len(toks) and toks[i][:1] in "-+" and len(toks[i]) > 1:
         t = toks[i]
         if not t.startswith("--") and "c" in t[1:]:
-            return toks[i + 1] if i + 1 < len(toks) else None
+            j = i + 1
+            if j < len(toks) and toks[j] == "--":
+                j += 1
+            return ("c", toks[j]) if j < len(toks) else None
+        if not t.startswith("--") and "s" in t[1:]:
+            stdin = True
         i += 2 if t in ("-o", "+o") else 1
+    if stdin or i >= len(toks) or toks[i] == "-":
+        return ("stdin", None)
     return None
 
 def analyse(cmd, prof=0):
     """[(registre, nom, version)] ajoutés par cmd, y compris dans les -c, sous-shells et substitutions."""
     if prof > PROFONDEUR_MAX:
-        raise Illisible("imbrication trop profonde")
+        if AJOUT.search(cmd):
+            raise Illisible("imbrication trop profonde")
+        return []
     out = []
+    cmd, heredocs = retire_heredocs(cmd)
     try:
         corps = substitutions(cmd)
+        for texte, shell, cite in heredocs:
+            if shell:
+                corps.append(texte)
+            elif not cite:
+                corps += substitutions(texte, apostrophes=False)
         segs = list(decoupe(jetons(cmd)))
     except (ValueError, Illisible) as e:
         if AJOUT.search(cmd):
@@ -140,13 +270,20 @@ def analyse(cmd, prof=0):
     for c in corps:
         out += analyse(c, prof + 1)
     for toks in segs:
-        toks = sans_prefixe(toks)
+        try:
+            toks = sans_prefixe(toks)
+        except Illisible:
+            if AJOUT.search(cmd):
+                raise
+            continue
         if not toks:
             continue
         out += paquets(toks)
-        sc = script_shell(toks)
-        if sc:
-            out += analyse(sc, prof + 1)
+        sh = appel_shell(toks)
+        if sh and sh[0] == "c":
+            out += analyse(sh[1], prof + 1)
+        elif sh and AJOUT.search(cmd):
+            raise Illisible("script passé à un shell par stdin, non analysable, dans une commande qui semble ajouter un paquet")
     return out
 
 # ---------- extraction des paquets ----------
@@ -173,10 +310,24 @@ def exacte(spec, motif):
 
 SEMVER = r"^\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$"
 
+def module_python(toks):
+    """[module, args…] de `python -m module args` ou `python -mmodule args` (options avant -m sautées), sinon None."""
+    for i, t in enumerate(toks[1:], 1):
+        if t == "-m":
+            return toks[i + 1:]
+        if t.startswith("-m"):
+            return [t[2:]] + toks[i + 1:]
+        if not t.startswith("-"):
+            return None
+    return None
+
 def paquets(toks):
     """[(registre, nom, version exacte ou None)] ajoutés par la commande."""
     base = toks[0].rsplit("/", 1)[-1]
     sc = toks[1] if len(toks) > 1 else ""
+    if base in ("npm", "pnpm", "yarn"):  # options globales avant la sous-commande
+        toks = [toks[0]] + saute_options(toks, SAUTE["npm"])
+        sc = toks[1] if len(toks) > 1 else ""
     res = []
     if base == "cargo" and sc == "add":
         if any(a in ("--git", "--path") or a.startswith(("--git=", "--path=")) for a in toks):
@@ -194,10 +345,10 @@ def paquets(toks):
             if m:
                 res.append(("npm", m.group(1), exacte(m.group(2), SEMVER)))
     else:
-        if base in ("pip", "pip3") and sc == "install":
+        if re.fullmatch(r"pip[\d.]*", base) and sc == "install":
             args = toks[2:]
-        elif base in ("python", "python3") and toks[1:4] == ["-m", "pip", "install"]:
-            args = toks[4:]
+        elif re.fullmatch(r"python[\d.]*", base) and (mod := module_python(toks)) and mod[:2] == ["pip", "install"]:
+            args = mod[2:]
         elif base == "uv" and toks[1:3] == ["pip", "install"]:
             args = toks[3:]
         elif base == "uv" and sc == "add":
