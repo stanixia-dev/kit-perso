@@ -14,7 +14,7 @@ Livre la branche courante : $ARGUMENTS (chemin de la spec, facultatif).
    - Quoi
    - Pourquoi
    - Comment tester
-   - Spec (lien vers le chemin donné en argument, s'il existe)
+   - Spec (lien vers le chemin donné en argument ; s'il n'existe plus, vers `docs/specs/archives/<même nom>`)
 
    Termine le corps par la ligne d'attribution demandée par le contexte, si elle existe.
 5. Termine par le lien de la PR, un résumé en 3 lignes et le rappel de faire `/clear`. Ne commence pas d'autre tâche.
