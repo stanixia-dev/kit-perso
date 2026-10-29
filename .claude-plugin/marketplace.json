@@ -1,0 +1,9 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "kit-perso",
+  "description": "Marketplace personnelle de stanixia-dev (un seul plugin).",
+  "owner": {"name": "stanixia-dev"},
+  "plugins": [
+    {"name": "kit-perso", "source": "./", "description": "Agents, skills et hooks personnels."}
+  ]
+}
