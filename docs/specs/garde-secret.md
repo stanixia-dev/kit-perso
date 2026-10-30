@@ -108,7 +108,7 @@ bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py && claude plugin va
 - [x] L1 — noyau : motifs, chemins, exceptions, scan git, CLI (étapes 1-5)
   Fichiers : hooks/garde-secret.py, tests/test_secrets.sh, tests/test_hooks.sh
   Fait quand : les cas `analyse`, scan et exceptions passent — `bash tests/test_hooks.sh`
-- [ ] L2 — PreToolUse : chemins, contenu écrit, commandes, scan avant commit et push (étapes 6-9)
+- [x] L2 — PreToolUse : chemins, contenu écrit, commandes, scan avant commit et push (étapes 6-9)
   Fichiers : hooks/garde-secret.py, hooks/hooks.json, tests/test_secrets.sh
   Fait quand : listes « bloqués » et « passent » vertes, entrée invalide → 2 — `bash tests/test_hooks.sh`
 - [ ] L3 — PostToolUse et Stop : masquage, alerte, scan de fin (étapes 10-12)

@@ -196,5 +196,96 @@ grep -q "secret.txt $EMP" "$TMP/resume.md" && ok "--ci liste l'exception non app
 lance "$TMP/horsdepot" --ci
 vaut "--ci hors dépôt : 2" 2
 
+# ---------- PreToolUse ----------
+mkdir -p "$TMP/w"
+ln -s "$TMP/w/.env" "$TMP/w/lien"
+# hk OUTIL CWD champ valeur [champ valeur] ; remplit CODE, SORTIE, ERREUR
+hk() {
+  local json
+  json=$(python3 -c 'import json, sys
+t, c, *kv = sys.argv[1:]
+print(json.dumps({"tool_name": t, "cwd": c, "tool_input": dict(zip(kv[::2], kv[1::2]))}))' "$@")
+  SORTIE=$(printf '%s' "$json" | python3 "$S" --hook pre 2>"$TMP/erreur")
+  CODE=$?
+  ERREUR=$(cat "$TMP/erreur")
+}
+hk_json() { # JSON brut
+  SORTIE=$(printf '%s' "$1" | python3 "$S" --hook pre 2>"$TMP/erreur")
+  CODE=$?
+  ERREUR=$(cat "$TMP/erreur")
+}
+bloque() { vaut "bloque $1" 2; }
+passe() { [ "$CODE" = 0 ] && [ -z "$SORTIE" ] && ok "laisse passer $1" || ko "laisse passer $1 (code $CODE)"; }
+
+hk Read "$TMP/w" file_path "$HOME/.ssh/config"; bloque "Read ~/.ssh/config"
+hk Read "$TMP/w" file_path "~/.config/gh/hosts.yml"; bloque "Read ~/.config/gh/hosts.yml"
+hk Read "$TMP/w" file_path "/x/.env"; bloque "Read /x/.env"
+hk Read "$TMP/w" file_path "/x/.env.local"; bloque "Read /x/.env.local"
+hk Read "$TMP/w" file_path "$TMP/w/lien"; bloque "Read lien symbolique vers .env"
+hk Read "$TMP/w" file_path "/x/.env.example"; passe "Read /x/.env.example"
+hk Grep "$TMP/w" path "$HOME/.ssh" pattern x; bloque "Grep path ~/.ssh"
+hk Grep "$TMP/w" path "~" pattern x; bloque "Grep path ~"
+hk Grep "$TMP/w" path "~/.config" pattern x; bloque "Grep path ~/.config"
+hk Grep "$TMP/w" glob "**/.env*" pattern x; bloque "Grep glob .env*"
+hk Grep "$TMP/w" path "$TMP/w" pattern x; passe "Grep dans un projet"
+hk Write "$TMP/w" file_path "/x/.env" content "A=1"; bloque "Write /x/.env"
+
+for c in 'cat .env' 'cat < .env' 'cat .env*' 'dd if=.env' 'echo x > .env' 'git show HEAD:.env' 'git add .env' \
+         "python3 -c \"print(open('.env').read())\"" "bash -c 'cat ~/.ssh/id_x'" 'echo "$(cat .env)"' 'gh auth token' \
+         'git credential fill' 'gh auth status --show-token' 'cat $HOME/.ssh/id_x' 'cat ~/.config/gh/hosts.yml' \
+         'tee .env.local < a' 'grep -e x .env' 'sed -n 1p .env' 'cat /proc/self/environ' "sh -c 'sh -c \"cat .env\"'" \
+         "bash <<'EOF'"$'\ncat .env\nEOF' 'x=1 cat .env' 'env A=1 cat .env' 'head -n1 -- .env'; do
+  hk Bash "$TMP/w" command "$c"; bloque "$c"
+done
+for c in "git commit -m 'protège .env'" "git commit -m \"\$(cat <<'EOF'"$'\nprotège .env et ~/.ssh\nEOF\n)"' 'echo .env >> .gitignore' \
+         'grep .env .gitignore' 'ls ~/.ssh' 'git check-ignore .env' "gh pr create --body 'voir ~/.ssh/ et .env'" \
+         'cat .env.example' 'ls -la' 'echo "ok" | wc -l' 'git status' 'grep -rn "\.env" src' 'cat README.md'; do
+  hk Bash "$TMP/w" command "$c"; passe "$c"
+done
+hk_json 'pas du json'; bloque "entrée JSON invalide"
+hk_json '{"tool_input":{"command":"ls"}}'; passe "tool_name absent = Bash"
+
+# contenu écrit
+for cas in "github|$GH" "cle-privee|$CLE" "aws|$AWS"; do
+  hk Write "$TMP/w" file_path "$TMP/w/a.txt" content "x ${cas#*|} y"; bloque "Write d'un fort (${cas%%|*})"
+done
+hk Edit "$TMP/w" file_path "$TMP/w/a.txt" old_string a new_string "k=$GH"; bloque "Edit d'un fort"
+hk NotebookEdit "$TMP/w" notebook_path "$TMP/w/a.ipynb" new_source "k=$GH"; bloque "NotebookEdit d'un fort"
+hk_json "$(python3 -c 'import json, sys; print(json.dumps({"tool_name": "MultiEdit", "cwd": "/tmp", "tool_input": {"file_path": "/tmp/a.txt", "edits": [{"old_string": "a", "new_string": sys.argv[1]}]}}))' "$GH")"
+bloque "MultiEdit d'un fort"
+grep -q "github (empreinte $EMP)" <<<"$ERREUR" && ok "message d'écriture : nom et empreinte" || ko "message d'écriture"
+sans_valeur "écriture"
+hk Write "$TMP/w" file_path "$TMP/w/a.txt" content "$AFF"
+[ "$CODE" = 0 ] && grep -q 'systemMessage' <<<"$SORTIE" && grep -q 'additionalContext' <<<"$SORTIE" && ok "Write d'un faible : 0 + avertissement" || ko "Write d'un faible"
+sans_valeur "avertissement faible"
+hk Write "$TMP/w" file_path "$TMP/w/a.txt" content "$AWSEX"; passe "Write de AKIA…EXAMPLE"
+hk Bash "$TMP/w" command "echo $GH"; bloque "commande Bash contenant un fort"
+
+# scan avant commit et push
+d=$(depot precommit)
+printf 'T=%s\n' "$GH" > "$d/n.txt"
+for c in 'git add -A && git commit -m x' 'git push origin f' 'gh pr create --fill'; do
+  hk Bash "$d" command "$c"; bloque "$c avec un secret dans le dépôt"
+done
+sans_valeur "scan avant commit"
+grep -q 'reset --soft' <<<"$ERREUR" && ok "message : reset --soft et révocation" || ko "message du scan avant commit"
+printf 'n.txt %s 2026-10-30 fixture\n' "$EMP" > "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'git commit -m x'; passe "git commit avec fort couvert par une exception"
+rm "$d/n.txt" "$d/.garde-secret-exceptions"
+printf '%s\n' "$AFF" > "$d/f.txt"
+hk Bash "$d" command 'git commit -am x'
+[ "$CODE" = 0 ] && grep -q 'systemMessage' <<<"$SORTIE" && ok "git commit avec un faible : avertit" || ko "git commit avec un faible"
+rm "$d/f.txt"
+hk Bash "$d" command 'git commit -m x'; passe "git commit dans un dépôt propre"
+hk Bash "$TMP/horsdepot" command 'git commit -m x'; passe "git commit hors dépôt"
+
+# exceptions : jamais sur la classe perso, `*` couvre la lecture d'un .env de la racine
+d=$(depot exc-chemins)
+printf '* * 2026-10-30 tout\n.env * 2026-10-30 lecture\n' > "$d/.garde-secret-exceptions"
+hk Read "$d" file_path "$HOME/.ssh/config"; bloque "Read ~/.ssh/config malgré une exception"
+hk Read "$d" file_path "$d/.env"; passe "Read .env couvert par une exception *"
+hk Read "$d" file_path "$d/.env.local"; passe "Read .env.local couvert par le joker *"
+hk Read "$TMP/w" file_path "$d/.env"; bloque "Read .env d'un autre dépôt que le cwd (exception sans effet)"
+
 # ---------- FIN ----------
 exit $((ECHECS > 0))
