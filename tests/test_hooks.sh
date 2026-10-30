@@ -41,6 +41,7 @@ for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          'cargo add cc0' "bash -c 'echo \"a && npm i gpl-pkg\"'" "bash -c 'ls && echo ok'" "git commit -m 'doc: npm i gpl-pkg \`npm i gpl-pkg\`'" 'cargo add bon 2>&1 | tail -1' \
          "git commit -m \"\$(cat <<'EOF'"$'\nAjoute l\'analyse de npm i x\nEOF\n)\"' \
          "cat > notes.md <<'EOF'"$'\nnpm i gpl-pkg\nEOF' "cat <<'EOF' | tee n.md"$'\nnpm i gpl-pkg\nEOF' \
+         'ls #c && npm i gpl-pkg' 'echo $# && cargo add bon' \
          'echo $((1<<2)) && cargo add bon' 'if true; then cargo add bon; fi' 'timeout 5 cargo add bon' \
          'nice -n 5 cargo add bon' 'sudo -u x cargo add bon' 'echo bon | xargs -n1 cargo add' 'time cargo add bon' \
          "bash -c -- 'ls'" 'npm -g i @scope/ok@1.0.0' 'npm --prefix . i @scope/ok@1.0.0' \
@@ -60,7 +61,11 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          'command npm i gpl-pkg' 'exec npm i gpl-pkg' "bash -c -- 'npm i gpl-pkg'" "echo 'npm i gpl-pkg' | bash" \
          "echo 'npm i gpl-pkg' | sh" 'diff <(npm i gpl-pkg) x' 'tee >(npm i gpl-pkg)' "env -S 'npm i gpl-pkg'" \
          'npm -g i gpl-pkg' 'npm --prefix . i gpl-pkg' 'python3 -mpip install gpl-pkg' \
-         'python3.12 -m pip install gpl-pkg' 'pip3.12 install gpl-pkg' 'pnpm -C x add gpl-pkg' "$PROFOND_AJOUT"; do
+         'python3.12 -m pip install gpl-pkg' 'pip3.12 install gpl-pkg' 'pnpm -C x add gpl-pkg' "$PROFOND_AJOUT" \
+         "ls # c"$'\nnpm i gpl-pkg' 'echo a#b; npm i gpl-pkg' 'curl https://x/a#frag && npm i gpl-pkg' \
+         "cat <<EOF | bash"$'\n# setup\nnpm i gpl-pkg\nEOF' "ls # <<EOF"$'\nnpm i gpl-pkg\nEOF' \
+         'true;>log npm i gpl-pkg' 'python3 -X utf8 -m pip install gpl-pkg' 'python3 -W ignore -m pip install gpl-pkg' \
+         'yarn global add gpl-pkg'; do
   [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"
 done
 [ "$(code_deps 'cargo add faille@1.2.3')" = 2 ] && erreur_deps 'cargo add faille@1.2.3' | grep -q 'RUSTSEC-2099-0001' \

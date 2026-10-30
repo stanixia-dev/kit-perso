@@ -45,6 +45,7 @@ OPT_VALEUR = {
     "command": set(), "time": set(), "nohup": set(),
 }
 HEREDOC = re.compile(r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|\\?([A-Za-z_]\w*))")
+DEBUT_MOT = " \t\r\n;&|()<>"
 RECEVEUR_SHELL = re.compile(r"(?<![\w.-])(bash|sh|zsh|dash|ksh|eval|source)(?![\w.-])")
 
 def premier_heredoc(s, debut=0):
@@ -67,6 +68,10 @@ def premier_heredoc(s, debut=0):
         elif c == "'":
             j = s.find("'", i + 1)
             i = n if j < 0 else j
+        elif c == "#" and (i == 0 or s[i - 1] in DEBUT_MOT):
+            j = s.find("\n", i)
+            i = n if j < 0 else j
+            continue
         elif c == '"':
             frames.append(["d", 0])
         elif s.startswith("$(", i):
@@ -151,16 +156,45 @@ def substitutions(s, apostrophes=True):
         i += 1
     return out
 
+def sans_commentaires(s):
+    """Retire les commentaires shell : hors apostrophes/guillemets et non échappé, un `#` en début de mot
+    supprime jusqu'au `\\n` exclu."""
+    out, i, n, q = [], 0, len(s), None
+    while i < n:
+        c = s[i]
+        if q:
+            if c == "\\" and q == '"' and i + 1 < n:
+                out.append(s[i:i + 2])
+                i += 2
+                continue
+            if c == q:
+                q = None
+        elif c == "\\" and i + 1 < n:
+            out.append(s[i:i + 2])
+            i += 2
+            continue
+        elif c in "'\"":
+            q = c
+        elif c == "#" and (i == 0 or s[i - 1] in DEBUT_MOT):
+            j = s.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
 def jetons(cmd):
-    lex = shlex.shlex(cmd.replace("\n", " ; "), posix=True, punctuation_chars=True)
+    lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|()<>\n")
+    lex.whitespace = " \t\r"
+    lex.commenters = ""
     lex.whitespace_split = True
     return list(lex)
 
 def separateur(t):
-    return bool(t) and all(c in ";&|()" for c in t)
+    return bool(t) and all(c in ";&|()\n" for c in t)
 
 def redirection(t):
-    return bool(t) and all(c in "<>&|;()" for c in t) and ("<" in t or ">" in t)
+    return bool(t) and all(c in "<>&|;()\n" for c in t) and ("<" in t or ">" in t)
 
 def decoupe(toks):
     seg = []
@@ -168,7 +202,11 @@ def decoupe(toks):
     while i < len(toks):
         t = toks[i]
         if redirection(t):
-            if seg and seg[-1].isdigit():
+            if t[0] in ";|()\n" or t.startswith("&&"):  # `;>log`, `&&>log` : la redirection clôt aussi le segment
+                if seg:
+                    yield seg
+                seg = []
+            elif seg and seg[-1].isdigit():
                 seg.pop()
             i += 2
             continue
@@ -255,6 +293,7 @@ def analyse(cmd, prof=0):
         return []
     out = []
     cmd, heredocs = retire_heredocs(cmd)
+    cmd = sans_commentaires(cmd)
     try:
         corps = substitutions(cmd)
         for texte, shell, cite in heredocs:
@@ -312,13 +351,16 @@ SEMVER = r"^\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$"
 
 def module_python(toks):
     """[module, args…] de `python -m module args` ou `python -mmodule args` (options avant -m sautées), sinon None."""
-    for i, t in enumerate(toks[1:], 1):
+    i = 1
+    while i < len(toks):
+        t = toks[i]
         if t == "-m":
             return toks[i + 1:]
         if t.startswith("-m"):
             return [t[2:]] + toks[i + 1:]
         if not t.startswith("-"):
             return None
+        i += 2 if t in ("-X", "-W") else 1
     return None
 
 def paquets(toks):
@@ -337,8 +379,9 @@ def paquets(toks):
                 continue
             nom, _, spec = t.partition("@")
             res.append(("crates", nom, exacte(spec, SEMVER)))
-    elif (base == "npm" and sc in ("install", "i", "add")) or (base in ("pnpm", "yarn") and sc == "add"):
-        for t in arguments(toks[2:], SAUTE["npm"]):
+    elif (base == "npm" and sc in ("install", "i", "add")) or (base in ("pnpm", "yarn") and sc == "add") \
+            or (base == "yarn" and toks[1:3] == ["global", "add"]):
+        for t in arguments(toks[3:] if sc == "global" else toks[2:], SAUTE["npm"]):
             if non_paquet(t) or ("/" in t and not t.startswith("@")):
                 continue
             m = re.match(r"^(@[^/@]+/[^@]+|[^@/]+)(?:@(.*))?$", t)
