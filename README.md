@@ -1,6 +1,6 @@
 # kit-perso
 
-Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, rappel-clear) et les skills (livrer) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
+Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, rappel-clear) et les skills (livrer) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
 
 ## Installation
 
@@ -17,7 +17,7 @@ Ou en deux temps dans une session :
 /plugin install kit-perso@kit-perso
 ```
 
-Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 1 skill, 3 hooks. Les agents s'appellent `kit-perso:codeur`, etc. ; le skill `/kit-perso:livrer`.
+Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 1 skill, 4 hooks (PreToolUse, PostToolUse, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; le skill `/kit-perso:livrer`.
 
 ## Mise à jour
 
