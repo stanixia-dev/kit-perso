@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# Tests de garde-secret.py sur des dépôts jetables. Lancer depuis n'importe où.
+# Aucun jeton en clair : ils sont construits à l'exécution (concaténation). HOME est un dossier jetable.
+set -u
+RACINE=$(cd "$(dirname "$0")/.." && pwd)
+S="$RACINE/hooks/garde-secret.py"
+ECHECS=0
+ok() { echo "OK    $1"; }
+ko() { echo "ECHEC $1"; ECHECS=$((ECHECS + 1)); }
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+export HOME="$TMP/home"
+mkdir -p "$HOME/.ssh" "$HOME/.config/gh"
+unset GITHUB_STEP_SUMMARY
+g() { git -c user.name=t -c user.email=t@t "$@"; }
+
+# ---------- jetons de test ----------
+A36=abcdefghijklmnopqrstuvwxyz0123456789
+GH="gh""p_$A36"
+GHPAT="github""_pat_$A36${A36:0:30}"
+GL="glpat""-${A36:0:24}"
+ANT="sk-""ant-$A36"
+OAI="sk-""proj-$A36"
+OAI2="sk-""${A36}wxyz"
+AWS="AK""IA""ABCDEFGH12345678"
+AWSEX="AK""IA""IOSFODNN7EXAMPLE"
+GOO="AI""za${A36:0:35}"
+SLK="xo""xb-${A36:0:24}"
+STR="sk""_live_${A36:0:24}"
+NPM="np""m_$A36"
+PYPI="py""pi-$A36${A36:0:20}"
+CLE="-----""BEGIN RSA PRIVATE KEY-----"$'\n'"${A36}${A36}"$'\n'"-----""END RSA PRIVATE KEY-----"
+JWT="ey""J${A36:0:12}.ey""J${A36:3:12}.${A36:0:12}"
+URL="post""gres://user:${A36:0:14}@hote"
+AFF="pass""word='${A36:0:14}'"
+
+# an [chemin] < texte : "niveau:nom" distincts, triés, séparés par des virgules
+an() {
+  python3 -c 'import importlib.util, sys
+s = importlib.util.spec_from_file_location("gs", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+print(",".join(sorted({f"{a}:{b}" for a, b, _ in m.analyse(sys.stdin.read(), sys.argv[2])})))' "$S" "${1:-src/x}"
+}
+attend() { # $1 = libellé, $2 = attendu, $3 = texte, $4 = chemin éventuel
+  [ "$(printf '%s' "$3" | an "${4:-src/x}")" = "$2" ] && ok "analyse $1" || ko "analyse $1"
+}
+
+for cas in "github|$GH" "github|$GHPAT" "gitlab|$GL" "anthropic|$ANT" "openai|$OAI" "openai|$OAI2" "aws|$AWS" \
+           "google|$GOO" "slack|$SLK" "stripe|$STR" "npm|$NPM" "pypi|$PYPI" "cle-privee|$CLE"; do
+  attend "${cas%%|*} positif" "fort:${cas%%|*}" "x ${cas#*|} y"
+done
+attend "jwt positif" "faible:jwt" "t=$JWT"
+attend "url positif" "faible:url" "u=$URL/b"
+attend "affectation positif" "faible:affectation" "$AFF"
+for cas in "github|gh""p_court" "gitlab|glpat""-court" "anthropic|sk-""ant-court" "openai|sk-""court" "aws|AK""IAcourt" \
+           "google|AI""zacourt" "slack|xo""xb-court" "stripe|sk""_live_court" "npm|np""m_court" "pypi|py""pi-court" \
+           "cle-privee|-----""BEGIN CERTIFICATE-----"; do
+  attend "${cas%%|*} négatif" "" "x ${cas#*|} y"
+done
+attend "jwt négatif" "" "ey""J${A36:0:12}.court"
+attend "url négatif (mot de passe court)" "" "post""gres://user:court@hote/b"
+attend "affectation négatif (valeur courte)" "" "pass""word='court'"
+attend "task- + 50 alphanumériques n'est pas un jeton" "" "task-${A36}${A36:0:14}"
+attend "AKIA…EXAMPLE ignoré" "" "$AWSEX"
+attend "fort à 5 caractères distincts ignoré" "" "gh""p_$(printf 'a%.0s' {1..40})"
+attend "faible à valeur 'example' ignoré" "" "pass""word='example${A36:0:8}'"
+attend "faible à entropie basse ignoré" "" "pass""word='aaaaaaaaaaaaaaaa'"
+attend "faible avec \$ ignoré" "" "pass""word='\${A36:0:14}'"
+attend "faible dans docs/ ignoré" "" "$AFF" docs/a.txt
+attend "faible dans un .md ignoré" "" "$AFF" a/LISEZMOI.md
+attend "fort dans docs/ gardé" "fort:github" "$GH" docs/a.md
+[ "$(printf '%s' "$CLE" | python3 -c 'import sys; print("fin" if "END" in sys.stdin.read() else "")')" = fin ] && ok "clé privée de test complète"
+
+for f in hooks/garde-secret.py docs/specs/*.md docs/specs/archives/*.md; do
+  [ -f "$RACINE/$f" ] || continue
+  [ -z "$(an src/x < "$RACINE/$f")" ] && ok "analyse ne trouve rien dans $f" || ko "secret apparent dans $f"
+done
+for f in "$RACINE"/tests/*.sh; do
+  [ -z "$(an src/x < "$f")" ] && ok "aucun secret en clair dans tests/$(basename "$f")" || ko "secret en clair dans $f"
+done
+
+# ---------- chemins ----------
+cl() { python3 -c 'import importlib.util, sys
+s = importlib.util.spec_from_file_location("gs", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+print(m.classe(sys.argv[2]) or "-")' "$S" "$1"; }
+for cas in "~/.ssh/config|perso" "/h/.config/gh/hosts.yml|perso" "/h/.aws/credentials|perso" "/h/.netrc|perso" \
+           "/proc/1/environ|perso" "/x/.env|env" "/x/.env.local|env" "/x/prod.env|env" "/x/.envrc|env" ".env*|env" \
+           "/x/.env.example|-" "/x/.env.sample|-" "/x/README.md|-" "/x/.gitignore|-" "*|-" "/x/environ|-"; do
+  [ "$(cl "${cas%|*}")" = "${cas##*|}" ] && ok "classe ${cas%|*}" || ko "classe ${cas%|*}"
+done
+
+# ---------- scan git ----------
+depot() { # $1 = nom ; dépôt avec un commit initial sur main, affiche son chemin
+  local d="$TMP/$1"
+  mkdir -p "$d"
+  git -C "$d" init -q -b main
+  echo base > "$d/LISEZMOI"
+  git -C "$d" add -A
+  g -C "$d" commit -qm init
+  echo "$d"
+}
+valide() { git -C "$1" add -A && g -C "$1" commit -qm "$2"; }
+# lance DEPOT [options] ; remplit CODE, SORTIE (stdout), ERREUR (stderr)
+lance() {
+  local d=$1; shift
+  SORTIE=$(python3 "$S" --depot "$d" "$@" 2>"$TMP/erreur")
+  CODE=$?
+  ERREUR=$(cat "$TMP/erreur")
+}
+vaut() { # $1 = libellé, $2 = code attendu
+  [ "$CODE" = "$2" ] && ok "$1" || ko "$1 (code $CODE)"
+}
+sans_valeur() { # aucun message ne contient de valeur
+  case "$SORTIE$ERREUR" in *"$A36"*|*"${A36:0:14}"*) ko "$1 : valeur dans un message";; *) ok "$1 : aucune valeur dans les messages";; esac
+}
+EMP=$(printf '%s' "$GH" | sha256sum | cut -c1-12)
+
+d=$(depot intermediaire)
+git -C "$d" checkout -qb f
+printf 'cle=%s\n' "$GH" > "$d/a.txt"; valide "$d" ajoute
+git -C "$d" rm -q a.txt; g -C "$d" commit -qm retire
+lance "$d" --base main
+vaut "fort dans un commit intermédiaire puis retiré : 2" 2
+grep -q "garde-secret" <<<"$ERREUR" && grep -q "github (empreinte $EMP)" <<<"$ERREUR" && ok "message cite le nom et l'empreinte" || ko "message du scan"
+sans_valeur "scan"
+
+d=$(depot env-force)
+printf 'x=1\n' > "$d/.env"; git -C "$d" add -f .env
+lance "$d" --base main
+vaut ".env forcé : 2" 2
+
+d=$(depot nonsuivi)
+printf '%s\n' "$GH" > "$d/n.txt"
+lance "$d"
+vaut "fichier non suivi à fort : 2" 2
+
+d=$(depot exemple)
+git -C "$d" checkout -qb f
+printf 'T=%s\n' "$GH" > "$d/.env.example"; valide "$d" ex
+lance "$d" --base main
+vaut ".env.example à fort : 2" 2
+
+d=$(depot plusplus)
+git -C "$d" checkout -qb f
+printf '++ %s\n' "$GH" > "$d/p.txt"; valide "$d" pp
+lance "$d" --base main
+vaut "ligne '++ <fort>' : 2" 2
+
+d=$(depot rien)
+git -C "$d" checkout -qb f
+echo propre > "$d/ok.txt"; valide "$d" propre
+lance "$d" --base main
+vaut "rien de neuf : 0" 0
+[ -z "$SORTIE$ERREUR" ] && ok "rien de neuf : muet" || ko "rien de neuf : muet"
+
+mkdir -p "$TMP/horsdepot"
+lance "$TMP/horsdepot"
+vaut "hors dépôt : 0" 0
+
+d=$(depot exception)
+git -C "$d" checkout -qb f
+printf 'T=%s\n' "$GH" > "$d/secret.txt"
+printf '# test\nsecret.txt %s 2026-10-30 fixture\nligne invalide\n' "$EMP" > "$d/.garde-secret-exceptions"
+valide "$d" ex
+lance "$d" --base main
+vaut "fort couvert par empreinte : 0" 0
+grep -q "invalide" <<<"$SORTIE" && ok "ligne d'exception invalide signalée" || ko "exception invalide non signalée"
+printf 'secret.txt %s 2026-10-30 autre\n' 000000000000 > "$d/.garde-secret-exceptions"
+lance "$d" --base main
+vaut "empreinte différente : 2" 2
+
+d=$(depot faible)
+git -C "$d" checkout -qb f
+printf '%s\n' "$AFF" > "$d/conf.txt"; valide "$d" faible
+lance "$d" --base main
+vaut "faible en local : 0" 0
+grep -q '⚠' <<<"$SORTIE" && ok "faible en local : avertit" || ko "faible en local : avertissement"
+sans_valeur "faible"
+lance "$d" --base main --ci
+vaut "faible en --ci : 2" 2
+
+d=$(depot ci-exception)
+printf 'secret.txt %s 2026-10-30 fixture\n' "$EMP" > "$d/.garde-secret-exceptions"; valide "$d" exc-main
+git -C "$d" checkout -qb f
+printf 'T=%s\n' "$GH" > "$d/secret.txt"; valide "$d" secret
+lance "$d" --base main --ci
+vaut "--ci applique l'exception de la base : 0" 0
+d=$(depot ci-ajoutee)
+git -C "$d" checkout -qb f
+printf 'T=%s\n' "$GH" > "$d/secret.txt"
+printf 'secret.txt %s 2026-10-30 ajoutee\n' "$EMP" > "$d/.garde-secret-exceptions"; valide "$d" secret
+lance "$d" --base main
+vaut "local applique l'exception du dépôt : 0" 0
+GITHUB_STEP_SUMMARY="$TMP/resume.md" lance "$d" --base main --ci
+vaut "--ci ignore l'exception ajoutée par la cible : 2" 2
+grep -q "secret.txt $EMP" "$TMP/resume.md" && ok "--ci liste l'exception non appliquée" || ko "--ci liste l'exception"
+lance "$TMP/horsdepot" --ci
+vaut "--ci hors dépôt : 2" 2
+
+# ---------- FIN ----------
+exit $((ECHECS > 0))
