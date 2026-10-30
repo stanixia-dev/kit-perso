@@ -102,6 +102,62 @@ d=$(depot illisible); printf 'ceci [n est pas du toml' > "$d/pyproject.toml"
 lance "$d"
 [ "$CODE" = 0 ] && grep -q 'pyproject.toml illisible' <<<"$SORTIE" && ok "verifie-manifestes avertit d'un fichier illisible" || ko "verifie-manifestes illisible"
 
+# --- lockfile illisible : reporté même s'il a déjà servi à résoudre une version
+d=$(depot lockillisible); printf '{"dependencies":{}}' > "$d/package.json"; valide "$d" base
+printf '{"dependencies":{"bon":"1.0.0"}}' > "$d/package.json"; printf 'pas du json' > "$d/package-lock.json"
+lance "$d"
+[ "$CODE" = 0 ] && grep -q 'package-lock.json illisible' <<<"$SORTIE" && ok "verifie-manifestes avertit d'un lockfile illisible" || ko "verifie-manifestes lock illisible"
+git -C "$d" checkout -q -b claude/lock; valide "$d" ajout
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 2 ] && grep -q 'package-lock.json illisible' <<<"$ERREUR" && ok "verifie-manifestes --ci bloque sur un lockfile illisible" || ko "verifie-manifestes ci lock illisible"
+
+# --- dépendances hors registre : avertissement en local, blocage en --ci, sauf exception
+hors_registre() { # $1 = manifeste, $2 = contenu, $3 = nom attendu
+  local d; d=$(depot "hors-$1-$3")
+  git -C "$d" checkout -q -b claude/hors
+  printf '%s' "$2" > "$d/$1"; valide "$d" ajout
+  lance "$d" --base main --cible HEAD
+  [ "$CODE" = 0 ] && grep -q "$3 ($1) : dépendance hors registre, à valider" <<<"$SORTIE" || { ko "verifie-manifestes hors registre $1 $3 (local)"; return; }
+  lance "$d" --ci --base main --cible HEAD
+  [ "$CODE" = 2 ] && grep -q "$3 ($1) : dépendance hors registre, à valider" <<<"$ERREUR" && ok "verifie-manifestes signale $3 hors registre ($1)" || ko "verifie-manifestes hors registre $1 $3 (ci)"
+}
+hors_registre package.json '{"dependencies":{"a-gh":"github:u/a","b-git":"git+https://x.io/b.git","c-url":"https://x.io/c.tgz","d-file":"file:../d","e-sh":"u/e"}}' a-gh
+hors_registre package.json '{"dependencies":{"b-git":"git+https://x.io/b.git"}}' b-git
+hors_registre package.json '{"dependencies":{"c-url":"https://x.io/c.tgz"}}' c-url
+hors_registre package.json '{"dependencies":{"d-file":"file:../d"}}' d-file
+hors_registre Cargo.toml $'[dependencies]\nx-git = { git = "https://x.io/x.git" }\n' x-git
+hors_registre Cargo.toml $'[dependencies]\nx-path = { path = "../x" }\n' x-path
+hors_registre requirements.txt $'p-url @ https://x.io/p.whl\n' p-url
+hors_registre requirements.txt $'git+https://x.io/q.git#egg=q-git\n-e git+https://x.io/r.git#egg=r-git\n' q-git
+hors_registre pyproject.toml $'[project]\nname = "x"\ndependencies = ["s-at @ git+https://x.io/s.git"]\n' s-at
+hors_registre pyproject.toml $'[tool.poetry.dependencies]\nt-git = { git = "https://x.io/t.git" }\n' t-git
+hors_registre pyproject.toml $'[tool.uv.sources]\nu-url = { url = "https://x.io/u.whl" }\n' u-url
+d=$(depot hors-ok); git -C "$d" checkout -q -b claude/ok
+mkdir -p "$d/pkg"
+printf '{"workspaces":["pkg"],"dependencies":{"pkg":"workspace:*","l":"file:./pkg"}}' > "$d/package.json"
+printf '[dependencies]\nloc = { path = "pkg" }\n' > "$d/Cargo.toml"; valide "$d" ajout
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 0 ] && [ -z "$SORTIE$ERREUR" ] && ok "verifie-manifestes ignore workspace: et chemins internes au dépôt" || ko "verifie-manifestes hors registre interne"
+git -C "$d" checkout -q main
+printf 'npm d-file * 2026-10-01 dépôt interne validé\n' > "$d/.garde-deps-exceptions"; valide "$d" "exception"
+git -C "$d" checkout -q -b claude/exc
+printf '{"dependencies":{"d-file":"file:../d"}}' > "$d/package.json"; valide "$d" ajout
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 0 ] && grep -q 'dépendance hors registre.*exception du 2026-10-01' <<<"$SORTIE" && ok "verifie-manifestes accepte une exception pour une dépendance hors registre" || ko "verifie-manifestes hors registre exception"
+
+# --- requirements/*.txt et fichiers inclus par -r / -c (sans boucle)
+d=$(depot reqdir); mkdir -p "$d/requirements"
+printf '# rien\n' > "$d/requirements/dev.txt"; valide "$d" base
+printf 'gpl-pkg==1.0.0\n' > "$d/requirements/dev.txt"
+lance "$d"
+[ "$CODE" = 2 ] && grep -q 'gpl-pkg@1.0.0 (requirements/dev.txt)' <<<"$ERREUR" && ok "verifie-manifestes suit requirements/*.txt" || ko "verifie-manifestes requirements/"
+d=$(depot reqinc); mkdir -p "$d/deps"
+printf -- '-r deps/base.in\n-c deps/contrainte.in\n' > "$d/requirements.txt"
+printf '# rien\n' > "$d/deps/base.in"; printf 'bon==1.0.0\n-r base.in\n-r ../requirements.txt\n' > "$d/deps/contrainte.in"; valide "$d" base
+printf 'gpl-pkg==1.0.0\n-r contrainte.in\n' > "$d/deps/base.in"
+lance "$d"
+[ "$CODE" = 2 ] && grep -q 'gpl-pkg@1.0.0 (requirements.txt)' <<<"$ERREUR" && ok "verifie-manifestes suit les fichiers inclus par -r/-c sans boucle" || ko "verifie-manifestes -r"
+
 # --- exceptions de l'utilisateur
 d=$(depot exceptions)
 printf '{"dependencies":{"gpl-pkg":"1.0.0"}}' > "$d/package.json"
