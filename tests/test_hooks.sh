@@ -53,7 +53,8 @@ for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          "bash -c -- 'ls'" 'npm -g i @scope/ok@1.0.0' 'npm --prefix . i @scope/ok@1.0.0' \
          'curl -s x | sh' 'bash script.sh' "$PROFOND" 'cat ~/.claude/settings.json' 'grep -r x .github/workflows' \
          "git commit -m 'doc .github/workflows'" 'git diff main -- .garde-deps-exceptions' 'ls ~/.claude/hooks' \
-         'echo ok > /dev/null' 'git status' 'echo "$(git log --format="%h #%s")"' 'git log --format="%h #%s"' 'sed -n 1p ~/.claude/settings.json' 'cp a b'; do
+         'echo ok > /dev/null' 'git status' 'curl -s https://x.io/a' 'echo "$(git log --format="%h #%s")"' 'git log --format="%h #%s"' \
+         'wget -q https://x.io/a' 'awk 1 ~/.claude/settings.json' 'sed -n 1p ~/.claude/settings.json' 'cp a b'; do
   [ "$(code_deps "$c")" = 0 ] && [ -z "$(sortie_deps "$c")" ] && ok "garde-deps laisse passer $c" || ko "garde-deps $c"
 done
 for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add deprecie' 'cargo add colle' \
@@ -80,7 +81,12 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          'claude plugin marketplace remove kit-perso' 'git -C x restore .github/workflows/t.yml' \
          'find .github -exec rm {} +' "echo 'x > .github/workflows/t.yml" 'true;>.garde-deps-exceptions' \
          'cat a | tee .github/workflows/t.yml' 'echo "$(echo "a #")"; npm i gpl-pkg' \
-         'echo "$(echo "a #")"; echo x > .garde-deps-exceptions' 'node -e "x" .garde-deps-exceptions'; do
+         'echo "$(echo "a #")"; echo x > .garde-deps-exceptions' 'curl -o .garde-deps-exceptions https://x.io/a' \
+         'curl --output ~/.claude/settings.json https://x.io/a' 'curl -sSo .github/workflows/t.yml https://x.io/a' \
+         'wget -O .garde-deps-exceptions https://x.io/a' 'wget --output-document=.github/workflows/t.yml https://x.io/a' \
+         'unlink .garde-deps-exceptions' 'rmdir ~/.claude/hooks' 'awk -i inplace 1 ~/.claude/settings.json' \
+         'echo x | sponge .garde-deps-exceptions' 'truncate -s0 .garde-deps-exceptions' 'install a ~/.claude/hooks/x' \
+         'ln -sf a .garde-deps-exceptions' 'dd if=a of=.garde-deps-exceptions' 'node -e "x" .garde-deps-exceptions'; do
   [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"
 done
 for ch in 'Edit|$HOME/.claude/settings.json' 'Write|/x/.github/workflows/a.yml' 'Write|/x/.garde-deps-exceptions' \

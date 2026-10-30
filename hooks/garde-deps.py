@@ -236,7 +236,7 @@ def decoupe(toks):
 
 MOTIFS = (".claude/settings", ".claude/hooks", ".claude/plugins", ".github/workflows", ".garde-deps-exceptions")
 ECRIVAINS = {"cp", "mv", "rm", "ln", "install", "rsync", "dd", "truncate", "tee", "touch", "chmod", "chown", "patch",
-             "tar", "unzip"}
+             "tar", "unzip", "unlink", "rmdir", "sponge"}
 INTERPRETES = re.compile(r"(python[\d.]*|node|ruby|perl|php|deno|bun)")
 GIT_ECRIT = {"checkout", "restore", "rm", "mv", "apply", "am", "clean"}
 GIT_OPT_VALEUR = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
@@ -270,6 +270,12 @@ def ecriture_protegee(toks):
         ecrit = sous_commande_git(args) in GIT_ECRIT
     elif base == "sed":
         ecrit = any(a.startswith("--in-place") or re.match(r"^-[A-Za-z]*i", a) for a in args)
+    elif base == "curl":
+        ecrit = any(a.startswith("--output") or re.match(r"^-[A-Za-z]*o", a) for a in args)
+    elif base == "wget":
+        ecrit = any(a.startswith("--output-document") or re.match(r"^-[A-Za-z]*O", a) for a in args)
+    elif base in ("awk", "gawk"):
+        ecrit = "inplace" in args or any(a.startswith("-i") and "inplace" in a for a in args)
     elif base == "find":
         ecrit = any(a in ("-delete", "-exec", "-execdir", "-ok", "-okdir") for a in args)
     else:
