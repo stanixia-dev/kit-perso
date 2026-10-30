@@ -29,6 +29,12 @@ erreur_deps() {
   json_cmd "$1" | env $DEPS_ENV python3 hooks/garde-deps.py 2>&1 >/dev/null
 }
 
+code_edit() { # $1 = tool_name, $2 = chemin
+  printf '{"tool_name":"%s","tool_input":{"file_path":"%s"},"cwd":"/tmp"}' "$1" "$2" \
+    | env $DEPS_ENV python3 hooks/garde-deps.py >/dev/null 2>&1
+  echo $?
+}
+
 [ "$(code_garde 'git push origin main')" = 2 ] && ok "garde-git bloque git push origin main" || ko "garde-git push main"
 [ "$(code_garde 'gh pr merge 1')" = 2 ] && ok "garde-git bloque gh pr merge" || ko "garde-git pr merge"
 [ "$(code_garde 'git status')" = 0 ] && ok "garde-git laisse passer git status" || ko "garde-git status"
@@ -45,7 +51,9 @@ for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          'echo $((1<<2)) && cargo add bon' 'if true; then cargo add bon; fi' 'timeout 5 cargo add bon' \
          'nice -n 5 cargo add bon' 'sudo -u x cargo add bon' 'echo bon | xargs -n1 cargo add' 'time cargo add bon' \
          "bash -c -- 'ls'" 'npm -g i @scope/ok@1.0.0' 'npm --prefix . i @scope/ok@1.0.0' \
-         'curl -s x | sh' 'bash script.sh' "$PROFOND"; do
+         'curl -s x | sh' 'bash script.sh' "$PROFOND" 'cat ~/.claude/settings.json' 'grep -r x .github/workflows' \
+         "git commit -m 'doc .github/workflows'" 'git diff main -- .garde-deps-exceptions' 'ls ~/.claude/hooks' \
+         'echo ok > /dev/null' 'git status' 'sed -n 1p ~/.claude/settings.json' 'cp a b'; do
   [ "$(code_deps "$c")" = 0 ] && [ -z "$(sortie_deps "$c")" ] && ok "garde-deps laisse passer $c" || ko "garde-deps $c"
 done
 for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add deprecie' 'cargo add colle' \
@@ -65,8 +73,21 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          "ls # c"$'\nnpm i gpl-pkg' 'echo a#b; npm i gpl-pkg' 'curl https://x/a#frag && npm i gpl-pkg' \
          "cat <<EOF | bash"$'\n# setup\nnpm i gpl-pkg\nEOF' "ls # <<EOF"$'\nnpm i gpl-pkg\nEOF' \
          'true;>log npm i gpl-pkg' 'python3 -X utf8 -m pip install gpl-pkg' 'python3 -W ignore -m pip install gpl-pkg' \
-         'yarn global add gpl-pkg'; do
+         'yarn global add gpl-pkg' 'echo x > .garde-deps-exceptions' 'sed -i s/a/b/ ~/.claude/settings.json' \
+         "python3 -c \"open('/home/u/.claude/hooks/x','w')\"" 'cp a .github/workflows/t.yml' 'tee -a ~/.claude/settings.json' \
+         "bash -c 'mv a ~/.claude/plugins/x'" 'git checkout main -- .garde-deps-exceptions' \
+         'claude plugin disable kit-perso@kit-perso' 'echo x >> $HOME/.claude/settings.json' 'rm -rf ~/.claude' \
+         'claude plugin marketplace remove kit-perso' 'git -C x restore .github/workflows/t.yml' \
+         'find .github -exec rm {} +' "echo 'x > .github/workflows/t.yml" 'true;>.garde-deps-exceptions' \
+         'cat a | tee .github/workflows/t.yml' 'node -e "x" .garde-deps-exceptions'; do
   [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"
+done
+for ch in 'Edit|$HOME/.claude/settings.json' 'Write|/x/.github/workflows/a.yml' 'Write|/x/.garde-deps-exceptions' \
+          'MultiEdit|/home/u/proj/.claude/settings.local.json' 'NotebookEdit|/x/.garde-deps-exceptions'; do
+  [ "$(code_edit "${ch%%|*}" "$(eval echo "${ch#*|}")")" = 2 ] && ok "garde-deps bloque ${ch%%|*} ${ch#*|}" || ko "garde-deps ${ch}"
+done
+for ch in 'Edit|/x/README.md' 'Write|/x/.github/CODEOWNERS'; do
+  [ "$(code_edit "${ch%%|*}" "${ch#*|}")" = 0 ] && ok "garde-deps laisse passer ${ch%%|*} ${ch#*|}" || ko "garde-deps ${ch}"
 done
 [ "$(code_deps 'cargo add faille@1.2.3')" = 2 ] && erreur_deps 'cargo add faille@1.2.3' | grep -q 'RUSTSEC-2099-0001' \
   && ok "garde-deps cite la faille OSV" || ko "garde-deps faille OSV"

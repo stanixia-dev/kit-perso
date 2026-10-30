@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/garde-git.py\"", "timeout": 10, "onFailure": "block"}]},
-      {"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/garde-deps.py\"", "timeout": 30}]}
+      {"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/garde-deps.py\"", "timeout": 30}]}
     ],
     "PostToolUse": [
       {"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rappel-clear.py\"", "timeout": 10}]},

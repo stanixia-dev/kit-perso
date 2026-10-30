@@ -1,5 +1,5 @@
 # Spec — garde-deps v2 (contrôle non contournable par l'IA)
-Statut : en cours
+Statut : livrée
 
 ## 1. Objectif
 Fermer les contournements de garde-deps par l'agent (Edit/Write direct sur un manifeste, script exécuté, `python -c`, retouche des hooks/réglages). Le hook Bash reste un filtre rapide ; la barrière devient le **contrôle par résultat** (diff des manifestes et lockfiles), appliqué localement (PostToolUse, Stop) et surtout en CI côté serveur. L'utilisateur garde une échappatoire, `.garde-deps-exceptions`, que l'IA ne peut pas faire valoir seule.
@@ -43,15 +43,15 @@ Fermer les contournements de garde-deps par l'agent (Edit/Write direct sur un ma
 16. (L5) `CHANGELOG.md`, entrée 0.3.0 (version inchangée, non publiée) : + contrôle par résultat (PostToolUse, Stop) ; + job CI `deps` ; + `.garde-deps-exceptions` ; + protection des réglages, hooks, workflows. Clôture selon `agents/codeur.md` et archivage dans le commit de L5.
 
 ## 5. Critères d'acceptation
-- [ ] Les 11 cas de l'étape 3 donnent le code attendu ; aucun test existant ne régresse.
-- [ ] `garde-deps.py` et `verifie-manifestes.py` importent `deps_communs` ; aucune fonction de registre/licence n'est dupliquée (`grep -c 'def charge' hooks/*.py` = 1).
-- [ ] Sans manifeste modifié : `exit 0`, sortie vide, aucun accès réseau ni fixture.
-- [ ] Ajout direct non conforme dans chacun des 4 manifestes → 2 ; transitif à faille dans chacun des 6 lockfiles → 0 + avertissement citant la faille.
-- [ ] Stop bloque une fois puis avertit (`stop_hook_active`) ; PostToolUse ignore un Edit hors manifeste et ne répète pas un même état.
-- [ ] Exception locale → avertissement ; `--ci` ignore une exception ajoutée par la cible, la liste, et bloque sur un registre injoignable.
-- [ ] `tests.yml` : `pull_request_target`, job `deps` épinglé, aucun code de la PR exécuté.
-- [ ] Écritures Edit/Write et Bash vers les chemins protégés bloquées ; lectures et `git commit -m` qui les citent passent.
-- [ ] README (verrouillage, 14 règles), CHANGELOG 0.3.0 à jour ; `claude plugin validate --strict .` vert ; spec livrée et archivée.
+- [x] Les 11 cas de l'étape 3 donnent le code attendu ; aucun test existant ne régresse.
+- [x] `garde-deps.py` et `verifie-manifestes.py` importent `deps_communs` ; aucune fonction de registre/licence n'est dupliquée (`grep -c 'def charge' hooks/*.py` = 1).
+- [x] Sans manifeste modifié : `exit 0`, sortie vide, aucun accès réseau ni fixture.
+- [x] Ajout direct non conforme dans chacun des 4 manifestes → 2 ; transitif à faille dans chacun des 6 lockfiles → 0 + avertissement citant la faille.
+- [x] Stop bloque une fois puis avertit (`stop_hook_active`) ; PostToolUse ignore un Edit hors manifeste et ne répète pas un même état.
+- [x] Exception locale → avertissement ; `--ci` ignore une exception ajoutée par la cible, la liste, et bloque sur un registre injoignable.
+- [x] `tests.yml` : `pull_request_target`, job `deps` épinglé, aucun code de la PR exécuté.
+- [x] Écritures Edit/Write et Bash vers les chemins protégés bloquées ; lectures et `git commit -m` qui les citent passent.
+- [x] README (verrouillage, 14 règles), CHANGELOG 0.3.0 à jour ; `claude plugin validate --strict .` vert ; spec livrée et archivée.
 
 ## 6. Tests
 ```
@@ -81,6 +81,6 @@ bash tests/test_hooks.sh && bash tests/test_manifestes.sh && python3 -m py_compi
 - [x] L4 — Mode CI et job `deps` (étapes 12-13)
   Fichiers : hooks/verifie-manifestes.py, tests/test_manifestes.sh, .github/workflows/tests.yml
   Fait quand : `bash tests/test_manifestes.sh && bash tests/test_hooks.sh && grep -q 'pull_request_target' .github/workflows/tests.yml && [ "$(grep -Ec 'uses: actions/checkout@[0-9a-f]{40} # ' .github/workflows/tests.yml)" -ge 3 ]`
-- [ ] L5 — Verrouillage, doc, CHANGELOG, clôture (étapes 14-16)
+- [x] L5 — Verrouillage, doc, CHANGELOG, clôture (étapes 14-16)
   Fichiers : hooks/deps_communs.py, hooks/garde-deps.py, hooks/hooks.json, tests/test_hooks.sh, README.md, CHANGELOG.md
   Fait quand : `bash tests/test_hooks.sh && grep -q '^## Verrouillage' README.md && grep -c 'garde-deps-exceptions' CHANGELOG.md && grep -q 'NotebookEdit' hooks/hooks.json && claude plugin validate --strict .`

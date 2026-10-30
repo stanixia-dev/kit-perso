@@ -1,11 +1,25 @@
 """Code commun de garde-deps (hook Bash) et de verifie-manifestes (contrôle par résultat) :
 accès aux registres et à OSV, règles de licence, examen d'un paquet."""
-import json, os, re, time, urllib.parse, urllib.request
+import fnmatch, json, os, re, time, urllib.parse, urllib.request
 from datetime import date, datetime, timezone
 
 UA = "kit-perso-garde-deps (https://github.com/stanixia-dev/kit-perso)"
 DELAI, BUDGET, AGE_MAX = 4, 20, 730
 DEBUT = time.monotonic()
+
+# Chemins que l'agent n'a pas le droit d'écrire (motifs fnmatch sur le realpath ; `~` = dossier personnel)
+PROTEGES = ("~/.claude/settings*.json", "*/.claude/settings*.json", "~/.claude/hooks/*", "~/.claude/plugins/*",
+            "*/.github/workflows/*", "*/.garde-deps-exceptions")
+
+def protege(chemin, cwd=None):
+    """Vrai si l'écriture de `chemin` (relatif à cwd) est interdite à l'agent."""
+    chemin = os.path.expanduser(str(chemin))
+    if cwd and not os.path.isabs(chemin):
+        chemin = os.path.join(cwd, chemin)
+    p = os.path.realpath(chemin)
+    homes = {os.path.expanduser("~"), os.path.realpath(os.path.expanduser("~"))}
+    return any(fnmatch.fnmatchcase(p, m.replace("~", h, 1) if m.startswith("~") else m)
+               for m in PROTEGES for h in homes)
 
 OSV_ECO = {"crates": "crates.io", "npm": "npm", "pypi": "PyPI"}
 OK = {"mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "zlib", "0bsd", "unlicense", "cc0-1.0"}

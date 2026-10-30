@@ -186,28 +186,75 @@ def redirection(t):
     return bool(t) and all(c in "<>&|;()\n" for c in t) and ("<" in t or ">" in t)
 
 def decoupe(toks):
-    seg = []
+    """Segments de commande, chacun avec ses cibles de redirection de sortie : yield (segment, [cibles])."""
+    seg, cibles = [], []
     i = 0
     while i < len(toks):
         t = toks[i]
         if redirection(t):
             if t[0] in ";|()\n" or t.startswith("&&"):  # `;>log`, `&&>log` : la redirection clôt aussi le segment
-                if seg:
-                    yield seg
-                seg = []
+                if seg or cibles:
+                    yield seg, cibles
+                seg, cibles = [], []
             elif seg and seg[-1].isdigit():
                 seg.pop()
+            if ">" in t and i + 1 < len(toks):
+                cibles.append(toks[i + 1])
             i += 2
             continue
         if separateur(t):
-            if seg:
-                yield seg
-            seg = []
+            if seg or cibles:
+                yield seg, cibles
+            seg, cibles = [], []
         else:
             seg.append(t)
         i += 1
-    if seg:
-        yield seg
+    if seg or cibles:
+        yield seg, cibles
+
+# ---------- écritures vers les chemins protégés ----------
+
+MOTIFS = (".claude/settings", ".claude/hooks", ".claude/plugins", ".github/workflows", ".garde-deps-exceptions")
+ECRIVAINS = {"cp", "mv", "rm", "ln", "install", "rsync", "dd", "truncate", "tee", "touch", "chmod", "chown", "patch",
+             "tar", "unzip"}
+INTERPRETES = re.compile(r"(python[\d.]*|node|ruby|perl|php|deno|bun)")
+GIT_ECRIT = {"checkout", "restore", "rm", "mv", "apply", "am", "clean"}
+GIT_OPT_VALEUR = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+
+def developpe(t):
+    home = os.path.expanduser("~")
+    t = t.replace("${HOME}", home).replace("$HOME", home)
+    return home + t[1:] if t == "~" or t.startswith("~/") else t
+
+def motif(t):
+    """Vrai si `t` cite un chemin protégé (ou un dossier qui les contient : ~/.claude, .claude, .github)."""
+    t = developpe(t)
+    if any(m in t for m in MOTIFS):
+        return True
+    n = t.rstrip("/")
+    return n.rsplit("/", 1)[-1] in (".claude", ".github") and n != ""
+
+def sous_commande_git(args):
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        i += 2 if args[i] in GIT_OPT_VALEUR else 1
+    return args[i] if i < len(args) else ""
+
+def ecriture_protegee(toks):
+    """Le premier argument protégé d'un segment qui écrit (écrivain connu), sinon None."""
+    base, args = toks[0].rsplit("/", 1)[-1], toks[1:]
+    if base == "claude" and args[:1] == ["plugin"] and (
+            args[1:2] in (["disable"], ["uninstall"]) or args[1:3] == ["marketplace", "remove"]):
+        return " ".join(toks)
+    if base == "git":
+        ecrit = sous_commande_git(args) in GIT_ECRIT
+    elif base == "sed":
+        ecrit = any(a.startswith("--in-place") or re.match(r"^-[A-Za-z]*i", a) for a in args)
+    elif base == "find":
+        ecrit = any(a in ("-delete", "-exec", "-execdir", "-ok", "-okdir") for a in args)
+    else:
+        ecrit = base in ECRIVAINS or bool(INTERPRETES.fullmatch(base))
+    return next((a for a in args if motif(a)), None) if ecrit else None
 
 def saute_options(toks, valeur):
     """Retire toks[0] et ses options (`valeur` : celles qui prennent un argument séparé)."""
@@ -274,10 +321,17 @@ def appel_shell(toks):
         return ("stdin", None)
     return None
 
-def analyse(cmd, prof=0):
-    """[(registre, nom, version)] ajoutés par cmd, y compris dans les -c, sous-shells et substitutions."""
+def risque(cmd):
+    """Vrai si une commande illisible semble ajouter un paquet ou toucher un chemin protégé."""
+    return bool(AJOUT.search(cmd)) or any(m in developpe(cmd) for m in MOTIFS)
+
+def analyse(cmd, prof=0, ecritures=None):
+    """[(registre, nom, version)] ajoutés par cmd, y compris dans les -c, sous-shells et substitutions.
+    `ecritures` (liste) reçoit les chemins protégés visés par un écrivain ou une redirection."""
+    if ecritures is None:
+        ecritures = []
     if prof > PROFONDEUR_MAX:
-        if AJOUT.search(cmd):
+        if risque(cmd):
             raise Illisible("imbrication trop profonde")
         return []
     out = []
@@ -292,24 +346,28 @@ def analyse(cmd, prof=0):
                 corps += substitutions(texte, apostrophes=False)
         segs = list(decoupe(jetons(cmd)))
     except (ValueError, Illisible) as e:
-        if AJOUT.search(cmd):
-            raise Illisible(f"commande non analysable ({e}) qui semble ajouter un paquet")
+        if risque(cmd):
+            raise Illisible(f"commande non analysable ({e}) qui semble ajouter un paquet ou toucher un chemin protégé")
         return []
     for c in corps:
-        out += analyse(c, prof + 1)
-    for toks in segs:
+        out += analyse(c, prof + 1, ecritures)
+    for toks, cibles in segs:
+        ecritures += [c for c in cibles if motif(c)]
         try:
             toks = sans_prefixe(toks)
         except Illisible:
-            if AJOUT.search(cmd):
+            if risque(cmd):
                 raise
             continue
         if not toks:
             continue
         out += paquets(toks)
+        cible = ecriture_protegee(toks)
+        if cible:
+            ecritures.append(cible)
         sh = appel_shell(toks)
         if sh and sh[0] == "c":
-            out += analyse(sh[1], prof + 1)
+            out += analyse(sh[1], prof + 1, ecritures)
         elif sh and AJOUT.search(cmd):
             raise Illisible("script passé à un shell par stdin, non analysable, dans une commande qui semble ajouter un paquet")
     return out
@@ -385,8 +443,8 @@ def paquets(toks):
                 res.append(("pypi",) + r)
     return res
 
-def tous_paquets(cmd):
-    return list(dict.fromkeys(analyse(cmd)))
+def tous_paquets(cmd, ecritures=None):
+    return list(dict.fromkeys(analyse(cmd, ecritures=ecritures)))
 
 def exceptions_du_depot(cwd):
     """Lit `.garde-deps-exceptions` dans le dossier contenant `.git` le plus proche de cwd (sinon rien)."""
@@ -402,15 +460,32 @@ def exceptions_du_depot(cwd):
             return [], []
         d = os.path.dirname(d)
 
+ECRITURE_FICHIER = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+
+def refuse_protege(chemin):
+    print(f"⛔ Bloqué par garde-deps : écriture vers un chemin protégé ({chemin}) : réglages Claude, hooks, plugins, "
+          "workflows CI et .garde-deps-exceptions.\nDemande à l'utilisateur de faire cette modification lui-même.",
+          file=sys.stderr)
+    sys.exit(2)
+
 def main():
     data = json.load(sys.stdin)
-    cmd = (data.get("tool_input") or {}).get("command", "")
+    ti = data.get("tool_input") or {}
+    if data.get("tool_name", "Bash") in ECRITURE_FICHIER:
+        chemin = ti.get("file_path") or ti.get("notebook_path") or ""
+        if chemin and protege(chemin, data.get("cwd")):
+            refuse_protege(chemin)
+        sys.exit(0)
+    cmd = ti.get("command", "")
+    ecritures = []
     try:
-        pqs = tous_paquets(cmd)
+        pqs = tous_paquets(cmd, ecritures)
     except Illisible as e:
         print(f"⛔ Bloqué par garde-deps : {e}.\nReformule la commande plus simplement (une commande par appel, "
               "sans imbrication) ou demande à l'utilisateur d'ajouter lui-même le paquet.", file=sys.stderr)
         sys.exit(2)
+    if ecritures:
+        refuse_protege(ecritures[0])
     if not pqs:
         sys.exit(0)
     exceptions, avert = exceptions_du_depot(data.get("cwd"))
