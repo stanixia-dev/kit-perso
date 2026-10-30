@@ -123,6 +123,36 @@ sortie_garde "$d/sous/dossier" | grep -q 'exception du 2026-10-01 : toutes versi
 rm "$d/.garde-deps-exceptions"
 sortie_garde "$d/sous/dossier" | grep -q 'Bloqué' && ok "garde-deps bloque sans exception" || ko "garde-deps sans exception"
 
+# --- mode --ci : strict, exceptions de la base seulement, résumé Markdown
+d=$(depot ci)
+git -C "$d" checkout -q -b claude/ci
+printf '{"dependencies":{"gpl-pkg":"1.0.0"}}' > "$d/package.json"
+printf 'npm gpl-pkg 1.0.0 2026-10-01 ajoutée par la PR\n' > "$d/.garde-deps-exceptions"
+mkdir -p "$d/.github/workflows"; printf 'name: x\n' > "$d/.github/workflows/t.yml"
+valide "$d" "ajout"
+RESUME="$TMP/resume.md"; : > "$RESUME"
+GITHUB_STEP_SUMMARY="$RESUME" lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 2 ] && grep -q 'licence non permissive' <<<"$ERREUR" && grep -q "non appliquée tant qu'elle n'est pas sur main" "$RESUME" \
+  && ok "verifie-manifestes --ci ignore et liste une exception ajoutée par la cible" || ko "verifie-manifestes ci exception cible"
+grep -q 'gpl-pkg@1.0.0' "$RESUME" && grep -q '.github/workflows/t.yml' "$RESUME" && grep -q '.garde-deps-exceptions' "$RESUME" \
+  && ok "verifie-manifestes --ci écrit le résumé (paquets, workflows, exceptions)" || ko "verifie-manifestes ci résumé"
+git -C "$d" checkout -q main
+printf 'npm gpl-pkg 1.0.0 2026-10-01 acceptée sur main\n' > "$d/.garde-deps-exceptions"; valide "$d" "exception sur main"
+git -C "$d" checkout -q -b claude/ci2
+printf '{"dependencies":{"gpl-pkg":"1.0.0"}}' > "$d/package.json"; valide "$d" "ajout 2"
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 0 ] && grep -q 'exception du 2026-10-01 : acceptée sur main' <<<"$SORTIE" && ok "verifie-manifestes --ci applique une exception de la base" || ko "verifie-manifestes ci exception base"
+printf '{"dependencies":{"gpl-pkg":"1.0.0","bon":"1.0.0"}}' > "$d/package.json"; valide "$d" "ajout 3"
+FIXTURES=/nonexistent lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 2 ] && grep -q 'vérification impossible' <<<"$ERREUR" && ok "verifie-manifestes --ci bloque si le registre est injoignable" || ko "verifie-manifestes ci injoignable"
+FIXTURES=/nonexistent lance "$d" --base main --cible HEAD
+[ "$CODE" = 0 ] && grep -q 'vérification impossible' <<<"$SORTIE" && ok "verifie-manifestes avertit seulement hors --ci si le registre est injoignable" || ko "verifie-manifestes fail-open"
+lance "$d" --ci --base inexistant --cible HEAD
+[ "$CODE" = 2 ] && grep -q 'Traceback' <<<"$ERREUR" && ok "verifie-manifestes --ci bloque sur erreur imprévue" || ko "verifie-manifestes ci imprévue"
+lance "$TMP/horsgit" --ci
+[ "$CODE" = 2 ] && ok "verifie-manifestes --ci bloque hors dépôt git" || ko "verifie-manifestes ci hors git"
+grep -q 'pull_request_target' "$RACINE/.github/workflows/tests.yml" && ok "tests.yml déclenche deps en pull_request_target" || ko "tests.yml pull_request_target"
+
 # --- --base / --cible
 d=$(depot refs)
 git -C "$d" checkout -q -b claude/x

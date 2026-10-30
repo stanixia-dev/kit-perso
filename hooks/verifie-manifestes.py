@@ -277,10 +277,39 @@ class Etat:
 
 def touches(racine, base, cible):
     args = ["diff", "-z", "--name-only", "--no-renames", base] + ([cible] if cible else [])
-    noms = set((git(racine, *args) or "").split("\0"))
+    sortie = git(racine, *args)
+    if sortie is None:
+        raise OSError(f"git {' '.join(args)} a échoué")
+    noms = set(sortie.split("\0"))
     if not cible:
         noms |= set((git(racine, "ls-files", "-z", "-o", "--exclude-standard") or "").split("\0"))
     return sorted(p for p in noms if p and suivi(p))
+
+def sensibles(racine, base, cible):
+    """Fichiers modifiés sous .github/workflows/ ou nommés .garde-deps-exceptions (listés dans le résumé CI)."""
+    sortie = git(racine, "diff", "-z", "--name-only", "--no-renames", base, cible) or ""
+    return sorted(p for p in sortie.split("\0")
+                  if p.startswith(".github/workflows/") or p.rsplit("/", 1)[-1] == ".garde-deps-exceptions")
+
+def lignes_exceptions(texte):
+    return {l.strip() for l in texte.splitlines() if l.strip() and not l.strip().startswith("#")}
+
+def resume_ci(examines, blocs, avert, ajoutees, fichiers_sensibles):
+    """Résumé Markdown ajouté à $GITHUB_STEP_SUMMARY."""
+    chemin = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not chemin:
+        return
+    def section(titre, items, code=False):
+        if not items:
+            return []
+        return [f"### {titre}"] + [f"- `{i}`" if code else f"- {i}" for i in items] + [""]
+    l = ["## garde-deps (contrôle des dépendances)", "",
+         "**Bloqué**" if blocs else "**Conforme**", f"{len(examines)} élément(s) examiné(s).", ""]
+    l += section("Paquets examinés", examines) + section("Blocages", blocs) + section("Avertissements", avert)
+    l += section("Exceptions ajoutées (non appliquées tant qu'elles ne sont pas sur main)", ajoutees, True)
+    l += section("Fichiers à valider par l'utilisateur", fichiers_sensibles, True)
+    with open(chemin, "a", encoding="utf-8") as f:
+        f.write("\n".join(l) + "\n")
 
 def directs(base, cible, touche, illisibles):
     """{(registre, nom, version|None): {chemins}} des paquets de manifestes dont spec ou version résolue a changé."""
@@ -337,7 +366,11 @@ def controle(racine, base_ref, cible_ref, touche, strict, exceptions=None):
                 avert.append(f"{r} {n}@{v} (transitif) : faille connue ({', '.join(f[:3])})")
     for p in sorted(set(illisibles)):
         (blocs if strict else avert).append(f"{p} illisible")
-    return blocs, avert, len(dir_) + len(nouveaux)
+    examines = [f"{r} {n}@{v or 'dernière'} ({', '.join(sorted(c))})" for (r, n, v), c in sorted(
+        dir_.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2] or ""))]
+    if nouveaux:
+        examines.append(f"{len(nouveaux)} paquet(s) transitif(s) (OSV)")
+    return blocs, avert, examines
 
 def etat_hash(racine, base_ref, cible_ref, touche):
     h = hashlib.sha256(base_ref.encode())
@@ -360,14 +393,26 @@ def main():
             ti = data.get("tool_input") or {}
             if not suivi(str(ti.get("file_path") or ti.get("notebook_path") or "")):
                 sys.exit(0)
+    if args.ci:  # barrière : délais plus généreux, tout échec est un blocage
+        dc.DELAI, dc.BUDGET = 10, 120
     depot = os.path.abspath(data.get("cwd") or args.depot or os.getcwd())
     top = git(depot, "rev-parse", "--show-toplevel")
     if not top:
+        if args.ci:
+            raise OSError(f"{depot} n'est pas un dépôt git")
         sys.exit(0)
     racine = top.strip()
     base_ref = args.base or base_par_defaut(racine)
     touche = touches(racine, base_ref, args.cible)
+    if args.ci:
+        # exceptions lues dans la base seulement ; celles que la cible ajoute sont listées, non appliquées
+        exceptions, avert_exc = lit_exceptions(lire(racine, base_ref, ".garde-deps-exceptions"))
+        ajoutees = sorted(lignes_exceptions(lire(racine, args.cible, ".garde-deps-exceptions"))
+                          - lignes_exceptions(lire(racine, base_ref, ".garde-deps-exceptions")))
+        fichiers_sensibles = sensibles(racine, base_ref, args.cible or "HEAD")
     if not touche:
+        if args.ci:
+            resume_ci([], [], avert_exc, ajoutees, fichiers_sensibles)
         sys.exit(0)
     if args.hook == "post":
         gitdir = (git(racine, "rev-parse", "--absolute-git-dir") or "").strip()
@@ -382,9 +427,13 @@ def main():
         if gitdir:
             with open(fichier, "w", encoding="utf-8") as f:
                 f.write(h)
-    exceptions, avert_exc = lit_exceptions(lire(racine, args.cible, ".garde-deps-exceptions"))
-    blocs, avert, _ = controle(racine, base_ref, args.cible, touche, args.ci, exceptions)
+    if not args.ci:
+        exceptions, avert_exc = lit_exceptions(lire(racine, args.cible, ".garde-deps-exceptions"))
+    blocs, avert, examines = controle(racine, base_ref, args.cible, touche, args.ci, exceptions)
     avert = avert_exc + avert
+    if args.ci:
+        avert += [f"exception non appliquée tant qu'elle n'est pas sur main : {l}" for l in ajoutees]
+        resume_ci(examines, blocs, avert, ajoutees, fichiers_sensibles)
     if blocs:
         texte = "⛔ Bloqué par garde-deps (manifestes) :\n" + "\n".join(f"- {b}" for b in blocs)
         if args.hook == "stop" and data.get("stop_hook_active"):
