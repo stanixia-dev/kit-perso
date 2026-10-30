@@ -1,5 +1,5 @@
 # Spec — garde-secret (accès, affichage et commit de secrets par l'IA)
-Statut : en cours
+Statut : livrée
 
 ## 1. Objectif
 Nouveau hook qui applique les règles « Secrets » du CLAUDE.md global : l'agent ne lit pas `~/.ssh/`, `~/.config/gh/` ni les `.env`, n'affiche et n'écrit aucun token ou mot de passe, n'en commite aucun. Le filtre de commandes reste une aide : les barrières sont le **masquage de la sortie** (PostToolUse) et le **scan du résultat git** (Stop, CI `pull_request_target`). L'utilisateur garde une échappatoire, `.garde-secret-exceptions`, que seul lui modifie.
@@ -80,17 +80,17 @@ Nouveau hook qui applique les règles « Secrets » du CLAUDE.md global : l'agen
 16. `plugin.json` en 0.4.0, entrée CHANGELOG `0.4.0 — 2026-10-30`. Clôture et archivage selon `agents/codeur.md` dans le commit de L5.
 
 ## 5. Critères d'acceptation
-- [ ] `FORTS` et `FAIBLES` : chaque nom a un cas positif et un cas négatif ; `task-` suivi de 50 alphanumériques n'est pas un jeton ; `analyse` ne trouve rien dans `hooks/garde-secret.py` ni dans `docs/specs/`.
-- [ ] Jetons de test construits à l'exécution (concaténation, ≥ 6 caractères distincts) ; aucun en clair dans `tests/`, et aucun libellé de test ne les imprime.
-- [ ] Bloqués : Read `~/.ssh/config`, `~/.config/gh/hosts.yml`, `/x/.env`, `/x/.env.local`, lien symbolique vers `.env` ; Grep `path` `~/.ssh` ; Write `/x/.env` ; `cat .env`, `cat < .env`, `cat .env*`, `dd if=.env`, `echo x > .env`, `git show HEAD:.env`, `git add .env`, `python3 -c "print(open('.env').read())"`, `bash -c 'cat ~/.ssh/id_x'`, `echo "$(cat .env)"`, `gh auth token`, `git credential fill`.
-- [ ] Passent sans sortie : Read `/x/.env.example` ; `git commit -m 'protège .env'`, y compris en heredoc `$(cat <<'EOF' …)` ; `echo .env >> .gitignore` ; `grep .env .gitignore` ; `ls ~/.ssh` ; `git check-ignore .env` ; `gh pr create --body 'voir ~/.ssh/ et .env'`.
-- [ ] Write/Edit/MultiEdit/NotebookEdit d'un `fort` → 2 ; d'un `faible` → 0 + avertissement ; `AKIA…EXAMPLE` → 0 ; commande Bash contenant un `fort` → 2.
-- [ ] Scan : `fort` dans un commit intermédiaire puis retiré → 2 ; `.env` forcé (`git add -f`) → 2 ; fichier non suivi → 2 ; `.env.example` à `fort` → 2 ; ligne `++ <fort>` → 2 ; rien de neuf → 0 muet ; hors dépôt → 0.
-- [ ] Exceptions : `fort` couvert par empreinte → 0 ; `--ci` ignore une exception ajoutée par la cible, la liste et bloque ; une exception ne débloque pas `~/.ssh`.
-- [ ] Post : sortie à `fort` → JSON masqué de même forme, sans la valeur ni dans `updatedToolOutput`, ni dans `systemMessage`, ni dans `additionalContext` ; clé privée masquée en entier, `END` compris ; valeur connue de `os.environ` masquée ; sortie saine → stdout vide ; Failure → alerte sans valeur. Étape 11 prouvée en session réelle.
-- [ ] Stop bloque une fois puis avertit ; en `--hook pre`, entrée JSON invalide → 2 ; en `--ci`, dépôt invalide → 2.
-- [ ] `verifie-manifestes.py --ci` échoue sur une PR à secret sans manifeste touché, et lance garde-secret même si les dépendances bloquent. Écritures de `.garde-secret-exceptions` bloquées par garde-deps (Edit, `echo x >`) ; `git diff` de ce fichier passe.
-- [ ] `git diff --stat main...HEAD -- .github/workflows` vide ; README, CHANGELOG, 0.4.0 à jour ; spec archivée.
+- [x] `FORTS` et `FAIBLES` : chaque nom a un cas positif et un cas négatif ; `task-` suivi de 50 alphanumériques n'est pas un jeton ; `analyse` ne trouve rien dans `hooks/garde-secret.py` ni dans `docs/specs/`.
+- [x] Jetons de test construits à l'exécution (concaténation, ≥ 6 caractères distincts) ; aucun en clair dans `tests/`, et aucun libellé de test ne les imprime.
+- [x] Bloqués : Read `~/.ssh/config`, `~/.config/gh/hosts.yml`, `/x/.env`, `/x/.env.local`, lien symbolique vers `.env` ; Grep `path` `~/.ssh` ; Write `/x/.env` ; `cat .env`, `cat < .env`, `cat .env*`, `dd if=.env`, `echo x > .env`, `git show HEAD:.env`, `git add .env`, `python3 -c "print(open('.env').read())"`, `bash -c 'cat ~/.ssh/id_x'`, `echo "$(cat .env)"`, `gh auth token`, `git credential fill`.
+- [x] Passent sans sortie : Read `/x/.env.example` ; `git commit -m 'protège .env'`, y compris en heredoc `$(cat <<'EOF' …)` ; `echo .env >> .gitignore` ; `grep .env .gitignore` ; `ls ~/.ssh` ; `git check-ignore .env` ; `gh pr create --body 'voir ~/.ssh/ et .env'`.
+- [x] Write/Edit/MultiEdit/NotebookEdit d'un `fort` → 2 ; d'un `faible` → 0 + avertissement ; `AKIA…EXAMPLE` → 0 ; commande Bash contenant un `fort` → 2.
+- [x] Scan : `fort` dans un commit intermédiaire puis retiré → 2 ; `.env` forcé (`git add -f`) → 2 ; fichier non suivi → 2 ; `.env.example` à `fort` → 2 ; ligne `++ <fort>` → 2 ; rien de neuf → 0 muet ; hors dépôt → 0.
+- [x] Exceptions : `fort` couvert par empreinte → 0 ; `--ci` ignore une exception ajoutée par la cible, la liste et bloque ; une exception ne débloque pas `~/.ssh`.
+- [x] Post : sortie à `fort` → JSON masqué de même forme, sans la valeur ni dans `updatedToolOutput`, ni dans `systemMessage`, ni dans `additionalContext` ; clé privée masquée en entier, `END` compris ; valeur connue de `os.environ` masquée ; sortie saine → stdout vide ; Failure → alerte sans valeur. Étape 11 prouvée en session réelle.
+- [x] Stop bloque une fois puis avertit ; en `--hook pre`, entrée JSON invalide → 2 ; en `--ci`, dépôt invalide → 2.
+- [x] `verifie-manifestes.py --ci` échoue sur une PR à secret sans manifeste touché, et lance garde-secret même si les dépendances bloquent. Écritures de `.garde-secret-exceptions` bloquées par garde-deps (Edit, `echo x >`) ; `git diff` de ce fichier passe.
+- [x] `git diff --stat main...HEAD -- .github/workflows` vide ; README, CHANGELOG, 0.4.0 à jour ; spec archivée.
 
 ## 6. Tests
 ```
@@ -117,6 +117,6 @@ bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py && claude plugin va
 - [x] L4 — CI via le job `deps`, protection des exceptions, relecteur (étapes 13-14)
   Fichiers : hooks/verifie-manifestes.py, hooks/deps_communs.py, hooks/garde-deps.py, agents/relecteur.md, tests/test_secrets.sh, tests/test_hooks.sh
   Fait quand : `--ci` bloque un secret sans manifeste touché — `bash tests/test_hooks.sh`
-- [ ] L5 — documentation, version 0.4.0, clôture (étapes 15-16)
+- [x] L5 — documentation, version 0.4.0, clôture (étapes 15-16)
   Fichiers : README.md, CHANGELOG.md, .claude-plugin/plugin.json
   Fait quand : suite complète verte, spec archivée — `bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py && claude plugin validate --strict .`
