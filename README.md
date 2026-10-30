@@ -1,6 +1,6 @@
 # kit-perso
 
-Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks de garde-fous git (garde-git, rappel-clear) et les skills (livrer) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
+Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, rappel-clear) et les skills (livrer) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
 
 ## Installation
 
@@ -17,7 +17,7 @@ Ou en deux temps dans une session :
 /plugin install kit-perso@kit-perso
 ```
 
-Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 1 skill, 2 hooks. Les agents s'appellent `kit-perso:codeur`, etc. ; le skill `/kit-perso:livrer`.
+Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 1 skill, 4 hooks (PreToolUse, PostToolUse, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; le skill `/kit-perso:livrer`.
 
 ## Mise à jour
 
@@ -42,7 +42,56 @@ puis redémarrer Claude Code. Pour développer sans installer : `claude --plugin
 - Hook : script dans `hooks/`, déclaré dans `hooks/hooks.json` via `${CLAUDE_PLUGIN_ROOT}`, cas ajouté à `tests/test_hooks.sh`.
 - Chaque ajout : montée MINEURE, entrée au CHANGELOG, et `claude plugin validate --strict .` vert.
 
-Tests : `bash tests/test_hooks.sh`.
+## Contrôle des dépendances
+
+Règles appliquées à chaque paquet ajouté ou modifié (cargo, npm/pnpm/yarn, pip/uv/poetry) : bloque une licence non permissive (hors MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD, Unlicense, CC0-1.0), une faille OSV connue, un paquet déprécié ou yanked, une dernière publication de plus de 2 ans. Avertit pour MPL/LGPL, les avis RustSec informatifs et les registres injoignables.
+Un paquet refusé, c'est l'utilisateur qui l'ajoute lui-même s'il l'accepte. Le relecteur lance `hooks/verifie-manifestes.py --base main` sur le diff.
+
+Trois couches, de la plus rapide à la plus sûre :
+
+1. **Hook Bash `garde-deps` (PreToolUse)** : filtre rapide qui lit la commande (`cargo add`, `npm i`, `pip install`…, y compris dans `bash -c`, heredocs, substitutions). Il se contourne (script écrit puis exécuté, chemin obfusqué) : ce n'est pas la barrière.
+2. **Contrôle par résultat en local (PostToolUse, Stop, SubagentStop)** : `hooks/verifie-manifestes.py` compare les manifestes (`Cargo.toml`, `package.json`, `pyproject.toml`, `requirements*.txt`) et lockfiles (`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `uv.lock`, `poetry.lock`) à `main` et applique les règles aux paquets ajoutés, quelle que soit la façon dont ils sont arrivés. Sans manifeste modifié, il sort aussitôt, sans réseau. Stop bloque une fois puis avertit (`stop_hook_active`).
+3. **CI, job `tests / deps`** : même script en `--ci`, lancé en `pull_request_target` : le workflow est celui de `main`, la PR ne peut donc ni le modifier ni le retirer, et aucun code de la PR n'est exécuté (ses manifestes sont lus comme données par git). Ce job ne tourne qu'une fois la PR qui l'introduit fusionnée dans `main`.
+
+Les dépendances **transitives** (lockfiles) ne sont examinées que par OSV (une seule requête par lot) et donnent un avertissement, jamais un blocage : licence et âge ne sont pas vérifiés, trop de requêtes.
+Hors réseau, les couches locales sont *fail-open* (avertissement « vérification impossible ») ; la CI est *fail-closed* (registre injoignable, fichier illisible ou erreur imprévue = blocage ; une relance coûte peu).
+
+Tests : `bash tests/test_hooks.sh` (appelle `tests/test_manifestes.sh`), hors réseau (réponses simulées dans `tests/fixtures/garde-deps.json`, dépôts git jetables) ; la CI GitHub les lance sur chaque PR et push sur `main`.
+
+### Exceptions
+
+`.garde-deps-exceptions` (racine du dépôt) autorise un paquet refusé : une ligne `<registre> <nom> <version|*> <AAAA-MM-JJ> <raison>` (`crates`, `npm` ou `pypi`), `#` pour un commentaire. En local, le blocage devient un avertissement `(exception du … : …)`. En CI, seules les exceptions déjà sur `main` comptent ; celles qu'ajoute la PR sont listées dans le résumé du job, non appliquées. Ajouter une exception = commit de l'utilisateur sur `main`, puis relancer la CI de la PR.
+
+## Verrouillage (à appliquer par l'utilisateur)
+
+Les hooks protègent déjà les réglages Claude (`~/.claude/settings*.json`, `**/.claude/settings*.json`), `~/.claude/hooks/` et `~/.claude/plugins/`, `**/.github/workflows/` et `**/.garde-deps-exceptions` contre les écritures de l'agent (Edit, Write, MultiEdit, NotebookEdit, et les commandes Bash qui écrivent ou redirigent vers ces chemins, `claude plugin disable|uninstall` compris). Un hook se désactive depuis les réglages : pour verrouiller aussi cela, ajouter ce bloc à `~/.claude/settings.json` (14 règles `permissions.deny`) :
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Edit(~/.claude/settings.json)",
+      "Write(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Write(~/.claude/settings.local.json)",
+      "Edit(~/.claude/hooks/**)",
+      "Write(~/.claude/hooks/**)",
+      "Edit(~/.claude/plugins/**)",
+      "Write(~/.claude/plugins/**)",
+      "Edit(**/.claude/settings*.json)",
+      "Write(**/.claude/settings*.json)",
+      "Edit(**/.github/workflows/**)",
+      "Write(**/.github/workflows/**)",
+      "Edit(**/.garde-deps-exceptions)",
+      "Write(**/.garde-deps-exceptions)"
+    ]
+  }
+}
+```
+
+À faire **après** la fusion de la PR qui introduit le contrôle (sinon elle n'aurait pas pu modifier les workflows). Sur GitHub, rendre le check `tests / deps` obligatoire sur `main` (Settings, Branches ou Rulesets, « Require status checks ») : réglage du dépôt, à faire à la main.
+
+Piste non retenue ici : le bac à sable Bash de Claude Code (`sandbox.enabled: true`, `allowUnsandboxedCommands: false`) appliquerait ces règles `deny` aux écritures Bash au niveau du système, ce qui couvrirait les contournements locaux résiduels ; à vérifier sur la version installée.
 
 ## Flux avec lots
 
