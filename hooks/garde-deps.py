@@ -388,6 +388,20 @@ def paquets(toks):
 def tous_paquets(cmd):
     return list(dict.fromkeys(analyse(cmd)))
 
+def exceptions_du_depot(cwd):
+    """Lit `.garde-deps-exceptions` dans le dossier contenant `.git` le plus proche de cwd (sinon rien)."""
+    d = os.path.abspath(cwd or os.getcwd())
+    while True:
+        if os.path.exists(os.path.join(d, ".git")):
+            try:
+                with open(os.path.join(d, ".garde-deps-exceptions"), encoding="utf-8") as f:
+                    return lit_exceptions(f.read())
+            except OSError:
+                return [], []
+        if os.path.dirname(d) == d:
+            return [], []
+        d = os.path.dirname(d)
+
 def main():
     data = json.load(sys.stdin)
     cmd = (data.get("tool_input") or {}).get("command", "")
@@ -399,9 +413,10 @@ def main():
         sys.exit(2)
     if not pqs:
         sys.exit(0)
-    blocs, avert = [], []
+    exceptions, avert = exceptions_du_depot(data.get("cwd"))
+    blocs = []
     for registre, nom, exact in pqs:
-        examine(registre, nom, exact, blocs, avert)
+        examine(registre, nom, exact, blocs, avert, exceptions=exceptions)
     if blocs:
         print("⛔ Bloqué par garde-deps :", file=sys.stderr)
         for b in blocs:

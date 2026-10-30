@@ -8,7 +8,7 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import deps_communs as dc
-from deps_communs import SEMVER, examine, exacte, non_paquet, osv_lot, pep508
+from deps_communs import SEMVER, examine, exacte, lit_exceptions, non_paquet, norme, osv_lot, pep508
 
 MANIFESTES = {"Cargo.toml": "crates", "package.json": "npm", "pyproject.toml": "pypi"}
 LOCKFILES = {"Cargo.lock": "crates", "package-lock.json": "npm", "pnpm-lock.yaml": "npm", "yarn.lock": "npm",
@@ -31,10 +31,6 @@ def est_lock(chemin):
 
 def suivi(chemin):
     return ecosysteme(chemin) is not None and not IGNORES & set(chemin.split("/")[:-1])
-
-def norme(registre, nom):
-    nom = nom.lower()
-    return nom.replace("_", "-") if registre == "crates" else nom
 
 # ---------- git ----------
 
@@ -310,14 +306,14 @@ def directs(base, cible, touche, illisibles):
             res.setdefault((registre, nom, v), set()).add(chemin)
     return res
 
-def controle(racine, base_ref, cible_ref, touche, strict):
+def controle(racine, base_ref, cible_ref, touche, strict, exceptions=None):
     """(blocs, avertissements, examinés) ; fichiers illisibles : avertissement, blocage si strict."""
     base, cible = Etat(racine, base_ref), Etat(racine, cible_ref)
     blocs, avert, illisibles = [], [], []
     dir_ = directs(base, cible, touche, illisibles)
     for (registre, nom, v), chemins in sorted(dir_.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2] or "")):
         b, a = [], []
-        examine(registre, nom, v, b, a, strict)
+        examine(registre, nom, v, b, a, strict, exceptions)
         ou = f" ({', '.join(sorted(chemins))}) : "
         blocs += [m.replace(" : ", ou, 1) for m in b]
         avert += [m.replace(" : ", ou, 1) for m in a]
@@ -386,7 +382,9 @@ def main():
         if gitdir:
             with open(fichier, "w", encoding="utf-8") as f:
                 f.write(h)
-    blocs, avert, _ = controle(racine, base_ref, args.cible, touche, args.ci)
+    exceptions, avert_exc = lit_exceptions(lire(racine, args.cible, ".garde-deps-exceptions"))
+    blocs, avert, _ = controle(racine, base_ref, args.cible, touche, args.ci, exceptions)
+    avert = avert_exc + avert
     if blocs:
         texte = "⛔ Bloqué par garde-deps (manifestes) :\n" + "\n".join(f"- {b}" for b in blocs)
         if args.hook == "stop" and data.get("stop_hook_active"):

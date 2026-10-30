@@ -169,21 +169,49 @@ def aujourdhui():
     e = os.environ.get("GARDE_DEPS_AUJOURDHUI")
     return date.fromisoformat(e) if e else datetime.now(timezone.utc).date()
 
-def examine(registre, nom, exact, blocs, avert, strict=False):
-    """Ajoute à `blocs` / `avert` les raisons de refuser / signaler registre nom@exact (dernière version si None).
-    strict : « vérification impossible » devient un blocage."""
+def norme(registre, nom):
+    """Nom de paquet normalisé pour comparer manifestes, lockfiles et exceptions."""
+    if registre == "pypi":
+        return re.sub(r"[._]+", "-", nom).lower()
+    return nom.lower().replace("_", "-") if registre == "crates" else nom
+
+def lit_exceptions(texte):
+    """([(registre, nom, version|*, date, raison)], avertissements) d'un `.garde-deps-exceptions`."""
+    res, avert = [], []
+    for n, ligne in enumerate(texte.splitlines(), 1):
+        ligne = ligne.strip()
+        if not ligne or ligne.startswith("#"):
+            continue
+        p = ligne.split(None, 4)
+        try:
+            if len(p) < 5 or p[0] not in OSV_ECO or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[3]):
+                raise ValueError
+            date.fromisoformat(p[3])
+        except ValueError:
+            avert.append(f".garde-deps-exceptions ligne {n} invalide (attendu : registre nom version|* AAAA-MM-JJ raison)")
+            continue
+        res.append(tuple(p))
+    return res, avert
+
+def exception_pour(exceptions, registre, nom, version):
+    for e in exceptions or ():
+        if e[0] == registre and norme(registre, e[1]) == norme(registre, nom) and e[2] in ("*", version):
+            return e
+    return None
+
+def examine_brut(registre, nom, exact, blocs, avert, strict=False):
     imprevu = blocs if strict else avert
     etiq = f"{registre} {nom}"
     d = charge(registre, nom)
     if d is None:
         imprevu.append(f"{etiq} : vérification impossible")
-        return
+        return exact
     v = exact or d["latest"]
     etiq = f"{etiq}@{v}"
     info = d["versions"].get(v)
     if info is None:
         blocs.append(f"{etiq} : version inconnue du registre")
-        return
+        return v
     n = niveau(info["licence"])
     if n == 2:
         blocs.append(f"{etiq} : licence non permissive ({info['licence'] or 'absente'})")
@@ -203,7 +231,7 @@ def examine(registre, nom, exact, blocs, avert, strict=False):
                  {"package": {"name": nom, "ecosystem": OSV_ECO[registre]}, "version": v})
     if o is None:
         imprevu.append(f"{etiq} : vérification impossible (OSV)")
-        return
+        return v
     vulns = o.get("vulns") or []
     graves = [x.get("id", "?") for x in vulns if not (x.get("database_specific") or {}).get("informational")]
     infos = [x.get("id", "?") for x in vulns if (x.get("database_specific") or {}).get("informational")]
@@ -211,6 +239,19 @@ def examine(registre, nom, exact, blocs, avert, strict=False):
         blocs.append(f"{etiq} : faille connue ({', '.join(graves[:3])})")
     if infos:
         avert.append(f"{etiq} : avis informatif ({', '.join(infos[:3])})")
+    return v
+
+def examine(registre, nom, exact, blocs, avert, strict=False, exceptions=None):
+    """Ajoute à `blocs` / `avert` les raisons de refuser / signaler registre nom@exact (dernière version si None).
+    strict : « vérification impossible » devient un blocage. Un paquet couvert par `exceptions` voit ses
+    blocages passer en avertissements."""
+    b = []
+    v = examine_brut(registre, nom, exact, b, avert, strict)
+    exc = exception_pour(exceptions, registre, nom, v or exact)
+    if exc:
+        avert += [f"{m} (exception du {exc[3]} : {exc[4]})" for m in b]
+    else:
+        blocs += b
 
 def osv_lot(items):
     """[(registre, nom, version)] -> liste alignée d'identifiants de failles (listes), ou None si OSV est injoignable.

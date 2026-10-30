@@ -102,6 +102,27 @@ d=$(depot illisible); printf 'ceci [n est pas du toml' > "$d/pyproject.toml"
 lance "$d"
 [ "$CODE" = 0 ] && grep -q 'pyproject.toml illisible' <<<"$SORTIE" && ok "verifie-manifestes avertit d'un fichier illisible" || ko "verifie-manifestes illisible"
 
+# --- exceptions de l'utilisateur
+d=$(depot exceptions)
+printf '{"dependencies":{"gpl-pkg":"1.0.0"}}' > "$d/package.json"
+printf '# accord du 2026-10-01\nnpm gpl-pkg 1.0.0 2026-10-01 licence acceptée pour ce prototype\nligne invalide\n' > "$d/.garde-deps-exceptions"
+lance "$d"
+[ "$CODE" = 0 ] && grep -q 'gpl-pkg@1.0.0 (package.json) : licence non permissive.*(exception du 2026-10-01 : licence acceptée pour ce prototype)' <<<"$SORTIE" \
+  && grep -q 'ligne 3 invalide' <<<"$SORTIE" && ok "verifie-manifestes transforme un blocage couvert en avertissement" || ko "verifie-manifestes exception"
+printf 'npm gpl-pkg 2.0.0 2026-10-01 autre version\nnpm autre * 2026-10-01 autre paquet\n' > "$d/.garde-deps-exceptions"
+lance "$d"
+[ "$CODE" = 2 ] && ok "verifie-manifestes ignore une exception d'une autre version ou d'un autre paquet" || ko "verifie-manifestes exception hors sujet"
+printf 'npm gpl-pkg * 2026-10-01 toutes versions\n' > "$d/.garde-deps-exceptions"
+lance "$d"
+[ "$CODE" = 0 ] && grep -q 'exception du 2026-10-01 : toutes versions' <<<"$SORTIE" && ok "verifie-manifestes accepte une exception pour toutes les versions" || ko "verifie-manifestes exception *"
+# garde-deps lit la même exception en remontant de cwd jusqu'à .git
+mkdir -p "$d/sous/dossier"
+sortie_garde() { printf '{"tool_input":{"command":"npm i gpl-pkg"},"cwd":"%s"}' "$1" \
+  | env GARDE_DEPS_FIXTURES="$FIX" GARDE_DEPS_AUJOURDHUI=2026-10-29 python3 "$RACINE/hooks/garde-deps.py" 2>&1; }
+sortie_garde "$d/sous/dossier" | grep -q 'exception du 2026-10-01 : toutes versions' && ok "garde-deps applique .garde-deps-exceptions du dépôt" || ko "garde-deps exception"
+rm "$d/.garde-deps-exceptions"
+sortie_garde "$d/sous/dossier" | grep -q 'Bloqué' && ok "garde-deps bloque sans exception" || ko "garde-deps sans exception"
+
 # --- --base / --cible
 d=$(depot refs)
 git -C "$d" checkout -q -b claude/x

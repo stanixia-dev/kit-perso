@@ -75,7 +75,7 @@ bash tests/test_hooks.sh && bash tests/test_manifestes.sh && python3 -m py_compi
 - [x] L2 — Code commun et contrôle par résultat local (étapes 4-9)
   Fichiers : hooks/deps_communs.py, hooks/garde-deps.py, hooks/verifie-manifestes.py, hooks/hooks.json, tests/test_manifestes.sh, tests/test_hooks.sh, tests/fixtures/garde-deps.json
   Fait quand : `bash tests/test_manifestes.sh && bash tests/test_hooks.sh && [ "$(grep -c 'def charge' hooks/*.py | grep -c ':1$')" = 1 ] && grep -q 'hook stop' hooks/hooks.json && claude plugin validate --strict .`
-- [ ] L3 — Exceptions utilisateur et relecteur (étapes 10-11)
+- [x] L3 — Exceptions utilisateur et relecteur (étapes 10-11)
   Fichiers : hooks/deps_communs.py, hooks/garde-deps.py, hooks/verifie-manifestes.py, tests/test_manifestes.sh, agents/relecteur.md
   Fait quand : `bash tests/test_manifestes.sh && bash tests/test_hooks.sh && grep -q 'verifie-manifestes.py' agents/relecteur.md && grep -q '^- Exceptions' agents/relecteur.md`
 - [ ] L4 — Mode CI et job `deps` (étapes 12-13)
