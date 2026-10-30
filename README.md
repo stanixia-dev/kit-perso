@@ -64,26 +64,19 @@ Tests : `bash tests/test_hooks.sh` (appelle `tests/test_manifestes.sh`), hors r�
 
 ## Verrouillage (à appliquer par l'utilisateur)
 
-Les hooks protègent déjà les réglages Claude (`~/.claude/settings*.json`, `**/.claude/settings*.json`), `~/.claude/hooks/` et `~/.claude/plugins/`, `**/.github/workflows/` et `**/.garde-deps-exceptions` contre les écritures de l'agent (Edit, Write, MultiEdit, NotebookEdit, et les commandes Bash qui écrivent ou redirigent vers ces chemins, `claude plugin disable|uninstall` compris). Un hook se désactive depuis les réglages : pour verrouiller aussi cela, ajouter ce bloc à `~/.claude/settings.json` (14 règles `permissions.deny`) :
+Les hooks protègent déjà les réglages Claude (`~/.claude/settings*.json`, `**/.claude/settings*.json`), `~/.claude/hooks/` et `~/.claude/plugins/`, `**/.github/workflows/` et `**/.garde-deps-exceptions` contre les écritures de l'agent (Edit, Write, MultiEdit, NotebookEdit, et les commandes Bash qui écrivent ou redirigent vers ces chemins, `claude plugin disable|uninstall` compris). Un hook se désactive depuis les réglages : pour verrouiller aussi cela, ajouter ce bloc à `~/.claude/settings.json` (7 règles `permissions.deny` ; `Edit(...)` couvre aussi l'outil Write) :
 
 ```json
 {
   "permissions": {
     "deny": [
       "Edit(~/.claude/settings.json)",
-      "Write(~/.claude/settings.json)",
       "Edit(~/.claude/settings.local.json)",
-      "Write(~/.claude/settings.local.json)",
       "Edit(~/.claude/hooks/**)",
-      "Write(~/.claude/hooks/**)",
       "Edit(~/.claude/plugins/**)",
-      "Write(~/.claude/plugins/**)",
       "Edit(**/.claude/settings*.json)",
-      "Write(**/.claude/settings*.json)",
       "Edit(**/.github/workflows/**)",
-      "Write(**/.github/workflows/**)",
-      "Edit(**/.garde-deps-exceptions)",
-      "Write(**/.garde-deps-exceptions)"
+      "Edit(**/.garde-deps-exceptions)"
     ]
   }
 }
