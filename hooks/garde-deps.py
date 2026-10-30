@@ -147,27 +147,47 @@ def substitutions(s, apostrophes=True):
 
 def sans_commentaires(s):
     """Retire les commentaires shell : hors apostrophes/guillemets et non échappé, un `#` en début de mot
-    supprime jusqu'au `\\n` exclu."""
-    out, i, n, q = [], 0, len(s), None
+    supprime jusqu'au `\\n` exclu. Les $( … ) (même entre guillemets doubles) sont du code : cadres empilés."""
+    out, i, n = [], 0, len(s)
+    frames = [["c", 0]]
     while i < n:
-        c = s[i]
-        if q:
-            if c == "\\" and q == '"' and i + 1 < n:
-                out.append(s[i:i + 2])
-                i += 2
-                continue
-            if c == q:
-                q = None
-        elif c == "\\" and i + 1 < n:
+        c, k = s[i], frames[-1][0]
+        if c == "\\" and i + 1 < n:
             out.append(s[i:i + 2])
             i += 2
             continue
-        elif c in "'\"":
-            q = c
+        if k == "d":
+            if c == '"':
+                frames.pop()
+            elif s.startswith("$(", i):
+                frames.append(["c", 0])
+                out.append("$")
+                i += 1
+                c = "("
+        elif c == "'":
+            j = s.find("'", i + 1)
+            j = n - 1 if j < 0 else j
+            out.append(s[i:j + 1])
+            i = j + 1
+            continue
         elif c == "#" and (i == 0 or s[i - 1] in DEBUT_MOT):
             j = s.find("\n", i)
             i = n if j < 0 else j
             continue
+        elif c == '"':
+            frames.append(["d", 0])
+        elif s.startswith("$(", i):
+            frames.append(["c", 0])
+            out.append("$")
+            i += 1
+            c = "("
+        elif c == "(":
+            frames[-1][1] += 1
+        elif c == ")":
+            if frames[-1][1]:
+                frames[-1][1] -= 1
+            elif len(frames) > 1:
+                frames.pop()
         out.append(c)
         i += 1
     return "".join(out)
