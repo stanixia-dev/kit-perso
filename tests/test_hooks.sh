@@ -75,4 +75,7 @@ done
 [ "$(code_deps 'pip3 install inconnu')" = 0 ] && sortie_deps 'pip3 install inconnu' | grep -q 'vérification impossible' \
   && ok "garde-deps avertit si injoignable" || ko "garde-deps injoignable"
 
+bash tests/test_manifestes.sh | grep -v '^OK' | sed 's/^/manifestes: /'
+[ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_manifestes.sh"
+
 exit $((ECHECS > 0))

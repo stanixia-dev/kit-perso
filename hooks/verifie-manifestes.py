@@ -1,0 +1,417 @@
+#!/usr/bin/env python3
+"""Contrôle par résultat des dépendances : compare les manifestes et lockfiles (cargo, npm/pnpm/yarn, pip/uv/poetry)
+entre une base et une cible, et applique les règles de garde-deps aux paquets ajoutés ou modifiés.
+Modes : CLI (défaut), hook PostToolUse (--hook post), hook Stop (--hook stop), CI (--ci, strict).
+Sortie 2 + message sur stderr = paquet non conforme ; avertissements sur stdout ; fail-open en hook."""
+import argparse, fnmatch, hashlib, json, os, re, subprocess, sys, tomllib
+from collections import defaultdict
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import deps_communs as dc
+from deps_communs import SEMVER, examine, exacte, non_paquet, osv_lot, pep508
+
+MANIFESTES = {"Cargo.toml": "crates", "package.json": "npm", "pyproject.toml": "pypi"}
+LOCKFILES = {"Cargo.lock": "crates", "package-lock.json": "npm", "pnpm-lock.yaml": "npm", "yarn.lock": "npm",
+             "uv.lock": "pypi", "poetry.lock": "pypi"}
+IGNORES = {"node_modules", "target", ".venv", "vendor"}
+VIDE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"  # arbre vide
+MAX_TRANSITIFS = 1000
+
+def ecosysteme(chemin):
+    """Registre d'un manifeste ou lockfile (par son nom), sinon None."""
+    nom = chemin.rsplit("/", 1)[-1]
+    if nom in MANIFESTES:
+        return MANIFESTES[nom]
+    if nom in LOCKFILES:
+        return LOCKFILES[nom]
+    return "pypi" if fnmatch.fnmatch(nom, "requirements*.txt") else None
+
+def est_lock(chemin):
+    return chemin.rsplit("/", 1)[-1] in LOCKFILES
+
+def suivi(chemin):
+    return ecosysteme(chemin) is not None and not IGNORES & set(chemin.split("/")[:-1])
+
+def norme(registre, nom):
+    nom = nom.lower()
+    return nom.replace("_", "-") if registre == "crates" else nom
+
+# ---------- git ----------
+
+def git(racine, *args):
+    """Sortie de git (texte) ou None en cas d'échec."""
+    try:
+        r = subprocess.run(["git", "-C", racine, *args], capture_output=True, check=False)
+    except OSError:
+        return None
+    return r.stdout.decode("utf-8", "replace") if r.returncode == 0 else None
+
+def base_par_defaut(racine):
+    for ref in ("origin/main", "main", "master"):
+        mb = git(racine, "merge-base", "HEAD", ref)
+        if mb and mb.strip():
+            return mb.strip()
+    if git(racine, "rev-parse", "--verify", "-q", "HEAD") is not None:
+        return "HEAD"
+    return VIDE
+
+def lire(racine, ref, chemin):
+    """Contenu d'un fichier à `ref` (None = arbre de travail) ; absent = chaîne vide."""
+    if ref is None:
+        try:
+            with open(os.path.join(racine, chemin), encoding="utf-8", errors="replace") as f:
+                return f.read()
+        except OSError:
+            return ""
+    return git(racine, "show", f"{ref}:{chemin}") or ""
+
+def fichiers(racine, ref):
+    if ref is None:
+        out = git(racine, "ls-files", "-z", "-c", "-o", "--exclude-standard")
+    else:
+        out = git(racine, "ls-tree", "-r", "-z", "--name-only", ref)
+    return sorted({p for p in (out or "").split("\0") if p and suivi(p)})
+
+# ---------- extraction : manifestes ----------
+
+def finalise(d):
+    return {k: tuple(sorted(v)) for k, v in d.items()}
+
+def cargo_manifeste(texte):
+    d, out = tomllib.loads(texte), defaultdict(set)
+    sources = [d] + [v for v in (d.get("target") or {}).values() if isinstance(v, dict)]
+    tables = [s.get(k) for s in sources for k in ("dependencies", "dev-dependencies", "build-dependencies")]
+    tables.append((d.get("workspace") or {}).get("dependencies"))
+    for t in tables:
+        for nom, v in (t if isinstance(t, dict) else {}).items():
+            if isinstance(v, dict):
+                if v.get("git") or v.get("path") or v.get("workspace"):
+                    continue
+                nom, v = v.get("package", nom), v.get("version", "*")
+            if isinstance(v, str):
+                out[("crates", nom)].add(v)
+    return finalise(out)
+
+def npm_manifeste(texte):
+    d, out = json.loads(texte), defaultdict(set)
+    for k in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
+        for nom, v in (d.get(k) if isinstance(d.get(k), dict) else {}).items():
+            if not isinstance(v, str):
+                continue
+            if v.startswith("npm:"):
+                reel, i = v[4:], v.rfind("@")
+                nom, v = (v[4:i], v[i + 1:]) if i > 4 else (reel, "*")
+            elif ":" in v or "/" in v:
+                continue
+            out[("npm", nom)].add(v)
+    return finalise(out)
+
+def pyproject_manifeste(texte):
+    d, out = tomllib.loads(texte), defaultdict(set)
+
+    def ligne(t):
+        if isinstance(t, str):
+            r = pep508(t)
+            if r:
+                out[("pypi", r[0])].add(re.sub(r"\s+", " ", t.strip()))
+
+    p = d.get("project") or {}
+    for t in p.get("dependencies") or []:
+        ligne(t)
+    for liste in (p.get("optional-dependencies") or {}).values():
+        for t in liste if isinstance(liste, list) else []:
+            ligne(t)
+    for liste in (d.get("dependency-groups") or {}).values():
+        for t in liste if isinstance(liste, list) else []:
+            ligne(t)
+    poetry = (d.get("tool") or {}).get("poetry") or {}
+    tables = [poetry.get("dependencies"), poetry.get("dev-dependencies")]
+    tables += [g.get("dependencies") for g in (poetry.get("group") or {}).values() if isinstance(g, dict)]
+    for t in tables:
+        for nom, v in (t if isinstance(t, dict) else {}).items():
+            if nom.lower() == "python":
+                continue
+            if isinstance(v, dict):
+                if v.get("git") or v.get("path") or v.get("url"):
+                    continue
+                v = v.get("version", "*")
+            if isinstance(v, str):
+                nom = re.sub(r"[._]+", "-", nom).lower()
+                out[("pypi", nom)].add(f"{nom}=={v}" if re.fullmatch(r"\d[\w.+-]*", v) else f"{nom} {v}")
+    return finalise(out)
+
+def requirements(texte):
+    out = defaultdict(set)
+    for l in texte.splitlines():
+        l = re.split(r"(?:^|\s)(?:#|--)", l, 1)[0].strip()
+        if not l or l.startswith("-") or non_paquet(l):
+            continue
+        r = pep508(l)
+        if r:
+            out[("pypi", r[0])].add(re.sub(r"\s+", " ", l))
+    return finalise(out)
+
+def manifeste(chemin, texte):
+    """{(registre, nom): (spec, …)} des dépendances d'un manifeste ; ValueError si illisible."""
+    nom = chemin.rsplit("/", 1)[-1]
+    try:
+        if nom == "Cargo.toml":
+            return cargo_manifeste(texte)
+        if nom == "package.json":
+            return npm_manifeste(texte)
+        if nom == "pyproject.toml":
+            return pyproject_manifeste(texte)
+        return requirements(texte)
+    except (ValueError, TypeError, AttributeError) as e:  # tomllib.TOMLDecodeError et json.JSONDecodeError sont des ValueError
+        raise ValueError(str(e))
+
+def version_exacte(registre, spec):
+    if registre == "pypi":
+        r = pep508(spec)
+        return r[1] if r else None
+    return exacte(spec, SEMVER)
+
+# ---------- extraction : lockfiles ----------
+
+def lock_toml(nom_fichier, texte):
+    """Cargo.lock, uv.lock, poetry.lock : paquets venant d'un registre (sources git, chemin, url ignorées)."""
+    registre, out = LOCKFILES[nom_fichier], set()
+    for p in tomllib.loads(texte).get("package") or []:
+        nom, v, src = p.get("name"), p.get("version"), p.get("source")
+        if not nom or not v:
+            continue
+        if nom_fichier == "Cargo.lock":
+            ok = isinstance(src, str) and src.startswith(("registry+", "sparse+"))
+        elif nom_fichier == "uv.lock":
+            ok = isinstance(src, dict) and "registry" in src
+        else:
+            ok = not isinstance(src, dict) or src.get("type") not in ("git", "directory", "file", "url")
+        if ok:
+            out.add((registre, re.sub(r"[._]+", "-", nom).lower() if registre == "pypi" else nom, v))
+    return out
+
+def lock_package_lock(texte):
+    out = set()
+    for cle, p in (json.loads(texte).get("packages") or {}).items():
+        if not cle or not isinstance(p, dict) or p.get("link") or not p.get("version"):
+            continue
+        nom = p.get("name") or cle.rsplit("node_modules/", 1)[-1]
+        out.add(("npm", nom, p["version"]))
+    return out
+
+def lock_pnpm(texte):
+    out, dans = set(), False
+    for l in texte.splitlines():
+        if l and not l[0].isspace():
+            dans = l.rstrip() == "packages:"
+            continue
+        m = dans and re.match(r"^  ['\"]?/?((?:@[^/@\s'\"]+/)?[^@/\s'\"]+)@([^(:'\"\s]+)", l)
+        if m:
+            out.add(("npm", m.group(1), m.group(2)))
+    return out
+
+PROTOCOLES = ("workspace:", "patch:", "file:", "link:", "portal:", "git", "http")
+
+def lock_yarn(texte):
+    out, nom = set(), None
+    for l in texte.splitlines():
+        if l and l[0] not in " \t#":
+            nom = None
+            if not l.rstrip().endswith(":") or l.startswith("__metadata"):
+                continue
+            desc = l.rstrip()[:-1].split(",")[0].strip().strip("\"'")
+            i = desc.rfind("@")
+            if i <= 0 or desc[i + 1:].startswith(PROTOCOLES) or "@" in desc[1:i]:
+                continue
+            nom = desc[:i]
+        elif nom:
+            m = re.match(r"^\s+version:?\s+\"?([^\"\s]+)\"?\s*$", l)
+            if m:
+                out.add(("npm", nom, m.group(1)))
+                nom = None
+    return out
+
+def lock(chemin, texte):
+    """{(registre, nom, version)} d'un lockfile ; ValueError si illisible."""
+    nom = chemin.rsplit("/", 1)[-1]
+    try:
+        if nom in ("Cargo.lock", "uv.lock", "poetry.lock"):
+            return lock_toml(nom, texte)
+        if nom == "package-lock.json":
+            return lock_package_lock(texte)
+        return lock_pnpm(texte) if nom == "pnpm-lock.yaml" else lock_yarn(texte)
+    except (ValueError, TypeError, AttributeError) as e:
+        raise ValueError(str(e))
+
+# ---------- états (base / cible) ----------
+
+class Etat:
+    def __init__(self, racine, ref):
+        self.racine, self.ref = racine, ref
+        self.fichiers = fichiers(racine, ref)
+        self.manifestes = [p for p in self.fichiers if not est_lock(p)]
+        self.locks = [p for p in self.fichiers if est_lock(p)]
+        self._lock = {}
+
+    def texte(self, chemin):
+        return lire(self.racine, self.ref, chemin)
+
+    def lock(self, chemin, illisibles=None):
+        if chemin not in self._lock:
+            try:
+                self._lock[chemin] = lock(chemin, self.texte(chemin))
+            except ValueError:
+                self._lock[chemin] = set()
+                if illisibles is not None:
+                    illisibles.append(chemin)
+        return self._lock[chemin]
+
+    def resolu(self, chemin, registre, nom):
+        """Versions résolues par les lockfiles du dossier du manifeste, sinon du plus proche parent qui en a un."""
+        d, n = os.path.dirname(chemin), norme(registre, nom)
+        while True:
+            locks = [p for p in self.locks if os.path.dirname(p) == d and LOCKFILES[p.rsplit("/", 1)[-1]] == registre]
+            if locks:
+                return {v for p in locks for r, nm, v in self.lock(p) if r == registre and norme(r, nm) == n}
+            if not d:
+                return set()
+            d = os.path.dirname(d)
+
+# ---------- contrôle ----------
+
+def touches(racine, base, cible):
+    args = ["diff", "-z", "--name-only", "--no-renames", base] + ([cible] if cible else [])
+    noms = set((git(racine, *args) or "").split("\0"))
+    if not cible:
+        noms |= set((git(racine, "ls-files", "-z", "-o", "--exclude-standard") or "").split("\0"))
+    return sorted(p for p in noms if p and suivi(p))
+
+def directs(base, cible, touche, illisibles):
+    """{(registre, nom, version|None): {chemins}} des paquets de manifestes dont spec ou version résolue a changé."""
+    res = {}
+    for chemin in cible.manifestes:
+        try:
+            c = manifeste(chemin, cible.texte(chemin))
+        except ValueError:
+            if chemin in touche:
+                illisibles.append(chemin)
+            continue
+        try:
+            b = manifeste(chemin, base.texte(chemin)) if chemin in base.manifestes else {}
+        except ValueError:
+            b = {}
+        for (registre, nom), specs in c.items():
+            rc, rb = cible.resolu(chemin, registre, nom), base.resolu(chemin, registre, nom)
+            if b.get((registre, nom)) == specs and rc == rb:
+                continue
+            v = next(iter(rc)) if len(rc) == 1 else None
+            for spec in specs if v is None else ():
+                v = v or version_exacte(registre, spec)
+            res.setdefault((registre, nom, v), set()).add(chemin)
+    return res
+
+def controle(racine, base_ref, cible_ref, touche, strict):
+    """(blocs, avertissements, examinés) ; fichiers illisibles : avertissement, blocage si strict."""
+    base, cible = Etat(racine, base_ref), Etat(racine, cible_ref)
+    blocs, avert, illisibles = [], [], []
+    dir_ = directs(base, cible, touche, illisibles)
+    for (registre, nom, v), chemins in sorted(dir_.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2] or "")):
+        b, a = [], []
+        examine(registre, nom, v, b, a, strict)
+        ou = f" ({', '.join(sorted(chemins))}) : "
+        blocs += [m.replace(" : ", ou, 1) for m in b]
+        avert += [m.replace(" : ", ou, 1) for m in a]
+    connus = set()
+    for p in base.locks:
+        connus |= base.lock(p)
+    nouveaux = set()
+    for p in cible.locks:
+        if p in touche:
+            nouveaux |= cible.lock(p, illisibles)
+    nouveaux = sorted(nouveaux - connus - {(r, n, v) for r, n, v in dir_})
+    if len(nouveaux) > MAX_TRANSITIFS:
+        avert.append(f"{len(nouveaux) - MAX_TRANSITIFS} paquets transitifs non examinés (plus de {MAX_TRANSITIFS})")
+        nouveaux = nouveaux[:MAX_TRANSITIFS]
+    ids = osv_lot(nouveaux)
+    if ids is None:
+        (blocs if strict else avert).append("paquets transitifs : vérification impossible (OSV)")
+    else:
+        for (r, n, v), f in zip(nouveaux, ids):
+            if f:
+                avert.append(f"{r} {n}@{v} (transitif) : faille connue ({', '.join(f[:3])})")
+    for p in sorted(set(illisibles)):
+        (blocs if strict else avert).append(f"{p} illisible")
+    return blocs, avert, len(dir_) + len(nouveaux)
+
+def etat_hash(racine, base_ref, cible_ref, touche):
+    h = hashlib.sha256(base_ref.encode())
+    for p in touche:
+        h.update(b"\0" + p.encode() + b"\0" + lire(racine, cible_ref, p).encode("utf-8", "replace"))
+    return h.hexdigest()
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--depot")
+    ap.add_argument("--base")
+    ap.add_argument("--cible")
+    ap.add_argument("--hook", choices=("post", "stop"))
+    ap.add_argument("--ci", action="store_true")
+    args = ap.parse_args()
+    data = {}
+    if args.hook:
+        data = json.load(sys.stdin)
+        if args.hook == "post" and data.get("tool_name", "Bash") != "Bash":
+            ti = data.get("tool_input") or {}
+            if not suivi(str(ti.get("file_path") or ti.get("notebook_path") or "")):
+                sys.exit(0)
+    depot = os.path.abspath(data.get("cwd") or args.depot or os.getcwd())
+    top = git(depot, "rev-parse", "--show-toplevel")
+    if not top:
+        sys.exit(0)
+    racine = top.strip()
+    base_ref = args.base or base_par_defaut(racine)
+    touche = touches(racine, base_ref, args.cible)
+    if not touche:
+        sys.exit(0)
+    if args.hook == "post":
+        gitdir = (git(racine, "rev-parse", "--absolute-git-dir") or "").strip()
+        h = etat_hash(racine, base_ref, args.cible, touche)
+        fichier = os.path.join(gitdir, "garde-deps-etat")
+        try:
+            with open(fichier, encoding="utf-8") as f:
+                if f.read().strip() == h:
+                    sys.exit(0)
+        except OSError:
+            pass
+        if gitdir:
+            with open(fichier, "w", encoding="utf-8") as f:
+                f.write(h)
+    blocs, avert, _ = controle(racine, base_ref, args.cible, touche, args.ci)
+    if blocs:
+        texte = "⛔ Bloqué par garde-deps (manifestes) :\n" + "\n".join(f"- {b}" for b in blocs)
+        if args.hook == "stop" and data.get("stop_hook_active"):
+            print(json.dumps({"systemMessage": "⚠ garde-deps : paquet non conforme encore présent : "
+                              + " ; ".join(blocs)}, ensure_ascii=False))
+            sys.exit(0)
+        print(texte, file=sys.stderr)
+        sys.exit(2)
+    if avert and args.hook == "post":
+        msg = "⚠ garde-deps : " + " ; ".join(avert)
+        print(json.dumps({"systemMessage": msg, "hookSpecificOutput": {
+            "hookEventName": "PostToolUse", "additionalContext": msg}}, ensure_ascii=False))
+    elif avert and not args.hook:
+        for a in avert:
+            print(f"⚠ {a}")
+    sys.exit(0)
+
+if __name__ == "__main__":
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        if "--ci" in sys.argv:
+            import traceback
+            traceback.print_exc()
+            sys.exit(2)
+        sys.exit(0)

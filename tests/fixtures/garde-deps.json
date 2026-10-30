@@ -244,5 +244,49 @@
    ]
   }
  },
- "osv-pypi-gpl-pkg": {}
+ "osv-pypi-gpl-pkg": {},
+ "npm-trou": {
+  "dist-tags": {
+   "latest": "1.0.0"
+  },
+  "versions": {
+   "1.0.0": {
+    "license": "MIT"
+   }
+  },
+  "time": {
+   "created": "2020-01-01T00:00:00Z",
+   "modified": "2026-06-01T00:00:00Z",
+   "1.0.0": "2026-06-01T00:00:00Z"
+  }
+ },
+ "osv-npm-trou": {
+  "vulns": [
+   {
+    "id": "GHSA-trou-npm"
+   }
+  ]
+ },
+ "pypi-trou": {
+  "info": {
+   "version": "1.0.0",
+   "license_expression": "MIT",
+   "classifiers": []
+  },
+  "releases": {
+   "1.0.0": [
+    {
+     "yanked": false,
+     "upload_time_iso_8601": "2026-06-01T00:00:00Z"
+    }
+   ]
+  }
+ },
+ "osv-pypi-trou": {
+  "vulns": [
+   {
+    "id": "PYSEC-2099-0002"
+   }
+  ]
+ }
 }
