@@ -114,7 +114,7 @@ bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py && claude plugin va
 - [x] L3 — PostToolUse et Stop : masquage, alerte, scan de fin (étapes 10-12)
   Fichiers : hooks/garde-secret.py, hooks/hooks.json, tests/test_secrets.sh
   Fait quand : masquage et Stop verts, preuve en session faite — `bash tests/test_hooks.sh && claude plugin validate --strict .`
-- [ ] L4 — CI via le job `deps`, protection des exceptions, relecteur (étapes 13-14)
+- [x] L4 — CI via le job `deps`, protection des exceptions, relecteur (étapes 13-14)
   Fichiers : hooks/verifie-manifestes.py, hooks/deps_communs.py, hooks/garde-deps.py, agents/relecteur.md, tests/test_secrets.sh, tests/test_hooks.sh
   Fait quand : `--ci` bloque un secret sans manifeste touché — `bash tests/test_hooks.sh`
 - [ ] L5 — documentation, version 0.4.0, clôture (étapes 15-16)

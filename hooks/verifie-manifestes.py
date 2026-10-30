@@ -371,10 +371,11 @@ def touches(racine, base, cible):
     return sorted(gardes)
 
 def sensibles(racine, base, cible):
-    """Fichiers modifiés sous .github/workflows/ ou nommés .garde-deps-exceptions (listés dans le résumé CI)."""
+    """Fichiers modifiés sous .github/workflows/ ou nommés .garde-deps-exceptions / .garde-secret-exceptions
+    (listés dans le résumé CI)."""
     sortie = git(racine, "diff", "-z", "--name-only", "--no-renames", base, cible) or ""
     return sorted(p for p in sortie.split("\0")
-                  if p.startswith(".github/workflows/") or p.rsplit("/", 1)[-1] == ".garde-deps-exceptions")
+                  if p.startswith(".github/workflows/") or p.rsplit("/", 1)[-1] in (".garde-deps-exceptions", ".garde-secret-exceptions"))
 
 def lignes_exceptions(texte):
     return {l.strip() for l in texte.splitlines() if l.strip() and not l.strip().startswith("#")}
@@ -550,13 +551,19 @@ def main():
     sys.exit(0)
 
 if __name__ == "__main__":
+    code = 0
     try:
         main()
-    except SystemExit:
-        raise
+    except SystemExit as e:
+        code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
     except Exception:
         if "--ci" in sys.argv:
             import traceback
             traceback.print_exc()
-            sys.exit(2)
-        sys.exit(0)
+            code = 2
+    if "--ci" in sys.argv:  # le scan de secrets tourne aussi quand les dépendances bloquent
+        sys.stdout.flush()
+        r = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "garde-secret.py"),
+                            *sys.argv[1:]], check=False)
+        code = max(code, r.returncode)
+    sys.exit(code)

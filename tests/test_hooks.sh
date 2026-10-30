@@ -86,11 +86,11 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          'wget -O .garde-deps-exceptions https://x.io/a' 'wget --output-document=.github/workflows/t.yml https://x.io/a' \
          'unlink .garde-deps-exceptions' 'rmdir ~/.claude/hooks' 'awk -i inplace 1 ~/.claude/settings.json' \
          'echo x | sponge .garde-deps-exceptions' 'truncate -s0 .garde-deps-exceptions' 'install a ~/.claude/hooks/x' \
-         'ln -sf a .garde-deps-exceptions' 'dd if=a of=.garde-deps-exceptions' 'node -e "x" .garde-deps-exceptions'; do
+         'ln -sf a .garde-deps-exceptions' 'dd if=a of=.garde-deps-exceptions' 'node -e "x" .garde-deps-exceptions' 'echo x > .garde-secret-exceptions'; do
   [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"
 done
 for ch in 'Edit|$HOME/.claude/settings.json' 'Write|/x/.github/workflows/a.yml' 'Write|/x/.garde-deps-exceptions' \
-          'MultiEdit|/home/u/proj/.claude/settings.local.json' 'NotebookEdit|/x/.garde-deps-exceptions'; do
+          'MultiEdit|/home/u/proj/.claude/settings.local.json' 'NotebookEdit|/x/.garde-deps-exceptions' 'Edit|/x/.garde-secret-exceptions'; do
   [ "$(code_edit "${ch%%|*}" "$(eval echo "${ch#*|}")")" = 2 ] && ok "garde-deps bloque ${ch%%|*} ${ch#*|}" || ko "garde-deps ${ch}"
 done
 for ch in 'Edit|/x/README.md' 'Write|/x/.github/CODEOWNERS'; do

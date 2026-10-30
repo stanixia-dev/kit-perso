@@ -364,5 +364,51 @@ printf '%s\n' "$AFF" > "$d/f.txt"
 st "$d" false; [ "$CODE" = 0 ] && [ -z "$SORTIE$ERREUR" ] && ok "stop : un faible n'est pas signalé" || ko "stop : faible"
 st "$TMP/horsdepot" false; vaut "stop : hors dépôt" 0
 
+# ---------- CI via verifie-manifestes.py, protection des exceptions ----------
+V="$RACINE/hooks/verifie-manifestes.py"
+FIX="$RACINE/tests/fixtures/garde-deps.json"
+ci() { # DEPOT [options] ; lance verifie-manifestes.py --ci
+  local d=$1; shift
+  SORTIE=$(env GARDE_DEPS_FIXTURES="$FIX" GARDE_DEPS_AUJOURDHUI=2026-10-29 python3 "$V" --depot "$d" --base main --ci "$@" 2>"$TMP/erreur")
+  CODE=$?
+  ERREUR=$(cat "$TMP/erreur")
+}
+d=$(depot ci-secret)
+git -C "$d" checkout -qb f
+printf 'T=%s\n' "$GH" > "$d/n.txt"; valide "$d" secret
+ci "$d"
+vaut "verifie-manifestes --ci échoue sur un secret sans manifeste touché" 2
+grep -q 'garde-secret' <<<"$ERREUR" && ok "--ci : détection de garde-secret" || ko "--ci : message garde-secret"
+sans_valeur "--ci"
+d=$(depot ci-propre)
+git -C "$d" checkout -qb f
+echo propre > "$d/ok.txt"; valide "$d" propre
+ci "$d"; vaut "verifie-manifestes --ci propre : 0" 0
+d=$(depot ci-deux)
+git -C "$d" checkout -qb f
+printf '{"dependencies":{"gpl-pkg":"1.0.0"}}' > "$d/package.json"
+printf 'T=%s\n' "$GH" > "$d/n.txt"; valide "$d" les-deux
+ci "$d"
+vaut "--ci : dépendance et secret bloquent" 2
+grep -q 'garde-deps' <<<"$ERREUR" && grep -q 'garde-secret' <<<"$ERREUR" && ok "--ci : garde-secret tourne même si les dépendances bloquent" || ko "--ci : les deux contrôles"
+GITHUB_STEP_SUMMARY="$TMP/resume2.md" ci "$d"
+grep -q 'garde-deps' "$TMP/resume2.md" && grep -q 'garde-secret' "$TMP/resume2.md" && ok "--ci : les deux sections dans le résumé" || ko "--ci : résumé"
+d=$(depot ci-sensible)
+git -C "$d" checkout -qb f
+printf 'x.txt %s 2026-10-30 ajoutee\n' "$EMP" > "$d/.garde-secret-exceptions"; valide "$d" exc
+GITHUB_STEP_SUMMARY="$TMP/resume3.md" ci "$d"
+grep -q '\.garde-secret-exceptions' "$TMP/resume3.md" && ok "--ci : .garde-secret-exceptions listé parmi les fichiers sensibles" || ko "--ci : fichier sensible"
+
+# garde-deps protège .garde-secret-exceptions
+gd() { json=$(python3 -c 'import json, sys
+t, k, v = sys.argv[1:4]
+print(json.dumps({"tool_name": t, "cwd": "/tmp", "tool_input": {k: v}}))' "$@")
+  SORTIE=$(printf '%s' "$json" | python3 "$RACINE/hooks/garde-deps.py" 2>"$TMP/erreur"); CODE=$?; ERREUR=$(cat "$TMP/erreur"); }
+gd Edit file_path /x/.garde-secret-exceptions; vaut "garde-deps bloque Edit .garde-secret-exceptions" 2
+grep -q 'garde-secret-exceptions' <<<"$ERREUR" && ok "garde-deps cite .garde-secret-exceptions" || ko "garde-deps message"
+gd Write file_path /x/.garde-secret-exceptions; vaut "garde-deps bloque Write .garde-secret-exceptions" 2
+gd Bash command 'echo x > .garde-secret-exceptions'; vaut "garde-deps bloque echo x > .garde-secret-exceptions" 2
+gd Bash command 'git diff main -- .garde-secret-exceptions'; vaut "garde-deps laisse passer git diff du fichier" 0
+
 # ---------- FIN ----------
 exit $((ECHECS > 0))

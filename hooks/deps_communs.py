@@ -9,7 +9,7 @@ DEBUT = time.monotonic()
 
 # Chemins que l'agent n'a pas le droit d'écrire (motifs fnmatch sur le realpath ; `~` = dossier personnel)
 PROTEGES = ("~/.claude/settings*.json", "*/.claude/settings*.json", "~/.claude/hooks/*", "~/.claude/plugins/*",
-            "*/.github/workflows/*", "*/.garde-deps-exceptions")
+            "*/.github/workflows/*", "*/.garde-deps-exceptions", "*/.garde-secret-exceptions")
 
 def protege(chemin, cwd=None):
     """Vrai si l'écriture de `chemin` (relatif à cwd) est interdite à l'agent."""
