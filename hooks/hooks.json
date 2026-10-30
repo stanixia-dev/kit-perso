@@ -7,13 +7,19 @@
     ],
     "PostToolUse": [
       {"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rappel-clear.py\"", "timeout": 10}]},
-      {"matcher": "Edit|Write|MultiEdit|Bash", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/verifie-manifestes.py\" --hook post", "timeout": 30}]}
+      {"matcher": "Edit|Write|MultiEdit|Bash", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/verifie-manifestes.py\" --hook post", "timeout": 30}]},
+      {"matcher": "Bash|Read|Grep", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/garde-secret.py\" --hook post", "timeout": 15}]}
     ],
     "Stop": [
-      {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/verifie-manifestes.py\" --hook stop", "timeout": 30}]}
+      {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/verifie-manifestes.py\" --hook stop", "timeout": 30}]},
+      {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/garde-secret.py\" --hook stop", "timeout": 30}]}
     ],
     "SubagentStop": [
-      {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/verifie-manifestes.py\" --hook stop", "timeout": 30}]}
+      {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/verifie-manifestes.py\" --hook stop", "timeout": 30}]},
+      {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/garde-secret.py\" --hook stop", "timeout": 30}]}
+    ],
+    "PostToolUseFailure": [
+      {"matcher": "Bash|Read|Grep", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/garde-secret.py\" --hook post", "timeout": 15}]}
     ]
   }
 }

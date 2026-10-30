@@ -287,5 +287,82 @@ hk Read "$d" file_path "$d/.env"; passe "Read .env couvert par une exception *"
 hk Read "$d" file_path "$d/.env.local"; passe "Read .env.local couvert par le joker *"
 hk Read "$TMP/w" file_path "$d/.env"; bloque "Read .env d'un autre dépôt que le cwd (exception sans effet)"
 
+# ---------- PostToolUse, PostToolUseFailure, Stop ----------
+VC="valeur""connue-${A36:0:10}"
+# po EVENEMENT OUTIL CWD CHAMP VALEUR : tool_response = {stdout: VALEUR, stderr: "", interrupted: false}
+po() {
+  local json
+  json=$(python3 -c 'import json, sys
+ev, t, c, _, v = sys.argv[1:6]
+d = {"hook_event_name": ev, "tool_name": t, "cwd": c}
+if ev == "PostToolUseFailure":
+    d["error"] = v
+else:
+    d["tool_response"] = {"stdout": v, "stderr": "", "interrupted": False}
+print(json.dumps(d))' "$@")
+  SORTIE=$(printf '%s' "$json" | MON_TOKEN_TEST="$VC" python3 "$S" --hook post 2>"$TMP/erreur")
+  CODE=$?
+  ERREUR=$(cat "$TMP/erreur")
+}
+# json_ok CHAMP : extrait un champ de SORTIE (chemin pointé), vide si absent
+champ() { printf '%s' "$SORTIE" | python3 -c 'import json, sys
+d = json.load(sys.stdin)
+for k in sys.argv[1].split("."):
+    d = d[k]
+print(json.dumps(d) if not isinstance(d, str) else d)' "$1" 2>/dev/null; }
+sans_secret() { # $1 = libellé, $2 = valeur qui ne doit apparaître nulle part
+  case "$SORTIE$ERREUR" in *"$2"*) ko "$1 : la valeur apparaît";; *) ok "$1 : la valeur n'apparaît pas";; esac
+}
+
+po PostToolUse Bash "$TMP/w" stdout "sortie $GH fin"
+[ "$CODE" = 0 ] && [ "$(champ hookSpecificOutput.updatedToolOutput.stdout)" = "sortie [masqué:github:$EMP] fin" ] \
+  && ok "post : fort masqué, forme conservée" || ko "post : fort masqué"
+[ "$(champ hookSpecificOutput.updatedToolOutput.interrupted)" = false ] && [ "$(champ hookSpecificOutput.hookEventName)" = PostToolUse ] \
+  && ok "post : autres champs conservés" || ko "post : autres champs"
+grep -q 'masqué' <<<"$(champ systemMessage)" && grep -q 'masqué' <<<"$(champ hookSpecificOutput.additionalContext)" \
+  && ok "post : alerte" || ko "post : alerte"
+sans_secret "post (github)" "$A36"
+po PostToolUse Bash "$TMP/w" stdout "avant"$'\n'"$CLE"$'\n'"après"
+[ "$CODE" = 0 ] && grep -q 'masqué:cle-privee' <<<"$SORTIE" && ok "post : clé privée masquée" || ko "post : clé privée"
+case "$(champ hookSpecificOutput.updatedToolOutput.stdout)" in *END*|*PRIVATE*) ko "post : clé privée entière";; *"avant"*"après"*) ok "post : clé privée masquée en entier, END compris";; *) ko "post : clé privée (texte autour)";; esac
+sans_secret "post (clé privée)" "$A36"
+po PostToolUse Bash "$TMP/w" stdout "la valeur est $VC ici"
+grep -q 'masqué:valeur-connue' <<<"$SORTIE" && ok "post : valeur connue de l'environnement masquée" || ko "post : valeur connue"
+sans_secret "post (valeur connue)" "$VC"
+printf 'MON_API_KEY=%s\nHOME_DIR=/tmp/zzzzzzzzzz\n' "valeurenv-${A36:5:10}" > "$TMP/w/.env"
+po PostToolUse Bash "$TMP/w" stdout "contenu valeurenv-${A36:5:10} et /tmp/zzzzzzzzzz"
+case "$(champ hookSpecificOutput.updatedToolOutput.stdout)" in *"valeurenv-"*) ko "post : valeur du .env masquée";; *"/tmp/zzzzzzzzzz"*) ok "post : valeur du .env masquée, le reste intact";; *) ko "post : .env";; esac
+rm "$TMP/w/.env"
+po PostToolUse Bash "$TMP/w" stdout "rien à signaler 12345678"
+[ "$CODE" = 0 ] && [ -z "$SORTIE" ] && ok "post : sortie saine, stdout vide" || ko "post : sortie saine"
+po PostToolUse Bash "$TMP/w" stdout "$AWSEX"
+[ -z "$SORTIE" ] && ok "post : exemple AKIA…EXAMPLE laissé" || ko "post : exemple"
+po PostToolUseFailure Bash "$TMP/w" error "échec avec $GH"
+[ "$CODE" = 0 ] && grep -q 'additionalContext' <<<"$SORTIE" && ok "failure : alerte" || ko "failure : alerte"
+sans_secret "failure" "$A36"
+po PostToolUseFailure Bash "$TMP/w" error "échec banal"
+[ -z "$SORTIE" ] && ok "failure : erreur saine, stdout vide" || ko "failure : erreur saine"
+SORTIE=$(printf 'pas du json' | python3 "$S" --hook post 2>/dev/null); CODE=$?
+[ "$CODE" = 0 ] && [ -z "$SORTIE" ] && ok "post : entrée invalide, sortie intacte" || ko "post : entrée invalide"
+
+# stop
+st() { # $1 = cwd, $2 = stop_hook_active
+  SORTIE=$(printf '{"cwd":"%s","stop_hook_active":%s}' "$1" "$2" | python3 "$S" --hook stop 2>"$TMP/erreur")
+  CODE=$?
+  ERREUR=$(cat "$TMP/erreur")
+}
+d=$(depot stop)
+printf 'T=%s\n' "$GH" > "$d/n.txt"
+st "$d" false; vaut "stop : bloque une première fois" 2
+sans_valeur "stop"
+st "$d" true
+[ "$CODE" = 0 ] && grep -q 'systemMessage' <<<"$SORTIE" && ok "stop : avertit ensuite" || ko "stop : avertissement"
+sans_valeur "stop (rappel)"
+rm "$d/n.txt"
+st "$d" false; [ "$CODE" = 0 ] && [ -z "$SORTIE$ERREUR" ] && ok "stop : dépôt propre, muet" || ko "stop : dépôt propre"
+printf '%s\n' "$AFF" > "$d/f.txt"
+st "$d" false; [ "$CODE" = 0 ] && [ -z "$SORTIE$ERREUR" ] && ok "stop : un faible n'est pas signalé" || ko "stop : faible"
+st "$TMP/horsdepot" false; vaut "stop : hors dépôt" 0
+
 # ---------- FIN ----------
 exit $((ECHECS > 0))
