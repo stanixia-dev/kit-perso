@@ -1,6 +1,6 @@
 # kit-perso
 
-Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, rappel-clear) et les skills (livrer) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
+Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, garde-secret, rappel-clear) et les skills (livrer) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
 
 ## Installation
 
@@ -17,7 +17,7 @@ Ou en deux temps dans une session :
 /plugin install kit-perso@kit-perso
 ```
 
-Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 1 skill, 4 hooks (PreToolUse, PostToolUse, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; le skill `/kit-perso:livrer`.
+Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 1 skill, 5 hooks (PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; le skill `/kit-perso:livrer`.
 
 ## Mise à jour
 
@@ -62,9 +62,42 @@ Tests : `bash tests/test_hooks.sh` (appelle `tests/test_manifestes.sh`), hors r�
 
 `.garde-deps-exceptions` (racine du dépôt) autorise un paquet refusé : une ligne `<registre> <nom> <version|*> <AAAA-MM-JJ> <raison>` (`crates`, `npm` ou `pypi`), `#` pour un commentaire. En local, le blocage devient un avertissement `(exception du … : …)`. En CI, seules les exceptions déjà sur `main` comptent ; celles qu'ajoute la PR sont listées dans le résumé du job, non appliquées. Ajouter une exception = commit de l'utilisateur sur `main`, puis relancer la CI de la PR.
 
+## Contrôle des secrets
+
+Applique les règles « Secrets » du CLAUDE.md global : l'agent ne lit pas `~/.ssh/`, `~/.config/gh/` ni les `.env`, n'affiche et n'écrit aucun token ou mot de passe, n'en commite aucun. `hooks/garde-secret.py` n'a aucune dépendance. Aucun de ses messages ne contient une valeur : seulement le chemin, le commit, le type de secret et une empreinte (12 premiers hex de `sha256`).
+
+Le filtre de commandes reste une aide ; les barrières sont le **masquage de la sortie** et le **scan du résultat git** :
+
+1. **PreToolUse** (`--hook pre`, `onFailure: "block"`) : refuse l'accès à un chemin protégé (Read, Grep, Edit, Write, MultiEdit, NotebookEdit, et chaque chemin cité dans une commande Bash, y compris dans `bash -c`, heredocs et substitutions), un secret dans le contenu écrit ou dans le texte d'une commande, `gh auth token` et `git credential fill`. Avant `git commit`, `git push` et `gh pr create`, il scanne le dépôt.
+2. **PostToolUse** (Bash, Read, Grep, BashOutput, TaskOutput) : remplace chaque secret reconnu par `[masqué:<type>:<empreinte>]` dans la sortie (`updatedToolOutput`), ainsi que les valeurs de `os.environ` et des `.env` du dossier dont le nom évoque un secret. PostToolUseFailure : alerte seule.
+3. **Stop, SubagentStop** : scan du dépôt, bloque une fois puis avertit.
+4. **CI** : `verifie-manifestes.py --ci` (job `tests / deps`) enchaîne `garde-secret.py --ci`, depuis `main` : la PR ne peut ni l'altérer ni le retirer. Le secret s'affiche donc sous le nom de check `deps`.
+
+Le scan lit chaque commit un par un (un secret retiré au commit suivant reste dans l'historique), plus la copie de travail et les fichiers non suivis. Il refuse aussi des noms de fichiers (`.env`, `id_rsa`, `.p12`…).
+
+| Contrôle | Signature | Générique | Échec du hook |
+|---|---|---|---|
+| Pre : chemin protégé | bloque | — | bloque |
+| Pre : contenu écrit | bloque | avertit | bloque |
+| Pre Bash : chemin ou texte de la commande | bloque | — | bloque |
+| Pre Bash : scan avant commit, push, PR | bloque | avertit ; scan incomplet (budget de 10 s) : avertit, mais bloque `git push` et `gh pr create` | bloque |
+| Post : sortie | masque + alerte | — | sortie intacte |
+| Stop, SubagentStop | bloque une fois, puis avertit | — | passe |
+| CI (`--ci`) | bloque | bloque | bloque |
+
+Signature : formats connus (GitHub, GitLab, Anthropic, OpenAI, AWS, Google, Slack, Stripe, npm, PyPI, clés privées). Générique : JWT, URL à mot de passe, affectation `password = "…"`, écartés dans la doc et les tests.
+
+Résiduels assumés : un script qui lit un fichier protégé et transforme la valeur avant de l'afficher ; un mot de passe sans signature, absent des valeurs connues ; la sortie d'une commande en échec, non réécrivable (alerte seule) ; `cd x && git push` (le scan local vise le dossier courant, CI et Stop rattrapent) ; un chemin contenant un blanc ; un jeton encodé en UTF-16 (les motifs lisent du texte UTF-8) ; `gh gist create` d'un fichier non protégé qui contient un secret hors signature. Le bac à sable système n'est pas utilisé. Purge d'historique et révocation : à la charge de l'utilisateur. Secours : `claude plugin disable kit-perso@kit-perso`.
+
+Tests : `bash tests/test_secrets.sh` (appelé par `tests/test_hooks.sh`), `HOME` jetable, jetons construits à l'exécution.
+
+### Exceptions de secrets
+
+`.garde-secret-exceptions` (racine du dépôt) : une ligne `<glob relatif> <empreinte|*> <AAAA-MM-JJ> <raison>`, `#` pour un commentaire. L'empreinte est celle affichée par le message de blocage, jamais la valeur ; `*` couvre tout le chemin, lecture comprise. Sans effet hors de la racine du dépôt ni sur `~/.ssh` et autres identifiants personnels. En CI, seules les exceptions déjà sur `main` comptent ; celles de la PR sont listées dans le résumé, non appliquées. Le fichier est protégé contre les écritures de l'agent.
+
 ## Verrouillage (à appliquer par l'utilisateur)
 
-Les hooks protègent déjà les réglages Claude (`~/.claude/settings*.json`, `**/.claude/settings*.json`), `~/.claude/hooks/` et `~/.claude/plugins/`, `**/.github/workflows/` et `**/.garde-deps-exceptions` contre les écritures de l'agent (Edit, Write, MultiEdit, NotebookEdit, et les commandes Bash qui écrivent ou redirigent vers ces chemins, `claude plugin disable|uninstall` compris). Un hook se désactive depuis les réglages : pour verrouiller aussi cela, ajouter ce bloc à `~/.claude/settings.json` (7 règles `permissions.deny` ; `Edit(...)` couvre aussi l'outil Write) :
+Les hooks protègent déjà les réglages Claude (`~/.claude/settings*.json`, `**/.claude/settings*.json`), `~/.claude/hooks/` et `~/.claude/plugins/`, `**/.github/workflows/`, `**/.garde-deps-exceptions` et `**/.garde-secret-exceptions` contre les écritures de l'agent (Edit, Write, MultiEdit, NotebookEdit, et les commandes Bash qui écrivent ou redirigent vers ces chemins, `claude plugin disable|uninstall` compris). Un hook se désactive depuis les réglages : pour verrouiller aussi cela, ajouter ce bloc à `~/.claude/settings.json` (13 règles `permissions.deny` ; `Edit(...)` couvre aussi l'outil Write) :
 
 ```json
 {
@@ -76,13 +109,21 @@ Les hooks protègent déjà les réglages Claude (`~/.claude/settings*.json`, `*
       "Edit(~/.claude/plugins/**)",
       "Edit(**/.claude/settings*.json)",
       "Edit(**/.github/workflows/**)",
-      "Edit(**/.garde-deps-exceptions)"
+      "Edit(**/.garde-deps-exceptions)",
+      "Edit(**/.garde-secret-exceptions)",
+      "Read(~/.ssh/**)",
+      "Read(~/.config/gh/**)",
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.production)"
     ]
   }
 }
 ```
 
 À faire **après** la fusion de la PR qui introduit le contrôle (sinon elle n'aurait pas pu modifier les workflows). Sur GitHub, rendre le check `tests / deps` obligatoire sur `main` (Settings, Branches ou Rulesets, « Require status checks ») : réglage du dépôt, à faire à la main.
+
+Pas de `Read(**/.env.*)` : un refus l'emporte sur tout et rendrait `.env.example` illisible.
 
 Piste non retenue ici : le bac à sable Bash de Claude Code (`sandbox.enabled: true`, `allowUnsandboxedCommands: false`) appliquerait ces règles `deny` aux écritures Bash au niveau du système, ce qui couvrirait les contournements locaux résiduels ; à vérifier sur la version installée.
 

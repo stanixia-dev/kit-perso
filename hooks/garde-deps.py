@@ -234,7 +234,8 @@ def decoupe(toks):
 
 # ---------- écritures vers les chemins protégés ----------
 
-MOTIFS = (".claude/settings", ".claude/hooks", ".claude/plugins", ".github/workflows", ".garde-deps-exceptions")
+MOTIFS = (".claude/settings", ".claude/hooks", ".claude/plugins", ".github/workflows", ".garde-deps-exceptions",
+          ".garde-secret-exceptions")
 ECRIVAINS = {"cp", "mv", "rm", "ln", "install", "rsync", "dd", "truncate", "tee", "touch", "chmod", "chown", "patch",
              "tar", "unzip", "unlink", "rmdir", "sponge"}
 INTERPRETES = re.compile(r"(python[\d.]*|node|ruby|perl|php|deno|bun)")
@@ -490,7 +491,7 @@ ECRITURE_FICHIER = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
 def refuse_protege(chemin):
     print(f"⛔ Bloqué par garde-deps : écriture vers un chemin protégé ({chemin}) : réglages Claude, hooks, plugins, "
-          "workflows CI et .garde-deps-exceptions.\nDemande à l'utilisateur de faire cette modification lui-même.",
+          "workflows CI, .garde-deps-exceptions et .garde-secret-exceptions.\nDemande à l'utilisateur de faire cette modification lui-même.",
           file=sys.stderr)
     sys.exit(2)
 

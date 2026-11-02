@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 — 2026-10-30
+
+- Hook garde-secret : refuse l'accès de l'agent à `~/.ssh`, `~/.config/gh` et aux `.env`, les secrets dans le contenu écrit ou les commandes, `gh auth token` et `git credential fill`.
+- Masquage des secrets dans la sortie des outils (PostToolUse, `updatedToolOutput`) et alerte sur les erreurs (PostToolUseFailure).
+- Scan du dépôt, commit par commit, avant `git commit`/`push`/`gh pr create`, à l'arrêt (Stop, SubagentStop) et en CI via le job `deps` (`verifie-manifestes.py --ci` enchaîne `garde-secret.py --ci`).
+- Fichier `.garde-secret-exceptions`, protégé contre les écritures de l'agent ; le relecteur contrôle les secrets et ces exceptions.
+- README : section « Contrôle des secrets » et règles `deny` supplémentaires (13).
+
 ## 0.3.0 — 2026-10-29
 
 - Hook garde-deps : bloque l'ajout d'un paquet à licence non permissive, faille OSV, déprécié/yanked ou inactif depuis plus de 2 ans.
