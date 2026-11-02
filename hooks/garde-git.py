@@ -47,8 +47,11 @@ def segments(cmd):
         affecte = False
         while toks and (re.match(r"^\w+=", toks[0]) or toks[0] in ("env", "command", "exec", "time", "nohup")
                         or toks[0].rsplit("/", 1)[-1] == "rtk" or (toks[0] in ("bypass", "proxy") and len(toks) > 1)):
-            affecte = affecte or bool(re.match(r"^\w+=", toks[0]))
+            affecte = affecte or bool(re.match(r"^\w+=", toks[0])) or toks[0] == "env"
+            env = toks[0] == "env"
             toks = toks[1:]
+            while env and toks and toks[0].startswith("-"):  # options d'env (-i, -u X, -C d, -S s)
+                toks = toks[2:] if toks[0] in ("-u", "-C", "-S", "--unset", "--chdir", "--split-string") else toks[1:]
         if toks:
             yield toks, affecte
 
@@ -68,8 +71,21 @@ def refuse_affectation(base, sc, affecte):
 def verifie_git(args_sc, sc, cwd):
     if sc == "push":
         for a in args_sc:
-            if a in ("--receive-pack", "--exec") or a.startswith(("--receive-pack=", "--exec=")):
+            nom = a.split("=", 1)[0]
+            # git accepte les abréviations d'options longues (--rec, --exe…) : préfixe d'au moins 3 caractères
+            if len(nom) >= 5 and nom.startswith("--") and ("--receive-pack".startswith(nom) or "--exec".startswith(nom)):
                 bloque(f"`git push {a}` est interdit : le programme désigné s'exécuterait en local, hors du bac à sable.")
+        pos = [a for a in args_sc if not a.startswith("-")]
+        depots = [a.split("=", 1)[1] for a in args_sc if a.startswith("--repo=")]
+        if "--repo" in args_sc and args_sc.index("--repo") + 1 < len(args_sc):
+            depots.append(args_sc[args_sc.index("--repo") + 1])
+        depots += pos[:1]
+        for d in depots:
+            if re.match(r"^(https://|ssh://|git@[^:/\s]+:)", d):
+                continue
+            if d.startswith(("file://", "ext::", "~", ".")) or "/" in d or ":" in d or os.path.exists(os.path.join(cwd or "", d)):
+                bloque(f"`git push {d}` est interdit : seuls un nom de remote ou une URL https/ssh sont admis "
+                       "(les hooks d'un dépôt cible local s'exécuteraient hors du bac à sable).")
         for a in args_sc:
             if a in ("--force", "-f", "--force-with-lease", "--force-if-includes", "--mirror", "--delete", "-d", "--no-verify", "--prune") \
                or a.startswith("--force-with-lease=") or (re.match(r"^-[a-zA-Z]+$", a) and "f" in a):
@@ -121,7 +137,12 @@ def main():
     data = json.load(sys.stdin)
     cmd = (data.get("tool_input") or {}).get("command", "")
     cwd = CWD_SESSION = data.get("cwd") or None
-    for toks, affecte in segments(cmd):
+    segs = list(segments(cmd))
+    livre = any((t[0].rsplit("/", 1)[-1] == "gh") or (t[0].rsplit("/", 1)[-1] == "git" and sous_commande(t)[0] == "push") for t, _ in segs)
+    if livre and any(t[0] in ("export", "declare", "typeset") for t, _ in segs):
+        bloque("`export`/`declare`/`typeset` dans la même commande qu'un `git push` ou un `gh` est interdit : "
+               "la variable (ex. GIT_SSH_COMMAND) ferait exécuter du code hors du bac à sable.")
+    for toks, affecte in segs:
         base = toks[0].rsplit("/", 1)[-1]
         if base in ("cd", "pushd"):
             # suit les `cd <dossier> && …` (worktrees)

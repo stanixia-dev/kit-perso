@@ -247,6 +247,7 @@ echo "contenu" > "$HOME/.ssh/id_x"; ln -sfn "$HOME/.ssh/id_x" "$TMP/w/l"; echo "
 for c in 'gh pr create --body-file l' 'gh pr create --body-file=l' 'gh issue view --body-file l' 'git push origin l'; do
   hk Bash "$TMP/w" command "$c"; bloque "exclue : $c"
 done
+for c in 'git push -Fl origin b' 'git push -F=l origin b'; do hk Bash "$TMP/w" command "$c"; bloque "exclue : $c"; done
 hk Bash "$TMP/w" command 'gh pr create --body-file notes.md'; passe "exclue : gh pr create --body-file notes.md"
 rm -f "$TMP/w/l" "$TMP/w/notes.md" "$HOME/.ssh/id_x"
 hk_json 'pas du json'; bloque "entrée JSON invalide"

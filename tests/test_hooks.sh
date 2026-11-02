@@ -39,7 +39,10 @@ code_edit() { # $1 = tool_name, $2 = chemin
 [ "$(code_garde 'gh pr merge 1')" = 2 ] && ok "garde-git bloque gh pr merge" || ko "garde-git pr merge"
 [ "$(code_garde 'git status')" = 0 ] && ok "garde-git laisse passer git status" || ko "garde-git status"
 for c in 'git push --receive-pack=x origin b' 'git push --exec x origin b' 'git push --exec=x origin b' 'GIT_SSH_COMMAND=x git push origin b' \
-         'env A=1 gh pr create' "bash -c 'X=1 git push origin b'" 'rtk git push --receive-pack=x origin b' 'A=1 gh pr view 1'; do
+         'env A=1 gh pr create' "bash -c 'X=1 git push origin b'" 'rtk git push --receive-pack=x origin b' 'A=1 gh pr view 1' \
+         'git push --receive=x origin b' 'git push --exe=x origin b' 'git push --rec x origin b' 'env -i gh pr create' 'env -u X git push origin b' \
+         'git push /tmp/depot b' 'git push ./d b' 'git push file:///tmp/d b' 'git push ext::sh origin b' 'git push --repo=../d b' \
+         'export GIT_SSH_COMMAND=x; git push origin b' 'declare -x A=1 && gh pr create'; do
   [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
 done
 for c in 'git push -u origin claude/x' 'gh pr create --fill' 'gh pr checks --watch --interval 20' 'rtk git push -u origin claude/x'; do

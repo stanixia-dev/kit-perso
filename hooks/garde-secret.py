@@ -427,7 +427,13 @@ def bash_chemins(cmd, ctx, prof=0):
         if sous == "push" or (base == "gh" and args[:1] in (["pr"], ["run"], ["issue"])):
             # commande exclue du bac à sable : un argument qui désigne un fichier (lien compris) vers un chemin protégé
             for t in args:
-                for v in ((t, t.split("=", 1)[1]) if t.startswith("--") and "=" in t else (t,)):
+                if t.startswith("--") and "=" in t:
+                    vals = (t, t.split("=", 1)[1])
+                elif t.startswith("-") and not t.startswith("--") and len(t) > 2:
+                    vals = (t, t[2:], t[2:].lstrip("="))  # option courte collée : -Fl, -F=l
+                else:
+                    vals = (t,)
+                for v in vals:
                     v = developpe(v)
                     r = os.path.realpath(v if os.path.isabs(v) else os.path.join(ctx.get("cwd") or os.getcwd(), v))
                     if os.path.exists(r) and classe(r):
