@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 — 2026-11-02
+
+- Hook garde-deps : seul `python[3] -c "<code>"` (rien après le code) en lecture seule stricte (liste blanche : imports json, os, sys, re, tomllib ; `os.path`, `os.environ`, `os.getenv` ; `open` sans mode ou en `r`/`rb`) n'est plus bloqué comme écriture ; les autres interpréteurs et toute autre forme restent bloqués. Tout code non ASCII (identifiants Unicode pleine chasse) ou contenant `*` (dépaquetage) est refusé.
+
 ## 1.0.0 — 2026-11-02
 
 - Fragment de réglages `config/bac-a-sable.json` (bac à sable Bash strict, exclusions étroites pour `git push` et quelques `gh`), à fusionner par l'utilisateur ; sonde `tests/sonde-bac-a-sable.sh`.
