@@ -152,6 +152,8 @@ Chaque commande Bash de l'agent tourne dans le bac à sable système de Claude C
 
 Toute spec porte sous son titre `Statut : en cours`. Dans le commit de son dernier lot (ou son dernier commit, sans lots), le codeur coche les critères d'acceptation remplis, passe la ligne à `Statut : livrée` et déplace la spec dans `docs/specs/archives/`. Avec `> Coupure PR`, seule la dernière PR archive. Le relecteur vérifie statut, cases et emplacement ; `livrer` lie la spec archivée.
 
+Le statut n'a que deux valeurs, `en cours` et `livrée`. La validation de la spec est le feu vert de l'utilisateur à l'orchestrateur, pas un état : on n'écrit ni `validée` ni date. Le relecteur bloque toute autre valeur.
+
 ## Bascule depuis ~/.claude
 
 1. Installer le plugin (voir ci-dessus) et vérifier avec `claude plugin details`.

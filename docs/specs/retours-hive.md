@@ -68,7 +68,7 @@ Aligner specs, codeur et relecteur sur les règles de lots qui ont causé des bl
 - [x] L1 — règles des lots : coupure, fichiers imprévus, plusieurs commits (étapes 1-3)
   Fichiers : agents/specs.md, agents/codeur.md, agents/relecteur.md, README.md
   Fait quand : règles présentes, tests verts — `grep -q 'Coupure PR' agents/codeur.md && grep -q 'union' agents/relecteur.md && grep -q 'lockfile' agents/specs.md && bash tests/test_hooks.sh >/dev/null`
-- [ ] L2 — format de spec : Conception et statut (étapes 4-5)
+- [x] L2 — format de spec : Conception et statut (étapes 4-5)
   Fichiers : agents/specs.md, agents/relecteur.md, README.md
   Fait quand : item Conception et règle de statut présents — `grep -q 'Conception' agents/specs.md && grep -q 'feu vert' README.md && bash tests/test_hooks.sh >/dev/null`
 - [ ] L3 — garde-git et bac à sable pour `gh issue` (étapes 6-7)
