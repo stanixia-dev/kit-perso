@@ -1,6 +1,6 @@
 # kit-perso
 
-Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, garde-secret, rappel-clear) et les skills (livrer) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
+Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, garde-secret, rappel-clear) et les skills (livrer, ticket) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
 
 ## Installation
 
@@ -17,7 +17,7 @@ Ou en deux temps dans une session :
 /plugin install kit-perso@kit-perso
 ```
 
-Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 1 skill, 5 hooks (PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; le skill `/kit-perso:livrer`.
+Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 2 skills, 5 hooks (PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; les skills `/kit-perso:livrer` et `/kit-perso:ticket`.
 
 ## Mise à jour
 
@@ -153,6 +153,16 @@ Chaque commande Bash de l'agent tourne dans le bac à sable système de Claude C
 Toute spec porte sous son titre `Statut : en cours`. Dans le commit de son dernier lot (ou son dernier commit, sans lots), le codeur coche les critères d'acceptation remplis, passe la ligne à `Statut : livrée` et déplace la spec dans `docs/specs/archives/`. Avec `> Coupure PR`, seule la dernière PR archive. Le relecteur vérifie statut, cases et emplacement ; `livrer` lie la spec archivée.
 
 Le statut n'a que deux valeurs, `en cours` et `livrée`. La validation de la spec est le feu vert de l'utilisateur à l'orchestrateur, pas un état : on n'écrit ni `validée` ni date. Le relecteur bloque toute autre valeur.
+
+## Tickets
+
+Si la spec répond à des tickets du dépôt, elle porte sous le statut la ligne `Tickets : #9, #10`. `livrer` ajoute alors au corps de la PR une section « Tickets » : `Closes #n` pour la PR qui termine la spec (archivée), `Refs #n` pour les autres ; GitHub ferme les tickets à la fusion.
+
+Le skill `/kit-perso:ticket "<constat>"` (invocation par l'utilisateur seul, effet de bord public) ouvre un ticket du dépôt courant, ou commente un des tickets dont l'utilisateur est l'auteur (`--author @me`) en cas de doublon. Corps en quatre lignes : **Constat**, **Proposition**, **Source**, **Reproduire**.
+
+`garde-git` n'admet de `gh issue` que `view`, `list`, `ls`, `status`, `create`, `new` et `comment` (liste blanche : une sous-commande future est bloquée). Fermer, modifier, supprimer, rouvrir ou transférer un ticket reste à l'utilisateur. `create`, `new` et `comment` refusent `-R`/`--repo`, `--edit-last`, `--delete-last` et toute URL (autre dépôt) ; `view` et `list` avec `-R` restent admis.
+
+Résiduels : `cd` vers un autre dépôt avant `gh issue create` ; `gh api` en POST (échoue faute de jeton dans le bac à sable, mais pas sans lui) ; l'auteur du ticket commenté n'est pas vérifié par un hook (règle du skill).
 
 ## Bascule depuis ~/.claude
 

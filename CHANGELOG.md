@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.0 — 2026-11-02
+
+- Agents specs, codeur, relecteur : `> Coupure PR` libre et insérée par le codeur, lockfiles et config listés dans les lots, fichier imprévu ajouté au lot (#9, #10).
+- Un lot peut compter plusieurs commits, tous suffixés `(L<n>)` ; le relecteur contrôle l'union de leurs fichiers (#11).
+- Specs : item Conception facultatif (limite 200 lignes), ligne `Tickets` (#12).
+- Statut de spec limité à `en cours` et `livrée` ; le relecteur bloque toute autre valeur (#13).
+- Skill `ticket` (ouvre ou commente un ticket au format standard) ; `livrer` ajoute `Closes`/`Refs` au corps de PR.
+- Majeur : garde-git bloque les sous-commandes de `gh issue` hors lecture, création et commentaire ; `gh issue create|comment` exclus du bac à sable.
+
 ## 1.0.1 — 2026-11-02
 
 - Hook garde-deps : seul `python[3] -c "<code>"` (rien après le code) en lecture seule stricte (liste blanche : imports json, os, sys, re, tomllib ; `os.path`, `os.environ`, `os.getenv` ; `open` sans mode ou en `r`/`rb`) n'est plus bloqué comme écriture ; les autres interpréteurs et toute autre forme restent bloqués. Tout code non ASCII (identifiants Unicode pleine chasse) ou contenant `*` (dépaquetage) est refusé.

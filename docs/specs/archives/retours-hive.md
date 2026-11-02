@@ -1,5 +1,5 @@
 # Spec — retours Hive et tickets GitHub
-Statut : en cours
+Statut : livrée
 Tickets : #9, #10, #11, #12, #13
 
 ## 1. Objectif
@@ -45,15 +45,15 @@ Aligner specs, codeur et relecteur sur les règles de lots qui ont causé des bl
 11. **Version.** `.claude-plugin/plugin.json` → `2.0.0` ; CHANGELOG `## 2.0.0 — <date du jour>` : une ligne par ticket #9-#13, une pour le skill `ticket` et `livrer`, une « Majeur : garde-git bloque les sous-commandes de `gh issue` hors lecture, création et commentaire ».
 
 ## 5. Critères d'acceptation
-- [ ] `agents/codeur.md` impose `(L<n>)` sur chaque commit d'un lot et l'insertion de `> Coupure PR` quand le brief limite les lots.
-- [ ] `agents/relecteur.md` : union des fichiers par lot, lockfile admis, fichier ajouté au lot = mineur, brief ignoré, statut hors `en cours`/`livrée` bloquant.
-- [ ] `agents/specs.md` : coupure libre, lockfiles/config, item Conception, limite 200 conditionnelle, ligne Tickets, statut ≠ validation.
-- [ ] garde-git bloque `gh issue close 9`, `gh issue edit 9 -t x`, `gh issue delete 9`, `gh issue reopen 9`, `gh issue transfer 9 o/r`, `gh issue create -R o/r -t x -b y`, `gh issue create --repo=o/r -t x`, `gh issue comment 9 --repo o/r -b x`, `gh issue comment https://github.com/o/r/issues/1 -b x`, `gh issue comment 9 --edit-last -b x`, `rtk gh issue close 9`, `bash -c 'gh issue delete 9'`.
-- [ ] garde-git admet `gh issue create -t x -F f`, `gh issue comment 9 -F f`, `gh issue view 1 -R stanixia-dev/Hive`, `gh issue list --author @me --state open`.
-- [ ] `config/bac-a-sable.json` exclut les 4 commandes de l'étape 7 et `controle_bac` le vérifie.
-- [ ] `skills/ticket/SKILL.md` existe avec `disable-model-invocation: true` et les 4 rubriques Constat, Proposition, Source, Reproduire.
-- [ ] `skills/livrer/SKILL.md` décrit `Closes #n` (spec archivée) et `Refs #n` (sinon).
-- [ ] Version 2.0.0 dans `plugin.json` et en tête du CHANGELOG ; `claude plugin validate --strict .` vert.
+- [x] `agents/codeur.md` impose `(L<n>)` sur chaque commit d'un lot et l'insertion de `> Coupure PR` quand le brief limite les lots.
+- [x] `agents/relecteur.md` : union des fichiers par lot, lockfile admis, fichier ajouté au lot = mineur, brief ignoré, statut hors `en cours`/`livrée` bloquant.
+- [x] `agents/specs.md` : coupure libre, lockfiles/config, item Conception, limite 200 conditionnelle, ligne Tickets, statut ≠ validation.
+- [x] garde-git bloque `gh issue close 9`, `gh issue edit 9 -t x`, `gh issue delete 9`, `gh issue reopen 9`, `gh issue transfer 9 o/r`, `gh issue create -R o/r -t x -b y`, `gh issue create --repo=o/r -t x`, `gh issue comment 9 --repo o/r -b x`, `gh issue comment https://github.com/o/r/issues/1 -b x`, `gh issue comment 9 --edit-last -b x`, `rtk gh issue close 9`, `bash -c 'gh issue delete 9'`.
+- [x] garde-git admet `gh issue create -t x -F f`, `gh issue comment 9 -F f`, `gh issue view 1 -R stanixia-dev/Hive`, `gh issue list --author @me --state open`.
+- [x] `config/bac-a-sable.json` exclut les 4 commandes de l'étape 7 et `controle_bac` le vérifie.
+- [x] `skills/ticket/SKILL.md` existe avec `disable-model-invocation: true` et les 4 rubriques Constat, Proposition, Source, Reproduire.
+- [x] `skills/livrer/SKILL.md` décrit `Closes #n` (spec archivée) et `Refs #n` (sinon).
+- [x] Version 2.0.0 dans `plugin.json` et en tête du CHANGELOG ; `claude plugin validate --strict .` vert.
 
 ## 6. Tests
 - `bash tests/test_hooks.sh | grep -v '^OK'; echo "code ${PIPESTATUS[0]}"` → aucune ligne `ECHEC`, `code 0`.
@@ -62,7 +62,7 @@ Aligner specs, codeur et relecteur sur les règles de lots qui ont causé des bl
 - `grep -c '(L<n>)' agents/codeur.md agents/relecteur.md` → ≥ 1 chacun ; `grep -q 'Conception' agents/specs.md && grep -q '200' agents/specs.md`
 
 ## 7. Questions ouvertes
-- Skill `ticket` en `disable-model-invocation: true` : seul l'utilisateur l'invoque (`/kit-perso:ticket`), l'orchestrateur ne peut plus ouvrir de tickets de lui-même comme pour Hive. Recommandé : oui (effet de bord public, règle du README).
+- Skill `ticket` en `disable-model-invocation: true` : seul l'utilisateur l'invoque (`/kit-perso:ticket`), l'orchestrateur ne peut plus ouvrir de tickets de lui-même comme pour Hive. Tranché : oui (effet de bord public, règle du README).
 
 ## Lots
 - [x] L1 — règles des lots : coupure, fichiers imprévus, plusieurs commits (étapes 1-3)
@@ -74,6 +74,6 @@ Aligner specs, codeur et relecteur sur les règles de lots qui ont causé des bl
 - [x] L3 — garde-git et bac à sable pour `gh issue` (étapes 6-7)
   Fichiers : hooks/garde-git.py, tests/test_hooks.sh, config/bac-a-sable.json, README.md
   Fait quand : cas bloqués et admis des critères testés et verts — `bash tests/test_hooks.sh >/dev/null`
-- [ ] L4 — skill ticket, livrer, docs et version 2.0.0 (étapes 8-11)
+- [x] L4 — skill ticket, livrer, docs et version 2.0.0 (étapes 8-11)
   Fichiers : skills/ticket/SKILL.md, skills/livrer/SKILL.md, agents/specs.md, README.md, CHANGELOG.md, .claude-plugin/plugin.json
   Fait quand : plugin valide et tests verts — `claude plugin validate --strict . && bash tests/test_hooks.sh >/dev/null`
