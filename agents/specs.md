@@ -20,10 +20,10 @@ Format de la spec (≤ 120 lignes), avec sous le titre la ligne `Statut : en cou
 8. **Lots** (facultatif) — seulement si le travail se découpe en au moins 2 étapes testables séparément ; sinon, omets la section. Sous le titre `## Lots`, chaque lot tient en 3 lignes :
    ```
    - [ ] L1 — <objectif> (étapes 1-2)
-     Fichiers : <chemins>
+     Fichiers : <chemins, lockfiles et config d'outil touchés compris (ex. `Cargo.lock`, `.cargo/config.toml`)>
      Fait quand : <critère> — `<commande de test>`
    ```
-   Après chaque lot, les tests du projet doivent passer. Au-delà de 5 lots, insère la ligne `> Coupure PR` entre deux lots (5 lots au plus par PR). Les commandes « Fait quand » ne citent pas le chemin de la spec : elle est archivée au dernier lot.
+   Après chaque lot, les tests du projet doivent passer. Insère la ligne `> Coupure PR` entre deux lots là où une PR doit s'arrêter ; obligatoire au-delà de 5 lots (5 au plus par PR). Les commandes « Fait quand » ne citent pas le chemin de la spec : elle est archivée au dernier lot.
 
 Choisis la solution la plus simple qui marche ; justifie en une ligne les choix non évidents.
 Rapport final ≤ 10 lignes : chemin de la spec + questions ouvertes.

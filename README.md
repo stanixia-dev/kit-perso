@@ -142,9 +142,10 @@ Chaque commande Bash de l'agent tourne dans le bac à sable système de Claude C
 
 ## Flux avec lots
 
-À utiliser quand la spec se découpe en lots testables séparément ; sinon, le flux reste inchangé. Le format est l'item 8 de `agents/specs.md`.
+À utiliser quand la spec se découpe en lots testables séparément ; sinon, le flux reste inchangé. Le format est l'item Lots de `agents/specs.md`.
 
-- Un lot = un commit vert sur `claude/<sujet>`, coché dans la spec ; une seule PR ; un seul relecteur, à la fin.
+- Un lot = un ou plusieurs commits verts suffixés `(L<n>)` sur `claude/<sujet>`, case cochée dans le dernier ; une seule PR ; un seul relecteur, à la fin. Un fichier imprévu mais nécessaire est ajouté à la ligne `Fichiers :` du lot (mineur pour le relecteur) ; les lockfiles et la config d'outil touchés sont listés d'avance.
+- `> Coupure PR` se place là où une PR doit s'arrêter (obligatoire au-delà de 5 lots) ; si le brief arrête le codeur avant la prochaine coupure, il l'ajoute après le dernier lot traité. Le relecteur ignore le brief : le périmètre de la PR vient des cases et des coupures de la spec à HEAD.
 - Avec `> Coupure PR` : livrer la première PR, attendre que l'utilisateur la fusionne, faire `/clear`, puis créer `claude/<sujet>-2` depuis `main` à jour ; le codeur reprend aux lots non cochés (les cases cochées sont arrivées dans `main` avec la fusion).
 
 ## Clôture et archivage

@@ -65,7 +65,7 @@ Aligner specs, codeur et relecteur sur les règles de lots qui ont causé des bl
 - Skill `ticket` en `disable-model-invocation: true` : seul l'utilisateur l'invoque (`/kit-perso:ticket`), l'orchestrateur ne peut plus ouvrir de tickets de lui-même comme pour Hive. Recommandé : oui (effet de bord public, règle du README).
 
 ## Lots
-- [ ] L1 — règles des lots : coupure, fichiers imprévus, plusieurs commits (étapes 1-3)
+- [x] L1 — règles des lots : coupure, fichiers imprévus, plusieurs commits (étapes 1-3)
   Fichiers : agents/specs.md, agents/codeur.md, agents/relecteur.md, README.md
   Fait quand : règles présentes, tests verts — `grep -q 'Coupure PR' agents/codeur.md && grep -q 'union' agents/relecteur.md && grep -q 'lockfile' agents/specs.md && bash tests/test_hooks.sh >/dev/null`
 - [ ] L2 — format de spec : Conception et statut (étapes 4-5)
