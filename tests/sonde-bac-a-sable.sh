@@ -28,6 +28,7 @@ cd "$(dirname "$0")/.." || exit 1
 sortie() { # $1 = OK|TROU|INFO, $2 = libellé
   echo "$1 $2"
   [ "$1" = TROU ] && TROUS=$((TROUS + 1))
+  return 0
 }
 
 # lit_dossier <dossier> : 0 si un fichier ordinaire s'ouvre, 1 sinon, 2 si le dossier n'existe pas
