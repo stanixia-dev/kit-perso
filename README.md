@@ -162,6 +162,8 @@ Le skill `/kit-perso:ticket "<constat>"` (invocation par l'utilisateur seul, eff
 
 `garde-git` n'admet de `gh issue` que `view`, `list`, `ls`, `status`, `create`, `new` et `comment` (liste blanche : une sous-commande future est bloquée). Fermer, modifier, supprimer, rouvrir ou transférer un ticket reste à l'utilisateur. `create`, `new` et `comment` refusent `-R`/`--repo`, `--edit-last`, `--delete-last` et toute URL (autre dépôt) ; `view` et `list` avec `-R` restent admis.
 
+`garde-git` bloque aussi `gh repo set-default` et `gh alias set|import`, et `create` refuse `--parent`, `--blocking` et `--blocked-by`.
+
 Résiduels : `cd` vers un autre dépôt avant `gh issue create` ; `gh api` en POST (échoue faute de jeton dans le bac à sable, mais pas sans lui) ; l'auteur du ticket commenté n'est pas vérifié par un hook (règle du skill).
 
 ## Bascule depuis ~/.claude

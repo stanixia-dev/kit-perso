@@ -48,7 +48,11 @@ done
 for c in 'gh issue close 9' 'gh issue edit 9 -t x' 'gh issue delete 9' 'gh issue reopen 9' 'gh issue transfer 9 o/r' \
          'gh issue create -R o/r -t x -b y' 'gh issue create --repo=o/r -t x' 'gh issue comment 9 --repo o/r -b x' \
          'gh issue comment https://github.com/o/r/issues/1 -b x' 'gh issue comment 9 --edit-last -b x' 'rtk gh issue close 9' \
-         "bash -c 'gh issue delete 9'" 'gh issue create -Ro/r -t x' 'gh issue comment 9 --delete-last' 'gh issue -R o/r close 9' 'gh issue pin 9' 'gh issue'; do
+         "bash -c 'gh issue delete 9'" 'gh issue create -Ro/r -t x' 'gh issue comment 9 --delete-last' 'gh issue -R o/r close 9' 'gh issue pin 9' 'gh issue' \
+         'gh issue comment HTTPS://github.com/o/r/issues/1 -b x' 'gh issue create --parent HTTPS://github.com/o/r/issues/1 -t x' \
+         'gh issue comment 9 --edit-last=true -b x' 'gh issue comment 9 --delete-last=true' 'gh issue create -wRo/r -t x' 'gh issue create -eRo/r -t x' \
+         'gh issue create --parent 5 -t x' 'gh issue create --blocking=5 -t x' 'gh issue create --blocked-by 5 -t x' \
+         'gh repo set-default o/r' 'gh alias set x y' 'gh alias import f'; do
   [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
 done
 for c in 'gh issue create -t x -F f' 'gh issue comment 9 -F f' 'gh issue view 1 -R stanixia-dev/Hive' 'gh issue list --author @me --state open'; do
