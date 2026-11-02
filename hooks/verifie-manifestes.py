@@ -565,5 +565,5 @@ if __name__ == "__main__":
         sys.stdout.flush()
         r = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "garde-secret.py"),
                             *sys.argv[1:]], check=False)
-        code = max(code, r.returncode)
+        code = max(code, r.returncode if r.returncode >= 0 else 2)  # tué par un signal = échec
     sys.exit(code)
