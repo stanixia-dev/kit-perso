@@ -69,7 +69,7 @@ Applique les règles « Secrets » du CLAUDE.md global : l'agent ne lit pas `~/.
 Le filtre de commandes reste une aide ; les barrières sont le **masquage de la sortie** et le **scan du résultat git** :
 
 1. **PreToolUse** (`--hook pre`, `onFailure: "block"`) : refuse l'accès à un chemin protégé (Read, Grep, Edit, Write, MultiEdit, NotebookEdit, et chaque chemin cité dans une commande Bash, y compris dans `bash -c`, heredocs et substitutions), un secret dans le contenu écrit ou dans le texte d'une commande, `gh auth token` et `git credential fill`. Avant `git commit`, `git push` et `gh pr create`, il scanne le dépôt.
-2. **PostToolUse** (Bash, Read, Grep) : remplace chaque secret reconnu par `[masqué:<type>:<empreinte>]` dans la sortie (`updatedToolOutput`), ainsi que les valeurs de `os.environ` et des `.env` du dossier dont le nom évoque un secret. PostToolUseFailure : alerte seule.
+2. **PostToolUse** (Bash, Read, Grep, BashOutput, TaskOutput) : remplace chaque secret reconnu par `[masqué:<type>:<empreinte>]` dans la sortie (`updatedToolOutput`), ainsi que les valeurs de `os.environ` et des `.env` du dossier dont le nom évoque un secret. PostToolUseFailure : alerte seule.
 3. **Stop, SubagentStop** : scan du dépôt, bloque une fois puis avertit.
 4. **CI** : `verifie-manifestes.py --ci` (job `tests / deps`) enchaîne `garde-secret.py --ci`, depuis `main` : la PR ne peut ni l'altérer ni le retirer. Le secret s'affiche donc sous le nom de check `deps`.
 
@@ -80,14 +80,14 @@ Le scan lit chaque commit un par un (un secret retiré au commit suivant reste d
 | Pre : chemin protégé | bloque | — | bloque |
 | Pre : contenu écrit | bloque | avertit | bloque |
 | Pre Bash : chemin ou texte de la commande | bloque | — | bloque |
-| Pre Bash : scan avant commit, push, PR | bloque | avertit | bloque |
+| Pre Bash : scan avant commit, push, PR | bloque | avertit ; scan incomplet (budget de 10 s) : avertit, mais bloque `git push` et `gh pr create` | bloque |
 | Post : sortie | masque + alerte | — | sortie intacte |
 | Stop, SubagentStop | bloque une fois, puis avertit | — | passe |
 | CI (`--ci`) | bloque | bloque | bloque |
 
 Signature : formats connus (GitHub, GitLab, Anthropic, OpenAI, AWS, Google, Slack, Stripe, npm, PyPI, clés privées). Générique : JWT, URL à mot de passe, affectation `password = "…"`, écartés dans la doc et les tests.
 
-Résiduels assumés : un script qui lit un fichier protégé et transforme la valeur avant de l'afficher ; un mot de passe sans signature, absent des valeurs connues ; la sortie d'une commande en échec, non réécrivable (alerte seule) ; `cd x && git push` (le scan local vise le dossier courant, CI et Stop rattrapent) ; un chemin contenant un blanc. Le bac à sable système n'est pas utilisé. Purge d'historique et révocation : à la charge de l'utilisateur. Secours : `claude plugin disable kit-perso@kit-perso`.
+Résiduels assumés : un script qui lit un fichier protégé et transforme la valeur avant de l'afficher ; un mot de passe sans signature, absent des valeurs connues ; la sortie d'une commande en échec, non réécrivable (alerte seule) ; `cd x && git push` (le scan local vise le dossier courant, CI et Stop rattrapent) ; un chemin contenant un blanc ; un jeton encodé en UTF-16 (les motifs lisent du texte UTF-8) ; `gh gist create` d'un fichier non protégé qui contient un secret hors signature. Le bac à sable système n'est pas utilisé. Purge d'historique et révocation : à la charge de l'utilisateur. Secours : `claude plugin disable kit-perso@kit-perso`.
 
 Tests : `bash tests/test_secrets.sh` (appelé par `tests/test_hooks.sh`), `HOME` jetable, jetons construits à l'exécution.
 
