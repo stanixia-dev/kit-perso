@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 — 2026-11-02
+
+- Hook garde-deps : un `python -c` / `node -e` qui ne fait que lire un chemin protégé n'est plus bloqué comme écriture ; tout indice d'écriture dans le code inline (ou un argument protégé hors du code) reste bloqué.
+
 ## 1.0.0 — 2026-11-02
 
 - Fragment de réglages `config/bac-a-sable.json` (bac à sable Bash strict, exclusions étroites pour `git push` et quelques `gh`), à fusionner par l'utilisateur ; sonde `tests/sonde-bac-a-sable.sh`.

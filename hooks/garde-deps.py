@@ -255,6 +255,23 @@ def motif(t):
     n = t.rstrip("/")
     return n.rsplit("/", 1)[-1] in (".claude", ".github") and n != ""
 
+INLINE = {"-c", "-e", "-p", "-E", "-r", "--eval", "--print", "--command"}
+INDICE_ECRITURE = re.compile(
+    r"""open\s*\([^)]*(?:,\s*(?:mode\s*=\s*)?[^)]*[wax+]|mode\s*=)|\bwrite|\.dump\s*\(|\bos\s*\.\s*(?!path\b|environ\b|getenv\b|getcwd\b|fspath\b)\w+|\bshutil\b"""
+    r"""|\bsubprocess\b|\bsystem\s*\(|\bexec|\beval\b|__import__|getattr|\bimportlib\b|\bfs\b|\bchild_process\b"""
+    r"""|\b(?:replace|rename|remove|unlink|rmdir|rmtree|copy\w*|move|truncate|symlink|mkdir|makedirs|chmod|append\w*)\s*\("""
+    r"""|\b(?:Deno|Bun|File|IO|FileUtils)\b|\b(?:fopen|file_put_contents|unlink)\b""", re.I)
+
+def lecture_inline(args):
+    """Vrai si `args` est un interpréteur à code inline dont le seul argument protégé est ce code,
+    sans indice d'écriture (sinon : prudence, on bloque)."""
+    for i, a in enumerate(args[:-1]):
+        if a in INLINE:
+            code = args[i + 1]
+            autres = args[:i] + args[i + 2:]
+            return not INDICE_ECRITURE.search(code) and not any(motif(x) for x in autres)
+    return False
+
 def sous_commande_git(args):
     i = 0
     while i < len(args) and args[i].startswith("-"):
@@ -281,6 +298,8 @@ def ecriture_protegee(toks):
         ecrit = any(a in ("-delete", "-exec", "-execdir", "-ok", "-okdir") for a in args)
     else:
         ecrit = base in ECRIVAINS or bool(INTERPRETES.fullmatch(base))
+        if ecrit and base not in ECRIVAINS and lecture_inline(args):
+            ecrit = False
     return next((a for a in args if motif(a)), None) if ecrit else None
 
 def saute_options(toks, valeur):
