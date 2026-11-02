@@ -71,7 +71,7 @@ Aligner specs, codeur et relecteur sur les règles de lots qui ont causé des bl
 - [x] L2 — format de spec : Conception et statut (étapes 4-5)
   Fichiers : agents/specs.md, agents/relecteur.md, README.md
   Fait quand : item Conception et règle de statut présents — `grep -q 'Conception' agents/specs.md && grep -q 'feu vert' README.md && bash tests/test_hooks.sh >/dev/null`
-- [ ] L3 — garde-git et bac à sable pour `gh issue` (étapes 6-7)
+- [x] L3 — garde-git et bac à sable pour `gh issue` (étapes 6-7)
   Fichiers : hooks/garde-git.py, tests/test_hooks.sh, config/bac-a-sable.json, README.md
   Fait quand : cas bloqués et admis des critères testés et verts — `bash tests/test_hooks.sh >/dev/null`
 - [ ] L4 — skill ticket, livrer, docs et version 2.0.0 (étapes 8-11)

@@ -129,6 +129,29 @@ def verifie_gh(toks):
     for motif, raison in regles:
         if re.search(motif, j, re.IGNORECASE):
             bloque(raison)
+    if t and t[0] == "issue":
+        verifie_issue(t[1:])
+
+def verifie_issue(args):
+    """Allowlist : lecture, création et commentaire ; le reste est réservé à l'utilisateur."""
+    sc, i = "", 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-R", "--repo"):
+            i += 2; continue
+        if not a.startswith("-"):
+            sc = a; break
+        i += 1
+    if sc not in ("view", "list", "ls", "status", "create", "new", "comment"):
+        bloque("fermer, modifier ou supprimer un ticket est réservé à l'utilisateur.")
+    if sc in ("create", "new", "comment"):
+        for a in args:
+            if a in ("-R", "--repo") or a.startswith(("--repo=", "-R")):
+                bloque("ticket hors du dépôt courant interdit (-R/--repo).")
+            if a in ("--edit-last", "--delete-last"):
+                bloque(f"`gh issue {sc} {a}` interdit : modifier ou supprimer un commentaire est réservé à l'utilisateur.")
+            if a.startswith(("http://", "https://", "github.com/")):
+                bloque("ticket hors du dépôt courant interdit (une URL vise un autre dépôt).")
 
 CWD_SESSION = None
 

@@ -45,6 +45,15 @@ for c in 'git push --receive-pack=x origin b' 'git push --exec x origin b' 'git 
          'export GIT_SSH_COMMAND=x; git push origin b' 'declare -x A=1 && gh pr create'; do
   [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
 done
+for c in 'gh issue close 9' 'gh issue edit 9 -t x' 'gh issue delete 9' 'gh issue reopen 9' 'gh issue transfer 9 o/r' \
+         'gh issue create -R o/r -t x -b y' 'gh issue create --repo=o/r -t x' 'gh issue comment 9 --repo o/r -b x' \
+         'gh issue comment https://github.com/o/r/issues/1 -b x' 'gh issue comment 9 --edit-last -b x' 'rtk gh issue close 9' \
+         "bash -c 'gh issue delete 9'" 'gh issue create -Ro/r -t x' 'gh issue comment 9 --delete-last' 'gh issue -R o/r close 9' 'gh issue pin 9' 'gh issue'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'gh issue create -t x -F f' 'gh issue comment 9 -F f' 'gh issue view 1 -R stanixia-dev/Hive' 'gh issue list --author @me --state open'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 for c in 'git push -u origin claude/x' 'gh pr create --fill' 'gh pr checks --watch --interval 20' 'rtk git push -u origin claude/x'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
@@ -149,7 +158,8 @@ try:
     assert d["failIfUnavailable"] is True and d["autoAllowBashIfSandboxed"] is False
     ex = d["excludedCommands"]
     assert all(re.match(r"^(rtk )?(git push|gh (pr|run|issue)) ", e) for e in ex) and ex
-    for e in ("git push *", "gh pr create *", "rtk git push *", "rtk gh pr create *"):
+    for e in ("git push *", "gh pr create *", "rtk git push *", "rtk gh pr create *",
+              "gh issue create *", "gh issue comment *", "rtk gh issue create *", "rtk gh issue comment *"):
         assert e in ex, e
     assert {"~/.ssh", "~/.config/gh"} <= set(d["filesystem"]["denyRead"])
     for w in d["filesystem"]["allowWrite"]:
