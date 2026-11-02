@@ -38,6 +38,16 @@ code_edit() { # $1 = tool_name, $2 = chemin
 [ "$(code_garde 'git push origin main')" = 2 ] && ok "garde-git bloque git push origin main" || ko "garde-git push main"
 [ "$(code_garde 'gh pr merge 1')" = 2 ] && ok "garde-git bloque gh pr merge" || ko "garde-git pr merge"
 [ "$(code_garde 'git status')" = 0 ] && ok "garde-git laisse passer git status" || ko "garde-git status"
+for c in 'git push --receive-pack=x origin b' 'git push --exec x origin b' 'git push --exec=x origin b' 'GIT_SSH_COMMAND=x git push origin b' \
+         'env A=1 gh pr create' "bash -c 'X=1 git push origin b'" 'rtk git push --receive-pack=x origin b' 'A=1 gh pr view 1' \
+         'git push --receive=x origin b' 'git push --exe=x origin b' 'git push --rec x origin b' 'env -i gh pr create' 'env -u X git push origin b' \
+         'git push /tmp/depot b' 'git push ./d b' 'git push file:///tmp/d b' 'git push ext::sh origin b' 'git push --repo=../d b' \
+         'export GIT_SSH_COMMAND=x; git push origin b' 'declare -x A=1 && gh pr create'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'git push -u origin claude/x' 'gh pr create --fill' 'gh pr checks --watch --interval 20' 'rtk git push -u origin claude/x'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 sortie_rappel 'gh pr create --fill' | grep -q '/clear' && ok "rappel-clear après gh pr create" || ko "rappel-clear pr create"
 [ -z "$(sortie_rappel 'ls')" ] && ok "rappel-clear muet sur ls" || ko "rappel-clear ls"
 
@@ -102,6 +112,40 @@ done
   && ok "garde-deps avertit sur MPL-2.0" || ko "garde-deps MPL"
 [ "$(code_deps 'pip3 install inconnu')" = 0 ] && sortie_deps 'pip3 install inconnu' | grep -q 'vérification impossible' \
   && ok "garde-deps avertit si injoignable" || ko "garde-deps injoignable"
+
+# bac à sable : contrôle du fragment de réglages et de la sonde
+controle_bac() { # $1 = fichier ; sort 0 si conforme
+  python3 -I - "$1" <<'PY'
+import json, re, sys
+try:
+    d = json.load(open(sys.argv[1]))["sandbox"]
+    assert d["enabled"] is True and d["allowUnsandboxedCommands"] is False
+    assert d["failIfUnavailable"] is True and d["autoAllowBashIfSandboxed"] is False
+    ex = d["excludedCommands"]
+    assert all(re.match(r"^(rtk )?(git push|gh (pr|run|issue)) ", e) for e in ex) and ex
+    for e in ("git push *", "gh pr create *", "rtk git push *", "rtk gh pr create *"):
+        assert e in ex, e
+    assert {"~/.ssh", "~/.config/gh"} <= set(d["filesystem"]["denyRead"])
+    for w in d["filesystem"]["allowWrite"]:
+        w = w.rstrip("/")
+        assert w != "~/.cargo" and not re.match(r"^~/(\.claude|\.ssh|\.config/gh)(/|$)", w), w
+    assert {"GH_TOKEN", "GITHUB_TOKEN"} <= {c["name"] for c in d["credentials"]["envVars"] if c["mode"] == "deny"}
+    assert "api.github.com" in d["network"]["allowedDomains"] and d["network"]["allowLocalBinding"] is True
+except Exception as e:
+    print(f"fragment non conforme : {e!r}", file=sys.stderr); sys.exit(1)
+PY
+}
+T_BAC=$(mktemp -d)
+controle_bac config/bac-a-sable.json && ok "bac à sable : fragment conforme" || ko "bac à sable : fragment"
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); del d["sandbox"]["allowUnsandboxedCommands"]; json.dump(d, open(sys.argv[2], "w"))' config/bac-a-sable.json "$T_BAC/a.json"
+controle_bac "$T_BAC/a.json" 2>/dev/null && ko "bac à sable : allowUnsandboxedCommands retiré accepté" || ok "bac à sable : allowUnsandboxedCommands retiré refusé"
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["sandbox"]["filesystem"]["allowWrite"].append("~/.claude"); json.dump(d, open(sys.argv[2], "w"))' config/bac-a-sable.json "$T_BAC/b.json"
+controle_bac "$T_BAC/b.json" 2>/dev/null && ko "bac à sable : ~/.claude en écriture accepté" || ok "bac à sable : ~/.claude en écriture refusé"
+rm -rf "$T_BAC"
+bash -n tests/sonde-bac-a-sable.sh && ok "sonde : syntaxe" || ko "sonde : syntaxe"
+AVANT=$(git status --porcelain | md5sum)
+bash tests/sonde-bac-a-sable.sh --liste >/dev/null && [ "$(git status --porcelain | md5sum)" = "$AVANT" ] \
+  && ok "sonde --liste : sort en 0, rien créé" || ko "sonde --liste"
 
 bash tests/test_manifestes.sh | grep -v '^OK' | sed 's/^/manifestes: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_manifestes.sh"

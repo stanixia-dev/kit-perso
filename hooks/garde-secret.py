@@ -424,6 +424,20 @@ def bash_chemins(cmd, ctx, prof=0):
                 c = chemin_protege(t)
                 if c:
                     ctx["hits"].append(c)
+        if sous == "push" or (base == "gh" and args[:1] in (["pr"], ["run"], ["issue"])):
+            # commande exclue du bac à sable : un argument qui désigne un fichier (lien compris) vers un chemin protégé
+            for t in args:
+                if t.startswith("--") and "=" in t:
+                    vals = (t, t.split("=", 1)[1])
+                elif t.startswith("-") and not t.startswith("--") and len(t) > 2:
+                    vals = (t, t[2:], t[2:].lstrip("="))  # option courte collée : -Fl, -F=l
+                else:
+                    vals = (t,)
+                for v in vals:
+                    v = developpe(v)
+                    r = os.path.realpath(v if os.path.isabs(v) else os.path.join(ctx.get("cwd") or os.getcwd(), v))
+                    if os.path.exists(r) and classe(r):
+                        ctx["hits"].append(t)
         sh = gd.appel_shell(toks)
         if sh and sh[0] == "c":
             bash_chemins(sh[1], ctx, prof + 1)
@@ -482,7 +496,7 @@ def pre(data):
         if forts:
             refuse("⛔ Bloqué par garde-secret : secret dans le texte de la commande ("
                    + ", ".join(f"{n} {empreinte(v)}" for _, n, v in forts) + f"). {ACCES}")
-        ctx = {"hits": [], "scan": False, "livre": False}
+        ctx = {"hits": [], "scan": False, "livre": False, "cwd": cwd}
         bash_chemins(cmd, ctx)
         if ctx["hits"]:
             refuse(f"⛔ Bloqué par garde-secret : la commande touche un fichier ou une commande de secrets ({ctx['hits'][0]}). {ACCES}")
