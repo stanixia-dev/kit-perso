@@ -59,6 +59,8 @@ Faire passer chaque commande Bash de l'agent dans le bac à sable système de Cl
 - [x] Passent toujours : `git push -u origin claude/x`, `gh pr create --fill`, `gh pr checks --watch --interval 20`.
 - [x] Refusés : `gh pr create --body-file l`, où `l` est un lien vers un fichier de `$HOME/.ssh` (HOME jetable), et `--body-file=l`. Accepté : `gh pr create --body-file notes.md`.
 - [x] README : section Bac à sable présente, « Piste non retenue » retirée, résiduels à jour ; version 1.0.0 et CHANGELOG cohérents ; `claude plugin validate --strict .` vert.
+
+### Vérifications manuelles après fusion
 - [ ] Manuel (utilisateur, après installation de `socat`) : la sonde lancée par l'agent sous `--settings config/bac-a-sable.json` affiche `SONDE : 0 trou(s)`.
 - [ ] Manuel (utilisateur, fragment fusionné) : dans une session, `git push` et `gh pr view` fonctionnent, et `python3 -c` qui lit `~/.ssh/known_hosts` échoue.
 
