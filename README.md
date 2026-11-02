@@ -87,7 +87,7 @@ Le scan lit chaque commit un par un (un secret retiré au commit suivant reste d
 
 Signature : formats connus (GitHub, GitLab, Anthropic, OpenAI, AWS, Google, Slack, Stripe, npm, PyPI, clés privées). Générique : JWT, URL à mot de passe, affectation `password = "…"`, écartés dans la doc et les tests.
 
-Résiduels assumés : un script qui lit un fichier protégé et transforme la valeur avant de l'afficher ; un mot de passe sans signature, absent des valeurs connues ; la sortie d'une commande en échec, non réécrivable (alerte seule) ; `cd x && git push` (le scan local vise le dossier courant, CI et Stop rattrapent) ; un chemin contenant un blanc ; un jeton encodé en UTF-16 (les motifs lisent du texte UTF-8) ; `gh gist create` d'un fichier non protégé qui contient un secret hors signature. Le bac à sable système n'est pas utilisé. Purge d'historique et révocation : à la charge de l'utilisateur. Secours : `claude plugin disable kit-perso@kit-perso`.
+Résiduels assumés : un script qui lit un fichier protégé et transforme la valeur avant de l'afficher ; un mot de passe sans signature, absent des valeurs connues ; la sortie d'une commande en échec, non réécrivable (alerte seule) ; `cd x && git push` (le scan local vise le dossier courant, CI et Stop rattrapent) ; un chemin contenant un blanc ; un jeton encodé en UTF-16 (les motifs lisent du texte UTF-8) ; `gh gist create` d'un fichier non protégé qui contient un secret hors signature. Le bac à sable (section suivante) ferme, une fois appliqué, le script qui lit `~/.ssh` ou `~/.config/gh` et `gh gist create` (qui échoue sans jeton dans le bac à sable). Purge d'historique et révocation : à la charge de l'utilisateur. Secours : `claude plugin disable kit-perso@kit-perso`.
 
 Tests : `bash tests/test_secrets.sh` (appelé par `tests/test_hooks.sh`), `HOME` jetable, jetons construits à l'exécution.
 
@@ -125,7 +125,19 @@ Les hooks protègent déjà les réglages Claude (`~/.claude/settings*.json`, `*
 
 Pas de `Read(**/.env.*)` : un refus l'emporte sur tout et rendrait `.env.example` illisible.
 
-Piste non retenue ici : le bac à sable Bash de Claude Code (`sandbox.enabled: true`, `allowUnsandboxedCommands: false`) appliquerait ces règles `deny` aux écritures Bash au niveau du système, ce qui couvrirait les contournements locaux résiduels ; à vérifier sur la version installée.
+Pour fermer aussi les contournements par script, voir la section suivante (bac à sable).
+
+## Bac à sable (à appliquer par l'utilisateur)
+
+Chaque commande Bash de l'agent tourne dans le bac à sable système de Claude Code (bubblewrap) : lecture de `~/.ssh` et `~/.config/gh` et écriture hors du projet (`~/.claude/**`) impossibles, y compris par un script. Un plugin ne peut pas l'activer lui-même : le fragment est à fusionner à la main.
+
+- **Prérequis** : `bubblewrap` (présent) et `socat` (`apt install socat`). Sans `socat`, `failIfUnavailable: true` empêche Claude Code de démarrer : installer `socat` avant de fusionner.
+- **Fusion** : copier la clé `sandbox` de `config/bac-a-sable.json` dans `~/.claude/settings.json` (ou l'essayer avec `claude --settings config/bac-a-sable.json`). Mode strict : `dangerouslyDisableSandbox` est ignoré ; pas d'approbation automatique (`autoAllowBashIfSandboxed: false`).
+- **Exclusions** (hors bac à sable, car elles ont besoin des identifiants) : `git push`, `gh pr create|view|list|checks|diff`, `gh run view|list`, `gh issue view|list`, avec ou sans préfixe `rtk`. `gh api`, `gh gist` et `gh repo` échouent faute de jeton : élargir la liste dans `~/.claude/settings.json` au besoin. Les hooks durcissent ces commandes : `garde-git` refuse `git push --receive-pack|--exec` et toute affectation de variable devant `git push` ou `gh` (`GIT_SSH_COMMAND=…`) ; `garde-secret` résout les arguments qui désignent un fichier (liens compris) et refuse ceux qui mènent à un chemin protégé.
+- **Réseau** : liste blanche GitHub, crates.io, npm, PyPI et OSV (pour `verifie-manifestes.py`). Les jetons `GH_TOKEN` et `GITHUB_TOKEN` sont masqués. Podman n'est pas exclu : le lancer avec le préfixe `!`.
+- **Sonde** : demander à l'agent de lancer `bash tests/sonde-bac-a-sable.sh` (`--liste` affiche les contrôles) ; attendu : `SONDE : 0 trou(s)`.
+- **Non couvert** : les écritures dans les fichiers protégés du projet (`.github/workflows/`, `.claude/settings*.json`, `.garde-*-exceptions`), car sous Linux le bac à sable ignore les globs d'écriture ; elles restent couvertes par les hooks et la CI. Les `.env` : glob développé au démarrage, non vérifié.
+- **Retour arrière** : `"enabled": false` sous `sandbox` dans `~/.claude/settings.json`.
 
 ## Flux avec lots
 

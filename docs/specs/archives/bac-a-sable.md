@@ -1,5 +1,5 @@
 # Spec — bac-a-sable (bac à sable Bash de Claude Code)
-Statut : en cours
+Statut : livrée
 
 ## 1. Objectif
 Faire passer chaque commande Bash de l'agent dans le bac à sable système de Claude Code 2.1.316 (bubblewrap) : sans aucune exception possible, la lecture de `~/.ssh` et de `~/.config/gh` et l'écriture hors du projet (`~/.claude/**`) deviennent impossibles, y compris par un script. Cela ferme les résiduels « script qui lit un fichier protégé » (garde-secret Q2) et « script écrit puis exécuté » (garde-deps-v2) pour ces chemins. `git push` et quelques sous-commandes `gh` restent hors du bac à sable, via une liste d'exclusions étroite que les hooks durcissent.
@@ -53,12 +53,12 @@ Faire passer chaque commande Bash de l'agent dans le bac à sable système de Cl
    - `plugin.json` en **1.0.0** : majeur, puisque les hooks bloquent davantage (règle du README). Entrée `1.0.0 — <date>` au CHANGELOG. Clôture et archivage dans le commit de L3.
 
 ## 5. Critères d'acceptation
-- [ ] `config/bac-a-sable.json` passe le contrôle de l'étape 3, et le contrôle échoue si l'on retire `allowUnsandboxedCommands` ou si l'on ajoute `~/.claude` à `allowWrite`.
-- [ ] `bash tests/sonde-bac-a-sable.sh --liste` sort en 0 sans rien créer ; `git status` reste propre.
-- [ ] Bloqués : `git push --receive-pack=x origin b`, `git push --exec x origin b`, `GIT_SSH_COMMAND=x git push origin b`, `env A=1 gh pr create`, `bash -c 'X=1 git push origin b'`, `rtk git push --receive-pack=x origin b`.
-- [ ] Passent toujours : `git push -u origin claude/x`, `gh pr create --fill`, `gh pr checks --watch --interval 20`.
-- [ ] Refusés : `gh pr create --body-file l`, où `l` est un lien vers un fichier de `$HOME/.ssh` (HOME jetable), et `--body-file=l`. Accepté : `gh pr create --body-file notes.md`.
-- [ ] README : section Bac à sable présente, « Piste non retenue » retirée, résiduels à jour ; version 1.0.0 et CHANGELOG cohérents ; `claude plugin validate --strict .` vert.
+- [x] `config/bac-a-sable.json` passe le contrôle de l'étape 3, et le contrôle échoue si l'on retire `allowUnsandboxedCommands` ou si l'on ajoute `~/.claude` à `allowWrite`.
+- [x] `bash tests/sonde-bac-a-sable.sh --liste` sort en 0 sans rien créer ; `git status` reste propre.
+- [x] Bloqués : `git push --receive-pack=x origin b`, `git push --exec x origin b`, `GIT_SSH_COMMAND=x git push origin b`, `env A=1 gh pr create`, `bash -c 'X=1 git push origin b'`, `rtk git push --receive-pack=x origin b`.
+- [x] Passent toujours : `git push -u origin claude/x`, `gh pr create --fill`, `gh pr checks --watch --interval 20`.
+- [x] Refusés : `gh pr create --body-file l`, où `l` est un lien vers un fichier de `$HOME/.ssh` (HOME jetable), et `--body-file=l`. Accepté : `gh pr create --body-file notes.md`.
+- [x] README : section Bac à sable présente, « Piste non retenue » retirée, résiduels à jour ; version 1.0.0 et CHANGELOG cohérents ; `claude plugin validate --strict .` vert.
 - [ ] Manuel (utilisateur, après installation de `socat`) : la sonde lancée par l'agent sous `--settings config/bac-a-sable.json` affiche `SONDE : 0 trou(s)`.
 - [ ] Manuel (utilisateur, fragment fusionné) : dans une session, `git push` et `gh pr view` fonctionnent, et `python3 -c` qui lit `~/.ssh/known_hosts` échoue.
 
@@ -91,6 +91,6 @@ Faire passer chaque commande Bash de l'agent dans le bac à sable système de Cl
 - [x] L2 — durcissement des commandes exclues (étapes 4-5)
   Fichiers : hooks/garde-git.py, hooks/garde-secret.py, tests/test_hooks.sh, tests/test_secrets.sh
   Fait quand : cas bloqués, acceptés et refusés du §5 verts — `bash tests/test_hooks.sh`
-- [ ] L3 — README, CHANGELOG, version 1.0.0, clôture (étape 6)
+- [x] L3 — README, CHANGELOG, version 1.0.0, clôture (étape 6)
   Fichiers : README.md, CHANGELOG.md, .claude-plugin/plugin.json
   Fait quand : tests verts et validation stricte — `bash tests/test_hooks.sh && claude plugin validate --strict .`

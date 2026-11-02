@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0 — 2026-11-02
+
+- Fragment de réglages `config/bac-a-sable.json` (bac à sable Bash strict, exclusions étroites pour `git push` et quelques `gh`), à fusionner par l'utilisateur ; sonde `tests/sonde-bac-a-sable.sh`.
+- Hook garde-git : bloque `git push --receive-pack|--exec` et toute affectation de variable devant `git push` ou `gh` (commandes exclues du bac à sable).
+- Hook garde-secret : résout les arguments de fichier des commandes exclues et refuse ceux qui mènent à un chemin protégé.
+- Majeur : les hooks bloquent davantage. README : section « Bac à sable ».
+
 ## 0.4.0 — 2026-10-30
 
 - Hook garde-secret : refuse l'accès de l'agent à `~/.ssh`, `~/.config/gh` et aux `.env`, les secrets dans le contenu écrit ou les commandes, `gh auth token` et `git credential fill`.
