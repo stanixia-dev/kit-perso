@@ -114,6 +114,9 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          "python3 -c \"from pathlib import Path;Path('/home/u/.claude/settings.json').symlink_to('/tmp/x')\"" \
          "python3 -c \"import sys;sys.modules['os'].replace('a','/home/u/.claude/settings.json')\"" \
          "python3 -c \"import tempfile,shutil;shutil.copy('a','/home/u/.claude/settings.json')\"" \
+         "python3 -c \"p='/home/u/.claude/settings.json';open(*(p,'w'))\"" \
+         "python3 -c \"ｏｐｅｎ('/home/u/.claude/settings.json','w')\"" \
+         "python3 -c \"import os;os.ｒｅｍｏｖｅ('/home/u/.claude/settings.json')\"" \
          "perl -e 'open F, \">\", \"\$ENV{HOME}/.claude/settings.json\"; print F \"x\"'" \
          "perl -e 'system \"cp a \$ENV{HOME}/.claude/settings.json\"'" \
          "perl -e 'rename \"a\", \"\$ENV{HOME}/.claude/settings.json\"'" \

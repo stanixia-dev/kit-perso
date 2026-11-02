@@ -268,7 +268,8 @@ SYS_OK = re.compile(r"\bsys\b(?!\s*\.\s*(?:argv|stdin|exit|version|platform)\b)"
 OPEN_OK = re.compile(r"open\s*\(\s*(?:[^(),]|\([^()]*\))+?(?:,\s*['\"]rb?['\"]\s*)?\)")
 
 def code_lecture_seule(code):
-    if INTERDIT.search(code):
+    # Non-ASCII : Python normalise les identifiants en NFKC (ｏｐｅｎ == open). `*` : dépaquetage qui cache le mode.
+    if not code.isascii() or "*" in code or INTERDIT.search(code):
         return False
     reste = IMPORT_STMT.sub("", code)
     if re.search(r"\bimport\b", reste) or OS_OK.search(reste) or SYS_OK.search(reste):
