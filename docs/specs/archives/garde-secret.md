@@ -120,3 +120,10 @@ bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py && claude plugin va
 - [x] L5 — documentation, version 0.4.0, clôture (étapes 15-16)
   Fichiers : README.md, CHANGELOG.md, .claude-plugin/plugin.json
   Fait quand : suite complète verte, spec archivée — `bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py && claude plugin validate --strict .`
+
+## 8. Écarts après relecture
+- Le diff de la copie de travail utilise `--diff-filter=ACMR` pour les noms : retirer un `.env` suivi n'est pas refusé (sinon la remédiation serait bloquée). L'historique, lui, reste scanné.
+- `--text` est ajouté aux options de diff (`.gitattributes` `-diff` ou NUL ne masquent plus le contenu) ; les commits sont séparés sur `\0<sha 40 hex>\n` en début de ligne.
+- Le scan avant `git commit`/`push`/`gh pr create` a un budget d'environ 10 s sur les fichiers non suivis, puis avertit ; Stop et la CI scannent sans budget.
+- Motif `url` : schéma borné à 31 caractères (évite un coût quadratique). `.env` : le commentaire de fin de ligne est retiré avant masquage. `git [-c x] credential fill` est bloqué quelles que soient les options globales.
+- `--ci` : un code de retour négatif de garde-secret (signal) compte comme échec (2).

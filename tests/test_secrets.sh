@@ -410,5 +410,59 @@ gd Write file_path /x/.garde-secret-exceptions; vaut "garde-deps bloque Write .g
 gd Bash command 'echo x > .garde-secret-exceptions'; vaut "garde-deps bloque echo x > .garde-secret-exceptions" 2
 gd Bash command 'git diff main -- .garde-secret-exceptions'; vaut "garde-deps laisse passer git diff du fichier" 0
 
+# ---------- correctifs de relecture ----------
+d=$(depot gitattributes)
+git -C "$d" checkout -qb f
+echo '*.txt -diff' > "$d/.gitattributes"
+printf 'T=%s\n' "$GH" > "$d/n.txt"; valide "$d" masque
+lance "$d" --base main --ci; vaut ".gitattributes '-diff' n'aveugle pas le scan" 2
+d=$(depot nul)
+git -C "$d" checkout -qb f
+printf 'a\0b T=%s\n' "$GH" > "$d/n.dat"; valide "$d" nul
+lance "$d" --base main --ci; vaut "fichier à NUL : le jeton est trouvé" 2
+grep -q 'n.dat' <<<"$ERREUR" && ok "fichier à NUL : bon chemin" || ko "fichier à NUL : chemin"
+d=$(depot nul-sha)
+git -C "$d" checkout -qb f
+printf '+\0%s\n+T=%s\n' "$(printf 'a%.0s' {1..40})" "$GH" > "$d/n.dat"; valide "$d" nul-sha
+lance "$d" --base main --ci; vaut "NUL suivi d'un faux sha : le jeton est trouvé" 2
+
+# signal : garde-secret tué => échec du job
+cp -r "$RACINE/hooks" "$TMP/hooks-tues"
+printf 'import os, signal\nos.kill(os.getpid(), signal.SIGKILL)\n' > "$TMP/hooks-tues/garde-secret.py"
+d=$(depot tue)
+env GARDE_DEPS_FIXTURES="$FIX" python3 "$TMP/hooks-tues/verifie-manifestes.py" --depot "$d" --base main --ci >/dev/null 2>&1
+[ "$?" = 2 ] && ok "--ci : garde-secret tué par un signal = échec" || ko "--ci : garde-secret tué"
+
+# budget de temps du scan (hook) : avertissement, pas de blocage
+d=$(depot budget)
+printf 'x\n' > "$d/nonsuivi.txt"
+python3 -c 'import importlib.util, sys
+s = importlib.util.spec_from_file_location("gs", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+t, i = m.scan(sys.argv[2], "HEAD", None, False, 1e-9)
+print("budget" if i and not t else "rien")' "$S" "$d" | grep -q budget && ok "scan : budget dépassé signalé" || ko "scan : budget"
+
+# motif url non quadratique
+t0=$(date +%s)
+python3 -c 'print("a-" * 150000)' | an >/dev/null
+[ $(( $(date +%s) - t0 )) -lt 10 ] && ok "motif url : entrée pathologique rapide" || ko "motif url : lent"
+
+# commentaire de fin de ligne d'un .env
+printf 'MON_API_KEY=%s # commentaire\n' "valeurenv-${A36:5:10}" > "$TMP/w/.env"
+po PostToolUse Bash "$TMP/w" stdout "contenu valeurenv-${A36:5:10}"
+grep -q 'masqué:valeur-connue' <<<"$SORTIE" && ok "post : valeur de .env suivie d'un commentaire masquée" || ko "post : .env avec commentaire"
+rm "$TMP/w/.env"
+
+# git credential fill avec options globales
+for c in 'git -c a=b credential fill' 'git -C . credential fill'; do
+  hk Bash "$TMP/w" command "$c"; bloque "$c"
+done
+
+# retirer un .env suivi n'est pas refusé
+d=$(depot retrait)
+printf 'x=1\n' > "$d/.env"; git -C "$d" add -f .env; g -C "$d" commit -qm env
+git -C "$d" checkout -qb f
+git -C "$d" rm -q .env
+lance "$d" --base HEAD; vaut "retrait d'un .env suivi : 0" 0
+
 # ---------- FIN ----------
 exit $((ECHECS > 0))

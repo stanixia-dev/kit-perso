@@ -3,7 +3,7 @@
 Modes : CLI (défaut), --hook pre (PreToolUse), --hook post (PostToolUse / PostToolUseFailure), --hook stop (Stop), --ci (strict).
 Le filtre de commandes est une aide ; les barrières sont le masquage de la sortie et le scan du résultat git.
 Sortie 2 + message sur stderr = refus. Aucun message ne contient une valeur de secret."""
-import argparse, fnmatch, hashlib, importlib.util, json, math, os, re, sys
+import argparse, fnmatch, hashlib, importlib.util, json, math, os, re, sys, time
 from collections import Counter
 from datetime import date
 
@@ -20,7 +20,7 @@ FORTS = (("github", r"gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,}"),
          ("stripe", r"[sr]k_live_[0-9A-Za-z]{20,}"), ("npm", r"npm_[A-Za-z0-9]{36}"), ("pypi", r"pypi-[A-Za-z0-9_-]{50,}"),
          ("cle-privee", r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----|\Z)"))
 FAIBLES = (("jwt", r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
-           ("url", r"[a-z][a-z0-9+.-]*://[^/\s:@'\"]+:(?P<v>[^/\s:@'\"]{8,})@"),
+           ("url", r"[a-z][a-z0-9+.-]{0,30}://[^/\s:@'\"]+:(?P<v>[^/\s:@'\"]{8,})@"),
            ("affectation", r"(?i)(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|access[_-]?key|auth[_-]?key)[\"']?\s*[:=]\s*[\"'](?P<v>[^\"'\s]{12,})[\"']"))
 
 def compile_motifs(liste):
@@ -159,7 +159,7 @@ def couvre(exceptions, rel, emp=None):
 
 # ---------- scan git ----------
 
-OPTS_DIFF = ("--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--unified=0",
+OPTS_DIFF = ("--text", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--unified=0",
              "--src-prefix=a/", "--dst-prefix=b/")
 
 def git(racine, *args):
@@ -184,9 +184,10 @@ def analyse_diff(texte, commit, trouv):
         for niveau, nom, v in analyse("\n".join(lignes), chemin):
             trouv.append((chemin, commit, niveau, nom, empreinte(v)))
 
-def scan(racine, base, cible, ci):
+def scan(racine, base, cible, ci, budget=None):
     """(trouvailles, illisibles). Trouvaille = (chemin, commit, niveau, nom, empreinte). Les commits sont lus un par un."""
     v = vm()
+    fin_budget = time.monotonic() + budget if budget else None
     trouv, illis = [], []
     def g(motif, *args):
         r = git(racine, *args)
@@ -202,7 +203,8 @@ def scan(racine, base, cible, ci):
         fin = cible or "HEAD"
         plage = fin if base == v.VIDE else f"{base}..{fin}"
         sortie = g("log", "log", "-p", *OPTS_DIFF, "--diff-merges=first-parent", "--format=%x00%H", plage)
-        for bloc in (sortie or "").split("\0"):
+        # un NUL peut figurer dans un contenu (--text) : on ne coupe que sur `\0<sha>\n` en début de ligne
+        for bloc in re.split(r"(?<![^\n])\0(?=[0-9a-f]{40}\n)", sortie or ""):
             h, _, diff = bloc.partition("\n")
             if h.strip():
                 analyse_diff(diff, h.strip()[:8], trouv)
@@ -212,10 +214,13 @@ def scan(racine, base, cible, ci):
     if not cible:
         ref = "HEAD" if a_head else v.VIDE
         analyse_diff(g("diff", "diff", *OPTS_DIFF, ref) or "", "copie", trouv)
-        noms((g("diff --name-only", "diff", "--name-only", "-z", "--no-renames", ref) or "").split("\0"), "copie")
+        noms((g("diff --name-only", "diff", "--name-only", "-z", "--no-renames", "--diff-filter=ACMR", ref) or "").split("\0"), "copie")
         nonsuivis = [n for n in (g("ls-files", "ls-files", "-z", "-o", "--exclude-standard") or "").split("\0") if n]
         noms(nonsuivis, "copie")
         for n in nonsuivis:
+            if fin_budget and time.monotonic() > fin_budget:
+                illis.append("analyse des fichiers non suivis interrompue (budget de temps dépassé)")
+                break
             p = os.path.join(racine, n)
             try:
                 if os.path.islink(p) or os.path.getsize(p) > 1 << 20:
@@ -395,10 +400,11 @@ def bash_chemins(cmd, ctx, prof=0):
         if not toks:
             continue
         base, args = toks[0].rsplit("/", 1)[-1], toks[1:]
-        if (base == "gh" and (args[:2] == ["auth", "token"] or (args[:2] == ["auth", "status"] and any(
-                a in ("-t", "--show-token") for a in args)))) or (base == "git" and args[:2] == ["credential", "fill"]):
-            ctx["hits"].append("identifiants git/gh")
         sous = gd.sous_commande_git(args) if base == "git" else ""
+        if (base == "gh" and (args[:2] == ["auth", "token"] or (args[:2] == ["auth", "status"] and any(
+                a in ("-t", "--show-token") for a in args)))) or (
+                base == "git" and sous == "credential" and args[args.index(sous) + 1:][:1] == ["fill"]):
+            ctx["hits"].append("identifiants git/gh")
         if (base == "git" and sous in ("commit", "push")) or (base == "gh" and args[:2] == ["pr", "create"]):
             ctx["scan"] = True
         sh = gd.appel_shell(toks)
@@ -420,15 +426,15 @@ def bash_chemins(cmd, ctx, prof=0):
             if c:
                 ctx["hits"].append(c)
 
-def scan_depot(cwd):
-    """Scan du dépôt de cwd : (forts, faibles) non couverts, ou ([], []) hors dépôt / sur échec git."""
+def scan_depot(cwd, budget=None):
+    """Scan du dépôt de cwd : (forts, faibles, illisibles) non couverts, ou vide hors dépôt / sur échec git."""
     racine = racine_de(cwd)
     if not racine:
-        return [], []
-    trouv, _ = scan(racine, vm().base_par_defaut(racine), None, False)
+        return [], [], []
+    trouv, illis = scan(racine, vm().base_par_defaut(racine), None, False, budget)
     if trouv:
         trouv = sans_exceptions(trouv, exceptions_du_depot(racine)[0])
-    return [t for t in trouv if t[2] == "fort"], [t for t in trouv if t[2] != "fort"]
+    return [t for t in trouv if t[2] == "fort"], [t for t in trouv if t[2] != "fort"], illis
 
 def pre(data):
     outil = data.get("tool_name") or "Bash"
@@ -464,15 +470,16 @@ def pre(data):
         if ctx["hits"]:
             refuse(f"⛔ Bloqué par garde-secret : la commande touche un fichier ou une commande de secrets ({ctx['hits'][0]}). {ACCES}")
         if ctx["scan"]:
-            forts, faibles = scan_depot(cwd)
+            forts, faibles, illis = scan_depot(cwd, 10)
             if forts:
                 refuse("⛔ Bloqué par garde-secret : secret dans les modifications ou commits à livrer.\n"
                        + "\n".join(ligne_trouvaille(t) for t in forts)
                        + "\nCommits non poussés : retire le secret, puis `git reset --soft <base>` et recommite."
                        "\nDéjà poussé : préviens l'utilisateur, le secret est à révoquer.")
-            if faibles:
-                avertit("PreToolUse", "⚠ garde-secret : valeur ressemblant à un secret dans le dépôt ("
-                        + ", ".join(f"{t[0]} {t[3]} {t[4]}" for t in faibles) + ").")
+            notes = [f"{t[0]} {t[3]} {t[4]}" for t in faibles] + illis
+            if notes:
+                avertit("PreToolUse", "⚠ garde-secret : scan incomplet ou valeur ressemblant à un secret dans le dépôt ("
+                        + ", ".join(notes) + "). Stop et la CI refont le scan complet.")
 
 # -- post --
 
@@ -494,7 +501,13 @@ def valeurs_connues(cwd):
         for l in lignes:
             m = re.match(r"\s*(?:export\s+)?([A-Za-z_]\w*)\s*=\s*(.*)$", l)
             if m:
-                ajoute(m.group(1), m.group(2).strip().strip("'\""))
+                val = m.group(2).strip()
+                if val[:1] in ("'", '"'):  # valeur citée : jusqu'à la guillemet fermante
+                    fin = val.find(val[0], 1)
+                    val = val[1:fin] if fin > 0 else val[1:]
+                else:  # sinon, sans commentaire de fin de ligne
+                    val = re.split(r"\s+#", val, 1)[0].strip()
+                ajoute(m.group(1), val)
     return sorted(vals, key=len, reverse=True)
 
 def masque_texte(s, connus, trouves):
@@ -546,7 +559,7 @@ def msg_alerte(data, trouves):
 # -- stop --
 
 def stop(data):
-    forts, _ = scan_depot(data.get("cwd") or os.getcwd())
+    forts, _, _ = scan_depot(data.get("cwd") or os.getcwd())
     if not forts:
         return
     if data.get("stop_hook_active"):
