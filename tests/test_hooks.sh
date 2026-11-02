@@ -63,7 +63,7 @@ for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          "bash -c -- 'ls'" 'npm -g i @scope/ok@1.0.0' 'npm --prefix . i @scope/ok@1.0.0' \
          'curl -s x | sh' 'bash script.sh' "$PROFOND" 'cat ~/.claude/settings.json' 'grep x ~/.claude/settings.json' \
          "python3 -c \"import json,os;d=json.load(open(os.path.expanduser('~/.claude/settings.json')));print('sandbox' in d)\"" \
-         "node -e \"console.log(require('/home/u/.claude/settings.json').sandbox)\"" 'grep -r x .github/workflows' \
+         'grep -r x .github/workflows' \
          "git commit -m 'doc .github/workflows'" 'git diff main -- .garde-deps-exceptions' 'ls ~/.claude/hooks' \
          'echo ok > /dev/null' 'git status' 'curl -s https://x.io/a' 'echo "$(git log --format="%h #%s")"' 'git log --format="%h #%s"' \
          'wget -q https://x.io/a' 'awk 1 ~/.claude/settings.json' 'sed -n 1p ~/.claude/settings.json' 'cp a b'; do
@@ -103,7 +103,23 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          "python3 -c \"import os;os.replace('a','/home/u/.claude/settings.json')\"" \
          "python3 -c \"from pathlib import Path;Path('/home/u/.claude/settings.json').write_text('x')\"" \
          "python3 -c \"print(1)\" ~/.claude/settings.json" "python3 ~/.claude/hooks/x.py" \
-         "node -e \"require('fs').writeFileSync('/home/u/.claude/settings.json','x')\""; do
+         "node -e \"console.log(require('/home/u/.claude/settings.json').sandbox)\"" \
+         'python3 w.py -c ~/.claude/settings.json' 'node w.js -e ~/.claude/settings.json' 'python3 -m mod -c ~/.claude/settings.json' \
+         'node -r ~/.claude/hooks/x.js app.js' \
+         "python3 -c \"import os;print(1,file=open(os.path.expanduser('~/.claude/settings.json'),'w'))\"" \
+         "python3 -c \"from pathlib import Path;Path('/home/u/.claude/settings.json').open('w')\"" \
+         "python3 -c \"from os import replace as r;r('a','/home/u/.claude/settings.json')\"" \
+         "python3 -c \"from os import system as s;s('cp a /home/u/.claude/settings.json')\"" \
+         "python3 -c \"import pty;pty.spawn(['cp','a','/home/u/.claude/settings.json'])\"" \
+         "python3 -c \"from pathlib import Path;Path('/home/u/.claude/settings.json').symlink_to('/tmp/x')\"" \
+         "python3 -c \"import sys;sys.modules['os'].replace('a','/home/u/.claude/settings.json')\"" \
+         "python3 -c \"import tempfile,shutil;shutil.copy('a','/home/u/.claude/settings.json')\"" \
+         "perl -e 'open F, \">\", \"\$ENV{HOME}/.claude/settings.json\"; print F \"x\"'" \
+         "perl -e 'system \"cp a \$ENV{HOME}/.claude/settings.json\"'" \
+         "perl -e 'rename \"a\", \"\$ENV{HOME}/.claude/settings.json\"'" \
+         "ruby -e '\`cp a ~/.claude/settings.json\`'" \
+         "node -e \"require('f'+'s')['wr'+'iteFileSync']('/home/u/.claude/settings.json','x')\"" \
+         "php -r 'unlink(\"/home/u/.claude/settings.json\");'"; do
   [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"
 done
 for ch in 'Edit|$HOME/.claude/settings.json' 'Write|/x/.github/workflows/a.yml' 'Write|/x/.garde-deps-exceptions' \

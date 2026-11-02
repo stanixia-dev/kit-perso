@@ -2,7 +2,7 @@
 
 ## 1.0.1 — 2026-11-02
 
-- Hook garde-deps : un `python -c` / `node -e` qui ne fait que lire un chemin protégé n'est plus bloqué comme écriture ; tout indice d'écriture dans le code inline (ou un argument protégé hors du code) reste bloqué.
+- Hook garde-deps : seul `python[3] -c "<code>"` (rien après le code) en lecture seule stricte (liste blanche : imports json, os, sys, re, tomllib ; `os.path`, `os.environ`, `os.getenv` ; `open` sans mode ou en `r`/`rb`) n'est plus bloqué comme écriture ; les autres interpréteurs et toute autre forme restent bloqués.
 
 ## 1.0.0 — 2026-11-02
 

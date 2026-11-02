@@ -255,22 +255,33 @@ def motif(t):
     n = t.rstrip("/")
     return n.rsplit("/", 1)[-1] in (".claude", ".github") and n != ""
 
-INLINE = {"-c", "-e", "-p", "-E", "-r", "--eval", "--print", "--command"}
-INDICE_ECRITURE = re.compile(
-    r"""open\s*\([^)]*(?:,\s*(?:mode\s*=\s*)?[^)]*[wax+]|mode\s*=)|\bwrite|\.dump\s*\(|\bos\s*\.\s*(?!path\b|environ\b|getenv\b|getcwd\b|fspath\b)\w+|\bshutil\b"""
-    r"""|\bsubprocess\b|\bsystem\s*\(|\bexec|\beval\b|__import__|getattr|\bimportlib\b|\bfs\b|\bchild_process\b"""
-    r"""|\b(?:replace|rename|remove|unlink|rmdir|rmtree|copy\w*|move|truncate|symlink|mkdir|makedirs|chmod|append\w*)\s*\("""
-    r"""|\b(?:Deno|Bun|File|IO|FileUtils)\b|\b(?:fopen|file_put_contents|unlink)\b""", re.I)
+# Exemption « lecture inline » : liste blanche stricte, python uniquement, forme `python -c "<code>"`.
+# Tout doute (construction inconnue, autre interpréteur, autre forme) : on garde le comportement bloquant.
+IMPORTS_OK = r"(?:json|os|sys|re|tomllib)"
+IMPORT_STMT = re.compile(rf"\bimport\s+{IMPORTS_OK}(?:\s*,\s*{IMPORTS_OK})*[ \t]*(?=;|\n|$)")
+INTERDIT = re.compile(
+    r"__|\bfrom\b|\bas\b|\bfile\s*=|\bPath\b|pathlib|\bexec|\beval|\bcompile|getattr|setattr|globals|locals|\bvars\b"
+    r"|sys\s*\.\s*modules|subprocess|\bpty\b|system|spawn|link|write|\bdump\s*\(|builtins|importlib|\binput\b"
+    r"|breakpoint|\bmode\s*=|\\|\bdel\b|\blambda\b|\bclass\b|\bdef\b|\bwith\b")
+OS_OK = re.compile(r"\bos\b(?!\s*\.\s*(?:path\s*\.|environ\b|getenv\b))")
+SYS_OK = re.compile(r"\bsys\b(?!\s*\.\s*(?:argv|stdin|exit|version|platform)\b)")
+OPEN_OK = re.compile(r"open\s*\(\s*(?:[^(),]|\([^()]*\))+?(?:,\s*['\"]rb?['\"]\s*)?\)")
 
-def lecture_inline(args):
-    """Vrai si `args` est un interpréteur à code inline dont le seul argument protégé est ce code,
-    sans indice d'écriture (sinon : prudence, on bloque)."""
-    for i, a in enumerate(args[:-1]):
-        if a in INLINE:
-            code = args[i + 1]
-            autres = args[:i] + args[i + 2:]
-            return not INDICE_ECRITURE.search(code) and not any(motif(x) for x in autres)
-    return False
+def code_lecture_seule(code):
+    if INTERDIT.search(code):
+        return False
+    reste = IMPORT_STMT.sub("", code)
+    if re.search(r"\bimport\b", reste) or OS_OK.search(reste) or SYS_OK.search(reste):
+        return False
+    for m in re.finditer(r"\bopen\b", reste):
+        if reste[:m.start()].rstrip().endswith(".") or not OPEN_OK.match(reste, m.start()):
+            return False
+    return True
+
+def lecture_inline(base, args):
+    """Vrai pour `python[3] -c "<code>"` (rien d'autre) dont le code passe la liste blanche de lecture seule."""
+    return bool(re.fullmatch(r"python[\d.]*", base)) and len(args) == 2 and args[0] == "-c" \
+        and code_lecture_seule(args[1])
 
 def sous_commande_git(args):
     i = 0
@@ -298,7 +309,7 @@ def ecriture_protegee(toks):
         ecrit = any(a in ("-delete", "-exec", "-execdir", "-ok", "-okdir") for a in args)
     else:
         ecrit = base in ECRIVAINS or bool(INTERPRETES.fullmatch(base))
-        if ecrit and base not in ECRIVAINS and lecture_inline(args):
+        if ecrit and base not in ECRIVAINS and lecture_inline(base, args):
             ecrit = False
     return next((a for a in args if motif(a)), None) if ecrit else None
 
