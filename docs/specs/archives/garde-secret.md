@@ -127,3 +127,5 @@ bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py && claude plugin va
 - Le scan avant `git commit`/`push`/`gh pr create` a un budget d'environ 10 s sur les fichiers non suivis, puis avertit ; Stop et la CI scannent sans budget.
 - Motif `url` : schéma borné à 31 caractères (évite un coût quadratique). `.env` : le commentaire de fin de ligne est retiré avant masquage. `git [-c x] credential fill` est bloqué quelles que soient les options globales.
 - `--ci` : un code de retour négatif de garde-secret (signal) compte comme échec (2).
+- Hors spec, validés par l'utilisateur : `gh gist create` et `gh gist edit` sur un fichier protégé sont bloqués (L2) ; `BashOutput|TaskOutput` est ajouté au matcher PostToolUse du masquage (L3).
+- Le budget de 10 s du hook Pre couvre aussi la lecture des commits ; un scan incomplet refuse `git push` et `gh pr create` (avertit pour `git commit`). Motif `jwt` borné à 2048 par segment. `--diff-filter=d` remplace `ACMR` (couvre `T`). Résidu : jetons en UTF-16.

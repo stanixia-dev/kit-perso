@@ -8,7 +8,7 @@
     "PostToolUse": [
       {"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rappel-clear.py\"", "timeout": 10}]},
       {"matcher": "Edit|Write|MultiEdit|Bash", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/verifie-manifestes.py\" --hook post", "timeout": 30}]},
-      {"matcher": "Bash|Read|Grep", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/garde-secret.py\" --hook post", "timeout": 15}]}
+      {"matcher": "Bash|Read|Grep|BashOutput|TaskOutput", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/garde-secret.py\" --hook post", "timeout": 15}]}
     ],
     "Stop": [
       {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/verifie-manifestes.py\" --hook stop", "timeout": 30}]},

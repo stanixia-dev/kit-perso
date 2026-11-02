@@ -19,7 +19,7 @@ FORTS = (("github", r"gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,}"),
          ("slack", r"xox[abprs]-[0-9A-Za-z-]{20,}|hooks\.slack\.com/services/T[0-9A-Z]+/B[0-9A-Z]+/[0-9A-Za-z]{20,}"),
          ("stripe", r"[sr]k_live_[0-9A-Za-z]{20,}"), ("npm", r"npm_[A-Za-z0-9]{36}"), ("pypi", r"pypi-[A-Za-z0-9_-]{50,}"),
          ("cle-privee", r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----|\Z)"))
-FAIBLES = (("jwt", r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
+FAIBLES = (("jwt", r"eyJ[A-Za-z0-9_-]{10,2048}+\.eyJ[A-Za-z0-9_-]{10,2048}+\.[A-Za-z0-9_-]{10,2048}+"),
            ("url", r"[a-z][a-z0-9+.-]{0,30}://[^/\s:@'\"]+:(?P<v>[^/\s:@'\"]{8,})@"),
            ("affectation", r"(?i)(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|access[_-]?key|auth[_-]?key)[\"']?\s*[:=]\s*[\"'](?P<v>[^\"'\s]{12,})[\"']"))
 
@@ -205,16 +205,19 @@ def scan(racine, base, cible, ci, budget=None):
         sortie = g("log", "log", "-p", *OPTS_DIFF, "--diff-merges=first-parent", "--format=%x00%H", plage)
         # un NUL peut figurer dans un contenu (--text) : on ne coupe que sur `\0<sha>\n` en début de ligne
         for bloc in re.split(r"(?<![^\n])\0(?=[0-9a-f]{40}\n)", sortie or ""):
+            if fin_budget and time.monotonic() > fin_budget:
+                illis.append("analyse des commits interrompue (budget de temps dépassé)")
+                break
             h, _, diff = bloc.partition("\n")
             if h.strip():
                 analyse_diff(diff, h.strip()[:8], trouv)
         liste = g("log --name-only", "log", "--name-only", "--format=", "-z", "--no-renames",
-                  "--diff-merges=first-parent", "--diff-filter=ACMR", plage)
+                  "--diff-merges=first-parent", "--diff-filter=d", plage)
         noms((liste or "").split("\0"), "historique")
     if not cible:
         ref = "HEAD" if a_head else v.VIDE
         analyse_diff(g("diff", "diff", *OPTS_DIFF, ref) or "", "copie", trouv)
-        noms((g("diff --name-only", "diff", "--name-only", "-z", "--no-renames", "--diff-filter=ACMR", ref) or "").split("\0"), "copie")
+        noms((g("diff --name-only", "diff", "--name-only", "-z", "--no-renames", "--diff-filter=d", ref) or "").split("\0"), "copie")
         nonsuivis = [n for n in (g("ls-files", "ls-files", "-z", "-o", "--exclude-standard") or "").split("\0") if n]
         noms(nonsuivis, "copie")
         for n in nonsuivis:
@@ -360,6 +363,13 @@ def candidats(texte):
 def chemin_protege(texte):
     return next((c for c in candidats(texte) if classe(developpe(c))), None)
 
+def indice_git(gd, args):
+    """Indice de la sous-commande git dans `args` (options globales et leurs valeurs sautées)."""
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        i += 2 if args[i] in gd.GIT_OPT_VALEUR else 1
+    return i
+
 def bash_chemins(cmd, ctx, prof=0):
     """Remplit ctx : "hits" (raisons de refus) et "scan" (git commit/push, gh pr create)."""
     gd = charge("garde-deps.py")
@@ -403,10 +413,17 @@ def bash_chemins(cmd, ctx, prof=0):
         sous = gd.sous_commande_git(args) if base == "git" else ""
         if (base == "gh" and (args[:2] == ["auth", "token"] or (args[:2] == ["auth", "status"] and any(
                 a in ("-t", "--show-token") for a in args)))) or (
-                base == "git" and sous == "credential" and args[args.index(sous) + 1:][:1] == ["fill"]):
+                base == "git" and sous == "credential" and args[indice_git(gd, args) + 1:][:1] == ["fill"]):
             ctx["hits"].append("identifiants git/gh")
         if (base == "git" and sous in ("commit", "push")) or (base == "gh" and args[:2] == ["pr", "create"]):
             ctx["scan"] = True
+            if sous == "push" or base == "gh":
+                ctx["livre"] = True
+        if base == "gh" and args[:2] in (["gist", "create"], ["gist", "edit"]):  # publie des fichiers
+            for t in args[2:]:
+                c = chemin_protege(t)
+                if c:
+                    ctx["hits"].append(c)
         sh = gd.appel_shell(toks)
         if sh and sh[0] == "c":
             bash_chemins(sh[1], ctx, prof + 1)
@@ -465,17 +482,21 @@ def pre(data):
         if forts:
             refuse("⛔ Bloqué par garde-secret : secret dans le texte de la commande ("
                    + ", ".join(f"{n} {empreinte(v)}" for _, n, v in forts) + f"). {ACCES}")
-        ctx = {"hits": [], "scan": False}
+        ctx = {"hits": [], "scan": False, "livre": False}
         bash_chemins(cmd, ctx)
         if ctx["hits"]:
             refuse(f"⛔ Bloqué par garde-secret : la commande touche un fichier ou une commande de secrets ({ctx['hits'][0]}). {ACCES}")
         if ctx["scan"]:
-            forts, faibles, illis = scan_depot(cwd, 10)
+            forts, faibles, illis = scan_depot(cwd, float(os.environ.get("GARDE_SECRET_BUDGET", 10)))
             if forts:
                 refuse("⛔ Bloqué par garde-secret : secret dans les modifications ou commits à livrer.\n"
                        + "\n".join(ligne_trouvaille(t) for t in forts)
                        + "\nCommits non poussés : retire le secret, puis `git reset --soft <base>` et recommite."
                        "\nDéjà poussé : préviens l'utilisateur, le secret est à révoquer.")
+            if illis and ctx["livre"]:
+                refuse("⛔ Bloqué par garde-secret : scan incomplet (" + " ; ".join(illis) + "), donc la livraison "
+                       "(git push, gh pr create) est refusée. Réduis les fichiers non suivis (ou ajoute-les au .gitignore) "
+                       "et relance, ou demande à l'utilisateur de livrer lui-même.")
             notes = [f"{t[0]} {t[3]} {t[4]}" for t in faibles] + illis
             if notes:
                 avertit("PreToolUse", "⚠ garde-secret : scan incomplet ou valeur ressemblant à un secret dans le dépôt ("
@@ -506,7 +527,7 @@ def valeurs_connues(cwd):
                     fin = val.find(val[0], 1)
                     val = val[1:fin] if fin > 0 else val[1:]
                 else:  # sinon, sans commentaire de fin de ligne
-                    val = re.split(r"\s+#", val, 1)[0].strip()
+                    val = re.split(r"\s+#", val, maxsplit=1)[0].strip()
                 ajoute(m.group(1), val)
     return sorted(vals, key=len, reverse=True)
 
