@@ -43,12 +43,14 @@ def segments(cmd):
             toks = shlex.split(seg)
         except ValueError:
             toks = seg.split()
-        # saute les affectations VAR=val et les préfixes courants
+        # saute les affectations VAR=val et les préfixes courants (en notant s'il y en a eu)
+        affecte = False
         while toks and (re.match(r"^\w+=", toks[0]) or toks[0] in ("env", "command", "exec", "time", "nohup")
                         or toks[0].rsplit("/", 1)[-1] == "rtk" or (toks[0] in ("bypass", "proxy") and len(toks) > 1)):
+            affecte = affecte or bool(re.match(r"^\w+=", toks[0]))
             toks = toks[1:]
         if toks:
-            yield toks
+            yield toks, affecte
 
 def sous_commande(toks):
     """Pour git : retire les options globales (-C x, -c x, --no-pager…)."""
@@ -57,8 +59,17 @@ def sous_commande(toks):
         i += 2 if toks[i] in ("-C", "-c", "--git-dir", "--work-tree") else 1
     return toks[i] if i < len(toks) else "", toks[i + 1:]
 
+def refuse_affectation(base, sc, affecte):
+    """git push et gh tournent hors du bac à sable : une affectation (GIT_SSH_COMMAND…) ferait exécuter du code non confiné."""
+    if affecte and (base == "gh" or (base == "git" and sc == "push")):
+        bloque(f"`{base}{' push' if base == 'git' else ''}` précédé d'une affectation de variable (VAR=… ou env VAR=…) est interdit : "
+               "cette commande tourne hors du bac à sable et la variable (ex. GIT_SSH_COMMAND) pourrait exécuter du code.")
+
 def verifie_git(args_sc, sc, cwd):
     if sc == "push":
+        for a in args_sc:
+            if a in ("--receive-pack", "--exec") or a.startswith(("--receive-pack=", "--exec=")):
+                bloque(f"`git push {a}` est interdit : le programme désigné s'exécuterait en local, hors du bac à sable.")
         for a in args_sc:
             if a in ("--force", "-f", "--force-with-lease", "--force-if-includes", "--mirror", "--delete", "-d", "--no-verify", "--prune") \
                or a.startswith("--force-with-lease=") or (re.match(r"^-[a-zA-Z]+$", a) and "f" in a):
@@ -110,26 +121,28 @@ def main():
     data = json.load(sys.stdin)
     cmd = (data.get("tool_input") or {}).get("command", "")
     cwd = CWD_SESSION = data.get("cwd") or None
-    for toks in segments(cmd):
+    for toks, affecte in segments(cmd):
         base = toks[0].rsplit("/", 1)[-1]
         if base in ("cd", "pushd"):
             # suit les `cd <dossier> && …` (worktrees)
             cwd = resout(cwd, toks[1] if len(toks) > 1 else os.path.expanduser("~"))
         elif base == "git":
             sc, args_sc = sous_commande(toks)
+            refuse_affectation("git", sc, affecte)
             verifie_git(args_sc, sc, dossier_git(toks, cwd))
         elif base == "gh":
+            refuse_affectation("gh", "", affecte)
             verifie_gh(toks)
         elif base in ("bash", "sh", "zsh") and "-c" in toks:
             # sous-shell : on analyse la commande passée à -c
             k = toks.index("-c")
             if k + 1 < len(toks):
-                for sub in segments(toks[k + 1]):
+                for sub, aff in segments(toks[k + 1]):
                     b = sub[0].rsplit("/", 1)[-1]
                     if b == "git":
-                        sc, a = sous_commande(sub); verifie_git(a, sc, dossier_git(sub, cwd))
+                        sc, a = sous_commande(sub); refuse_affectation("git", sc, aff); verifie_git(a, sc, dossier_git(sub, cwd))
                     elif b == "gh":
-                        verifie_gh(sub)
+                        refuse_affectation("gh", "", aff); verifie_gh(sub)
     sys.exit(0)
 
 if __name__ == "__main__":

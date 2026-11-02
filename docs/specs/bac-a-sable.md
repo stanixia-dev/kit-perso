@@ -88,7 +88,7 @@ Faire passer chaque commande Bash de l'agent dans le bac à sable système de Cl
 - [x] L1 — fragment de réglages et sonde (étapes 1-3)
   Fichiers : config/bac-a-sable.json, tests/sonde-bac-a-sable.sh, tests/test_hooks.sh
   Fait quand : contrôle du fragment et `--liste` verts — `bash tests/test_hooks.sh`
-- [ ] L2 — durcissement des commandes exclues (étapes 4-5)
+- [x] L2 — durcissement des commandes exclues (étapes 4-5)
   Fichiers : hooks/garde-git.py, hooks/garde-secret.py, tests/test_hooks.sh, tests/test_secrets.sh
   Fait quand : cas bloqués, acceptés et refusés du §5 verts — `bash tests/test_hooks.sh`
 - [ ] L3 — README, CHANGELOG, version 1.0.0, clôture (étape 6)

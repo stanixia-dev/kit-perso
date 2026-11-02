@@ -38,6 +38,13 @@ code_edit() { # $1 = tool_name, $2 = chemin
 [ "$(code_garde 'git push origin main')" = 2 ] && ok "garde-git bloque git push origin main" || ko "garde-git push main"
 [ "$(code_garde 'gh pr merge 1')" = 2 ] && ok "garde-git bloque gh pr merge" || ko "garde-git pr merge"
 [ "$(code_garde 'git status')" = 0 ] && ok "garde-git laisse passer git status" || ko "garde-git status"
+for c in 'git push --receive-pack=x origin b' 'git push --exec x origin b' 'git push --exec=x origin b' 'GIT_SSH_COMMAND=x git push origin b' \
+         'env A=1 gh pr create' "bash -c 'X=1 git push origin b'" 'rtk git push --receive-pack=x origin b' 'A=1 gh pr view 1'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'git push -u origin claude/x' 'gh pr create --fill' 'gh pr checks --watch --interval 20' 'rtk git push -u origin claude/x'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 sortie_rappel 'gh pr create --fill' | grep -q '/clear' && ok "rappel-clear après gh pr create" || ko "rappel-clear pr create"
 [ -z "$(sortie_rappel 'ls')" ] && ok "rappel-clear muet sur ls" || ko "rappel-clear ls"
 

@@ -242,6 +242,13 @@ for c in "git commit -m 'protège .env'" "git commit -m \"\$(cat <<'EOF'"$'\npro
          'cat .env.example' 'ls -la' 'echo "ok" | wc -l' 'git status' 'grep -rn "\.env" src' 'cat README.md'; do
   hk Bash "$TMP/w" command "$c"; passe "$c"
 done
+# commandes exclues du bac à sable : un argument qui est un lien vers un chemin protégé est refusé
+echo "contenu" > "$HOME/.ssh/id_x"; ln -sfn "$HOME/.ssh/id_x" "$TMP/w/l"; echo "notes" > "$TMP/w/notes.md"
+for c in 'gh pr create --body-file l' 'gh pr create --body-file=l' 'gh issue view --body-file l' 'git push origin l'; do
+  hk Bash "$TMP/w" command "$c"; bloque "exclue : $c"
+done
+hk Bash "$TMP/w" command 'gh pr create --body-file notes.md'; passe "exclue : gh pr create --body-file notes.md"
+rm -f "$TMP/w/l" "$TMP/w/notes.md" "$HOME/.ssh/id_x"
 hk_json 'pas du json'; bloque "entrée JSON invalide"
 hk_json '{"tool_input":{"command":"ls"}}'; passe "tool_name absent = Bash"
 
