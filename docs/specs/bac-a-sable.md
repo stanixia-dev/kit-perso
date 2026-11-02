@@ -85,7 +85,7 @@ Faire passer chaque commande Bash de l'agent dans le bac à sable système de Cl
 - **Q5 — Liste `gh`.** *Tranchée : recommandation retenue.* Seules les sous-commandes citées tournent hors du bac à sable ; `gh api`, `gh gist` et `gh repo` échoueront faute de jeton. Recommandation : liste étroite, que tu élargis toi-même dans `~/.claude/settings.json` au besoin.
 
 ## Lots
-- [ ] L1 — fragment de réglages et sonde (étapes 1-3)
+- [x] L1 — fragment de réglages et sonde (étapes 1-3)
   Fichiers : config/bac-a-sable.json, tests/sonde-bac-a-sable.sh, tests/test_hooks.sh
   Fait quand : contrôle du fragment et `--liste` verts — `bash tests/test_hooks.sh`
 - [ ] L2 — durcissement des commandes exclues (étapes 4-5)

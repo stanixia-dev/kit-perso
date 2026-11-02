@@ -103,6 +103,40 @@ done
 [ "$(code_deps 'pip3 install inconnu')" = 0 ] && sortie_deps 'pip3 install inconnu' | grep -q 'vérification impossible' \
   && ok "garde-deps avertit si injoignable" || ko "garde-deps injoignable"
 
+# bac à sable : contrôle du fragment de réglages et de la sonde
+controle_bac() { # $1 = fichier ; sort 0 si conforme
+  python3 -I - "$1" <<'PY'
+import json, re, sys
+try:
+    d = json.load(open(sys.argv[1]))["sandbox"]
+    assert d["enabled"] is True and d["allowUnsandboxedCommands"] is False
+    assert d["failIfUnavailable"] is True and d["autoAllowBashIfSandboxed"] is False
+    ex = d["excludedCommands"]
+    assert all(re.match(r"^(rtk )?(git push|gh (pr|run|issue)) ", e) for e in ex) and ex
+    for e in ("git push *", "gh pr create *", "rtk git push *", "rtk gh pr create *"):
+        assert e in ex, e
+    assert {"~/.ssh", "~/.config/gh"} <= set(d["filesystem"]["denyRead"])
+    for w in d["filesystem"]["allowWrite"]:
+        w = w.rstrip("/")
+        assert w != "~/.cargo" and not re.match(r"^~/(\.claude|\.ssh|\.config/gh)(/|$)", w), w
+    assert {"GH_TOKEN", "GITHUB_TOKEN"} <= {c["name"] for c in d["credentials"]["envVars"] if c["mode"] == "deny"}
+    assert "api.github.com" in d["network"]["allowedDomains"] and d["network"]["allowLocalBinding"] is True
+except Exception as e:
+    print(f"fragment non conforme : {e!r}", file=sys.stderr); sys.exit(1)
+PY
+}
+T_BAC=$(mktemp -d)
+controle_bac config/bac-a-sable.json && ok "bac à sable : fragment conforme" || ko "bac à sable : fragment"
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); del d["sandbox"]["allowUnsandboxedCommands"]; json.dump(d, open(sys.argv[2], "w"))' config/bac-a-sable.json "$T_BAC/a.json"
+controle_bac "$T_BAC/a.json" 2>/dev/null && ko "bac à sable : allowUnsandboxedCommands retiré accepté" || ok "bac à sable : allowUnsandboxedCommands retiré refusé"
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["sandbox"]["filesystem"]["allowWrite"].append("~/.claude"); json.dump(d, open(sys.argv[2], "w"))' config/bac-a-sable.json "$T_BAC/b.json"
+controle_bac "$T_BAC/b.json" 2>/dev/null && ko "bac à sable : ~/.claude en écriture accepté" || ok "bac à sable : ~/.claude en écriture refusé"
+rm -rf "$T_BAC"
+bash -n tests/sonde-bac-a-sable.sh && ok "sonde : syntaxe" || ko "sonde : syntaxe"
+AVANT=$(git status --porcelain | md5sum)
+bash tests/sonde-bac-a-sable.sh --liste >/dev/null && [ "$(git status --porcelain | md5sum)" = "$AVANT" ] \
+  && ok "sonde --liste : sort en 0, rien créé" || ko "sonde --liste"
+
 bash tests/test_manifestes.sh | grep -v '^OK' | sed 's/^/manifestes: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_manifestes.sh"
 bash tests/test_secrets.sh | grep -v '^OK' | sed 's/^/secrets: /'

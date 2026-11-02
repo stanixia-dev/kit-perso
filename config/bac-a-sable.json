@@ -1,0 +1,48 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "failIfUnavailable": true,
+    "autoAllowBashIfSandboxed": false,
+    "excludedCommands": [
+      "git push *",
+      "gh pr create *",
+      "gh pr view *",
+      "gh pr list *",
+      "gh pr checks *",
+      "gh pr diff *",
+      "gh run view *",
+      "gh run list *",
+      "gh issue view *",
+      "gh issue list *",
+      "rtk git push *",
+      "rtk gh pr create *",
+      "rtk gh pr view *",
+      "rtk gh pr list *",
+      "rtk gh pr checks *",
+      "rtk gh pr diff *",
+      "rtk gh run view *",
+      "rtk gh run list *",
+      "rtk gh issue view *",
+      "rtk gh issue list *"
+    ],
+    "filesystem": {
+      "denyRead": ["~/.ssh", "~/.config/gh"],
+      "allowWrite": ["~/.cargo/registry", "~/.cargo/git", "~/.npm", "~/.cache", "~/.local/share/rtk"]
+    },
+    "credentials": {
+      "envVars": [
+        {"name": "GH_TOKEN", "mode": "deny"},
+        {"name": "GITHUB_TOKEN", "mode": "deny"}
+      ]
+    },
+    "network": {
+      "allowedDomains": [
+        "github.com", "api.github.com", "*.githubusercontent.com",
+        "crates.io", "index.crates.io", "static.crates.io",
+        "registry.npmjs.org", "pypi.org", "files.pythonhosted.org", "api.osv.dev"
+      ],
+      "allowLocalBinding": true
+    }
+  }
+}
