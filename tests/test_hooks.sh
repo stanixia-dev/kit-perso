@@ -138,6 +138,40 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          "php -r 'unlink(\"/home/u/.claude/settings.json\");'"; do
   [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"
 done
+# gh api : liste blanche (lecture libre, écriture limitée aux milestones)
+for c in 'gh api -X POST repos/o/r/merges -f base=main -f head=x' 'gh api repos/o/r/merges -f base=main' 'gh api repos/o/r/pulls/1/merge -X PUT' \
+         'gh api -XPATCH repos/o/r/issues/1 -f state=closed' 'gh api --method=patch repos/o/r/pulls/1 -f state=closed' \
+         'gh api -iXPATCH repos/o/r/issues/1 -f state=closed' 'gh api -X DELETE repos/o/r/milestones/1' 'gh api -X PUT repos/o/r/milestones/1' \
+         'gh api -X POST repos/o/r/milestones/1 -f state=closed' 'gh api -X PATCH repos/o/r/milestones -f title=x' \
+         "gh api -H 'Accept: x' repos/o/r/labels -f name=x" 'gh api repos/o/../milestones -f title=x' \
+         'gh api https://api.github.com/repos/o/r/milestones -f title=x' "gh api 'repos/o/r/milestones?x=1' -f title=x" \
+         'gh api --input f repos/o/r/milestones' 'gh api repos/o/r/milestones -F title=@f' 'gh api repos/o/r/milestones -Ftitle=@f' \
+         'gh api -X GET search/issues -F q=@f' 'gh api --hostname evil.example repos/o/r/milestones -f title=x' \
+         'gh api repos/o/r/milestones repos/o/r/merges -f title=x' "gh api graphql -f query='mutation { x }'" \
+         'gh api graphql -f query=$(cat q.txt)' 'gh api graphql -f query=mu$(echo t)ation' 'Q=x; gh api graphql -f query=$Q' \
+         'rtk gh api -X POST repos/o/r/merges -f base=main' "bash -c 'gh api repos/o/r/merges -f base=main'"; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'gh api repos/o/r/milestones' 'rtk gh api repos/o/r/milestones' "gh api --paginate 'repos/{owner}/{repo}/milestones?state=all'" \
+         'gh api -X GET search/issues -f q=repo:o/r' 'gh api graphql -f query=query{viewer{login}}' "gh api graphql -f query='query { viewer { login } }'" \
+         "gh api 'repos/{owner}/{repo}/milestones' -f title=v1 -f due_on=2026-12-01T00:00:00Z" \
+         'gh api -X POST repos/stanixia-dev/kit-perso/milestones -f title=v1' "gh api -XPATCH 'repos/{owner}/{repo}/milestones/3' -f state=closed" \
+         'gh api --method=patch /repos/o/r/milestones/3 -f state=closed' \
+         "gh api -H 'Accept: application/vnd.github+json' -X PATCH repos/o/r/milestones/3 -f state=closed"; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
+for c in 'gh issue edit 9 --milestone v1 -t x' 'gh issue edit 9 --add-label x' 'gh issue edit 9' 'gh issue edit 9 -m v1 -R o/r' \
+         'gh issue edit https://github.com/o/r/issues/9 -m v1' 'gh issue create -R autre/r -t x' 'gh issue -R o/r create -t x' \
+         'gh issue create -wRstanixia-dev/kit-perso -t x' 'gh issue create -R stanixia-dev/.. -t x' 'gh issue create -R stanixia-dev/a/b -t x' \
+         'gh issue create -R stanixia-dev -t x' 'gh issue create -R github.com/stanixia-dev/kit-perso -t x'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'gh issue edit 9 --milestone v1' 'gh issue edit 9 10 -m v1' 'gh issue edit 9 --milestone=v1' 'gh issue edit 9 --remove-milestone' \
+         'gh issue edit 9 -m v1 -R stanixia-dev/kit-perso' 'gh issue create -R stanixia-dev/kit-perso -t x -b y' \
+         'gh issue create --repo=STANIXIA-DEV/kit-perso -t x' 'gh issue comment 5 -Rstanixia-dev/kit-perso -b x' \
+         'gh issue -R stanixia-dev/kit-perso create -t x' 'gh issue create -R stanixia-dev/Hive -t x' 'gh pr edit 3 --milestone v1'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 for ch in 'Edit|$HOME/.claude/settings.json' 'Write|/x/.github/workflows/a.yml' 'Write|/x/.garde-deps-exceptions' \
           'MultiEdit|/home/u/proj/.claude/settings.local.json' 'NotebookEdit|/x/.garde-deps-exceptions' 'Edit|/x/.garde-secret-exceptions'; do
   [ "$(code_edit "${ch%%|*}" "$(eval echo "${ch#*|}")")" = 2 ] && ok "garde-deps bloque ${ch%%|*} ${ch#*|}" || ko "garde-deps ${ch}"
@@ -151,41 +185,6 @@ done
   && ok "garde-deps avertit sur MPL-2.0" || ko "garde-deps MPL"
 [ "$(code_deps 'pip3 install inconnu')" = 0 ] && sortie_deps 'pip3 install inconnu' | grep -q 'vérification impossible' \
   && ok "garde-deps avertit si injoignable" || ko "garde-deps injoignable"
-
-# bac à sable : contrôle du fragment de réglages et de la sonde
-controle_bac() { # $1 = fichier ; sort 0 si conforme
-  python3 -I - "$1" <<'PY'
-import json, re, sys
-try:
-    d = json.load(open(sys.argv[1]))["sandbox"]
-    assert d["enabled"] is True and d["allowUnsandboxedCommands"] is False
-    assert d["failIfUnavailable"] is True and d["autoAllowBashIfSandboxed"] is False
-    ex = d["excludedCommands"]
-    assert all(re.match(r"^(rtk )?(git push|gh (pr|run|issue)) ", e) for e in ex) and ex
-    for e in ("git push *", "gh pr create *", "rtk git push *", "rtk gh pr create *",
-              "gh issue create *", "gh issue comment *", "rtk gh issue create *", "rtk gh issue comment *"):
-        assert e in ex, e
-    assert {"~/.ssh", "~/.config/gh"} <= set(d["filesystem"]["denyRead"])
-    for w in d["filesystem"]["allowWrite"]:
-        w = w.rstrip("/")
-        assert w != "~/.cargo" and not re.match(r"^~/(\.claude|\.ssh|\.config/gh)(/|$)", w), w
-    assert {"GH_TOKEN", "GITHUB_TOKEN"} <= {c["name"] for c in d["credentials"]["envVars"] if c["mode"] == "deny"}
-    assert "api.github.com" in d["network"]["allowedDomains"] and d["network"]["allowLocalBinding"] is True
-except Exception as e:
-    print(f"fragment non conforme : {e!r}", file=sys.stderr); sys.exit(1)
-PY
-}
-T_BAC=$(mktemp -d)
-controle_bac config/bac-a-sable.json && ok "bac à sable : fragment conforme" || ko "bac à sable : fragment"
-python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); del d["sandbox"]["allowUnsandboxedCommands"]; json.dump(d, open(sys.argv[2], "w"))' config/bac-a-sable.json "$T_BAC/a.json"
-controle_bac "$T_BAC/a.json" 2>/dev/null && ko "bac à sable : allowUnsandboxedCommands retiré accepté" || ok "bac à sable : allowUnsandboxedCommands retiré refusé"
-python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["sandbox"]["filesystem"]["allowWrite"].append("~/.claude"); json.dump(d, open(sys.argv[2], "w"))' config/bac-a-sable.json "$T_BAC/b.json"
-controle_bac "$T_BAC/b.json" 2>/dev/null && ko "bac à sable : ~/.claude en écriture accepté" || ok "bac à sable : ~/.claude en écriture refusé"
-rm -rf "$T_BAC"
-bash -n tests/sonde-bac-a-sable.sh && ok "sonde : syntaxe" || ko "sonde : syntaxe"
-AVANT=$(git status --porcelain | md5sum)
-bash tests/sonde-bac-a-sable.sh --liste >/dev/null && [ "$(git status --porcelain | md5sum)" = "$AVANT" ] \
-  && ok "sonde --liste : sort en 0, rien créé" || ko "sonde --liste"
 
 bash tests/test_manifestes.sh | grep -v '^OK' | sed 's/^/manifestes: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_manifestes.sh"

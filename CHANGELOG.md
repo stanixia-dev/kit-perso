@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.0 — 2026-11-03
+
+- `gh api` en liste blanche : lecture libre, écriture limitée aux milestones (`POST …/milestones`, `PATCH …/milestones/<n>`) ; fichiers locaux, hôtes autres que github.com et mutations GraphQL bloqués.
+- `gh issue edit --milestone` / `--remove-milestone` admis (tout autre champ bloqué).
+- `-R/--repo` admis sur `gh issue create|comment|edit` vers les dépôts `stanixia-dev/*`.
+- Retrait du bac à sable : fragment `config/bac-a-sable.json` et sonde supprimés.
+- Majeur : garde-secret contrôle les fichiers de tout `gh`.
+
 ## 2.0.0 — 2026-11-02
 
 - Agents specs, codeur, relecteur : `> Coupure PR` libre et insérée par le codeur, lockfiles et config listés dans les lots, fichier imprévu ajouté au lot (#9, #10).

@@ -424,8 +424,8 @@ def bash_chemins(cmd, ctx, prof=0):
                 c = chemin_protege(t)
                 if c:
                     ctx["hits"].append(c)
-        if sous == "push" or (base == "gh" and args[:1] in (["pr"], ["run"], ["issue"])):
-            # commande exclue du bac à sable : un argument qui désigne un fichier (lien compris) vers un chemin protégé
+        if sous == "push" or base == "gh":
+            # commande qui porte les identifiants : un argument qui désigne un fichier (lien compris) vers un chemin protégé
             for t in args:
                 if t.startswith("--") and "=" in t:
                     vals = (t, t.split("=", 1)[1])
