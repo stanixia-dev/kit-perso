@@ -1,6 +1,6 @@
 # Durcissement des gardes : contournements gh/git et erreurs avalées
 
-Statut : validée (2026-11-03)
+Statut : livrée (2026-11-03, 3.1.2)
 
 ## Objectif
 
