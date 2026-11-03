@@ -225,5 +225,7 @@ bash tests/test_manifestes.sh | grep -v '^OK' | sed 's/^/manifestes: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_manifestes.sh"
 bash tests/test_secrets.sh | grep -v '^OK' | sed 's/^/secrets: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_secrets.sh"
+bash tests/test_ci_projet.sh | grep -v '^OK' | sed 's/^/ci-projet: /'
+[ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_ci_projet.sh"
 
 exit $((ECHECS > 0))

@@ -1,0 +1,34 @@
+name: kit-perso
+on:
+  pull_request:
+  pull_request_target:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  # pull_request_target exécute le workflow de main : la PR ne peut ni changer le SHA du kit ni retirer ce contrôle.
+  # Le code de la PR n'est jamais exécuté, seulement lu par git.
+  deps:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: stanixia-dev/kit-perso
+          ref: __SHA_KIT__
+          path: kit
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 kit/hooks/verifie-manifestes.py --ci --depot pr --base "$BASE" --cible HEAD
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+# JOBS-TESTS

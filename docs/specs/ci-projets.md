@@ -113,7 +113,7 @@ Aucune.
 
 ## Lots
 
-- [ ] L1 — Modèle, générateur et skill ci-projet (étapes 1-4)
+- [x] L1 — Modèle, générateur et skill ci-projet (étapes 1-4)
   Fichiers : `skills/ci-projet/SKILL.md`, `skills/ci-projet/genere-ci.py`, `skills/ci-projet/modele-ci.yml`, `tests/test_ci_projet.sh`, `tests/test_hooks.sh`
   Fait quand : génération, SHA, refus et ligne `run` du job deps testés hors réseau — `bash tests/test_hooks.sh`
 - [ ] L2 — Détection de la CI dans livrer et specs (étapes 5-6)
