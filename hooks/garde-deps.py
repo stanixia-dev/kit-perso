@@ -37,52 +37,71 @@ HEREDOC = re.compile(r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|\\?([A-Za-z_]\w
 DEBUT_MOT = " \t\r\n;&|()<>"
 RECEVEUR_SHELL = re.compile(r"(?<![\w.-])(bash|sh|zsh|dash|ksh|eval|source)(?![\w.-])")
 
-def premier_heredoc(s, debut=0):
-    """Match du premier `<<DELIM` (hors `<<<`) situé dans du code, pas dans une chaîne (sauf dans un $( … ))."""
+def parcours(s, ouvrants=("$(",), quotes=True, commentaires=True, backticks=False):
+    """Analyseur unique des guillemets, échappements et cadres ($( … ), "…") : génère (genre, i, j) avec s[i:j] pour
+    esc (échappement), sq ('…'), com (commentaire), bq (`…`, j None si non fermé), ouvre/ferme (cadre $( … )),
+    dq (guillemet double), d (caractère entre guillemets doubles) et c (caractère de code)."""
     frames, i, n = [["c", 0]], 0, len(s)
     while i < n:
         c, k = s[i], frames[-1][0]
         if c == "\\":
+            yield "esc", i, min(i + 2, n)
             i += 2
-            continue
-        if c == "`":
-            j = s.find("`", i + 1)
-            i = n if j < 0 else j
-        elif k == "d":
-            if c == '"':
-                frames.pop()
-            elif s.startswith("$(", i):
-                frames.append(["c", 0])
-                i += 1
-        elif c == "'":
-            j = s.find("'", i + 1)
-            i = n if j < 0 else j
-        elif c == "#" and (i == 0 or s[i - 1] in DEBUT_MOT):
-            j = s.find("\n", i)
-            i = n if j < 0 else j
-            continue
-        elif c == '"':
-            frames.append(["d", 0])
-        elif s.startswith("$(", i):
-            frames.append(["c", 0])
+        elif backticks and c == "`":
+            j = i + 1
+            while j < n and s[j] != "`":
+                j += 2 if s[j] == "\\" else 1
+            yield "bq", i, j + 1 if j < n else None
+            i = j + 1
+        elif k == "d" and c == '"':
+            frames.pop()
+            yield "dq", i, i + 1
             i += 1
-        elif c == "(":
-            frames[-1][1] += 1
-        elif c == ")":
-            if frames[-1][1]:
-                frames[-1][1] -= 1
-            elif len(frames) > 1:
-                frames.pop()
-        elif s.startswith("<<", i):
+        elif s.startswith(ouvrants, i):
+            frames.append(["c", 0])
+            yield "ouvre", i, i + 2
+            i += 2
+        elif k == "d":
+            yield "d", i, i + 1
+            i += 1
+        elif quotes and c == "'":
+            j = s.find("'", i + 1)
+            j = n if j < 0 else j + 1
+            yield "sq", i, j
+            i = j
+        elif commentaires and c == "#" and (i == 0 or s[i - 1] in DEBUT_MOT):
+            j = s.find("\n", i)
+            j = n if j < 0 else j
+            yield "com", i, j
+            i = j
+        else:
+            if quotes and c == '"':
+                frames.append(["d", 0])
+            elif c == "(":
+                frames[-1][1] += 1
+            elif c == ")":
+                if frames[-1][1]:
+                    frames[-1][1] -= 1
+                elif len(frames) > 1:
+                    frames.pop()
+                    yield "ferme", i, i + 1
+                    i += 1
+                    continue
+            yield ("dq" if c == '"' and quotes else "c"), i, i + 1
+            i += 1
+
+def premier_heredoc(s, debut=0):
+    """Match du premier `<<DELIM` (hors `<<<`) situé dans du code, pas dans une chaîne (sauf dans un $( … ))."""
+    saut = 0
+    for genre, i, _ in parcours(s, backticks=True):
+        if genre == "c" and i >= saut and s.startswith("<<", i):
             if s.startswith("<<<", i):
-                i += 3
+                saut = i + 3
                 continue
             m = HEREDOC.match(s, i)
             if m and i >= debut:
                 return m
-            i += 2
-            continue
-        i += 1
+            saut = i + 2
     return None
 
 def retire_heredocs(s):
@@ -116,83 +135,28 @@ def retire_heredocs(s):
 
 def substitutions(s, apostrophes=True):
     """Corps des $( … ), <( … ), >( … ) et `…` hors apostrophes (ils s'exécutent aussi entre guillemets doubles)."""
-    out, i, n, sq, dq = [], 0, len(s), False, False
-    while i < n:
-        c = s[i]
-        if sq:
-            sq = c != "'"
-        elif c == "\\":
-            i += 1
-        elif c == '"':
-            dq = not dq
-        elif c == "'" and apostrophes and not dq:
-            sq = True
-        elif c == "`":
-            j = i + 1
-            while j < n and s[j] != "`":
-                j += 2 if s[j] == "\\" else 1
-            if j >= n:
+    out, prof, debut = [], 0, 0
+    for genre, i, j in parcours(s, ("$(", "<(", ">("), apostrophes, False, True):
+        if genre == "bq":
+            if j is None:
                 raise Illisible("substitution `…` non fermée")
-            out.append(s[i + 1:j])
-            i = j
-        elif s.startswith(("$(", "<(", ">("), i):
-            j, prof = i + 2, 1
-            while j < n and prof:
-                prof += (s[j] == "(") - (s[j] == ")")
-                j += 1
-            if prof:
-                raise Illisible("substitution $( … ) non fermée")
-            out.append(s[i + 2:j - 1])
-            i = j - 1
-        i += 1
+            if not prof:
+                out.append(s[i + 1:j - 1])
+        elif genre == "ouvre":
+            debut = j if not prof else debut
+            prof += 1
+        elif genre == "ferme":
+            prof -= 1
+            if not prof:
+                out.append(s[debut:i])
+    if prof:
+        raise Illisible("substitution $( … ) non fermée")
     return out
 
 def sans_commentaires(s):
     """Retire les commentaires shell : hors apostrophes/guillemets et non échappé, un `#` en début de mot
     supprime jusqu'au `\\n` exclu. Les $( … ) (même entre guillemets doubles) sont du code : cadres empilés."""
-    out, i, n = [], 0, len(s)
-    frames = [["c", 0]]
-    while i < n:
-        c, k = s[i], frames[-1][0]
-        if c == "\\" and i + 1 < n:
-            out.append(s[i:i + 2])
-            i += 2
-            continue
-        if k == "d":
-            if c == '"':
-                frames.pop()
-            elif s.startswith("$(", i):
-                frames.append(["c", 0])
-                out.append("$")
-                i += 1
-                c = "("
-        elif c == "'":
-            j = s.find("'", i + 1)
-            j = n - 1 if j < 0 else j
-            out.append(s[i:j + 1])
-            i = j + 1
-            continue
-        elif c == "#" and (i == 0 or s[i - 1] in DEBUT_MOT):
-            j = s.find("\n", i)
-            i = n if j < 0 else j
-            continue
-        elif c == '"':
-            frames.append(["d", 0])
-        elif s.startswith("$(", i):
-            frames.append(["c", 0])
-            out.append("$")
-            i += 1
-            c = "("
-        elif c == "(":
-            frames[-1][1] += 1
-        elif c == ")":
-            if frames[-1][1]:
-                frames[-1][1] -= 1
-            elif len(frames) > 1:
-                frames.pop()
-        out.append(c)
-        i += 1
-    return "".join(out)
+    return "".join(s[i:j] for genre, i, j in parcours(s) if genre != "com")
 
 def jetons(cmd):
     lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|()<>\n")
@@ -345,15 +309,23 @@ def ecriture_protegee(toks):
             args = args[1:]  # script du plugin installé : exécuté, pas écrit ; ses arguments restent contrôlés
     return next((a for a in args if motif(a)), None) if ecrit else None
 
-def saute_options(toks, valeur):
-    """Retire toks[0] et ses options (`valeur` : celles qui prennent un argument séparé)."""
-    i = 1
-    while i < len(toks) and toks[i].startswith("-") and len(toks[i]) > 1:
-        if toks[i] == "--":
+def sans_options(args, valeur, tout=False):
+    """`args` sans ses options (`valeur` : celles qui prennent un argument séparé). Par défaut, seules les options de
+    tête sont retirées (jusqu'à `--` inclus) et le reste est rendu ; `tout` : les positionnels de toute la liste."""
+    i, out = 0, []
+    while i < len(args):
+        a = args[i]
+        if not a.startswith("-") or (len(a) == 1 and not tout):
+            if not tout:
+                break
+            out.append(a)
+            i += 1
+        elif a == "--" and not tout:
             i += 1
             break
-        i += 2 if toks[i] in valeur else 1
-    return toks[i:]
+        else:
+            i += 2 if a in valeur else 1
+    return out if tout else args[i:]
 
 def sans_prefixe(toks):
     """Saute mots-clés shell, affectations VAR=val, env (et ses options, dont -S) et préfixes courants."""
@@ -379,7 +351,7 @@ def sans_prefixe(toks):
                     raise Illisible(f"env -S illisible ({e})")
                 break
         elif base in OPT_VALEUR:
-            toks = saute_options(toks, OPT_VALEUR[base])
+            toks = sans_options(toks[1:], OPT_VALEUR[base])
             if base == "timeout":
                 toks = toks[1:]
         elif re.match(r"^\w+=", t) or base == "rtk" or (t in ("bypass", "proxy") and len(toks) > 1):
@@ -463,18 +435,6 @@ def analyse(cmd, prof=0, ecritures=None):
 
 # ---------- extraction des paquets ----------
 
-def arguments(args, skip):
-    """Jetons positionnels (options sautées, avec leur valeur pour celles qui en prennent une)."""
-    i, out = 0, []
-    while i < len(args):
-        a = args[i]
-        if a.startswith("-"):
-            i += 2 if a in skip else 1
-            continue
-        out.append(a)
-        i += 1
-    return out
-
 def module_python(toks):
     """[module, args…] de `python -m module args` ou `python -mmodule args` (options avant -m sautées), sinon None."""
     i = 1
@@ -494,7 +454,7 @@ def paquets(toks):
     base = toks[0].rsplit("/", 1)[-1]
     sc = toks[1] if len(toks) > 1 else ""
     if base in ("npm", "pnpm", "yarn"):  # options globales avant la sous-commande
-        toks = [toks[0]] + saute_options(toks, SAUTE["npm"])
+        toks = [toks[0]] + sans_options(toks[1:], SAUTE["npm"])
         sc = toks[1] if len(toks) > 1 else ""
     res = []
     if base == "find":  # `-exec cmd … ;` / `+` : la commande exécutée est analysée comme une commande
@@ -508,14 +468,14 @@ def paquets(toks):
     elif base == "cargo" and sc == "add":
         if any(a in ("--git", "--path") or a.startswith(("--git=", "--path=")) for a in toks):
             return []
-        for t in arguments(toks[2:], SAUTE["cargo"]):
+        for t in sans_options(toks[2:], SAUTE["cargo"], True):
             if non_paquet(t):
                 continue
             nom, _, spec = t.partition("@")
             res.append(("crates", nom, exacte(spec, SEMVER)))
     elif (base == "npm" and sc in ("install", "i", "add")) or (base in ("pnpm", "yarn") and sc == "add") \
             or (base == "yarn" and toks[1:3] == ["global", "add"]):
-        for t in arguments(toks[3:] if sc == "global" else toks[2:], SAUTE["npm"]):
+        for t in sans_options(toks[3:] if sc == "global" else toks[2:], SAUTE["npm"], True):
             if non_paquet(t) or ("/" in t and not t.startswith("@")):
                 continue
             m = re.match(r"^(@[^/@]+/[^@]+|[^@/]+)(?:@(.*))?$", t)
@@ -532,7 +492,7 @@ def paquets(toks):
             args = toks[2:]
         else:
             return []
-        for t in arguments(args, SAUTE["pip"]):
+        for t in sans_options(args, SAUTE["pip"], True):
             if non_paquet(t):
                 continue
             r = pep508(t)
