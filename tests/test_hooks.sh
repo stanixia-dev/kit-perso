@@ -148,11 +148,12 @@ for c in 'gh api -X POST repos/o/r/merges -f base=main -f head=x' 'gh api repos/
          'gh api --input f repos/o/r/milestones' 'gh api repos/o/r/milestones -F title=@f' 'gh api repos/o/r/milestones -Ftitle=@f' \
          'gh api -X GET search/issues -F q=@f' 'gh api --hostname evil.example repos/o/r/milestones -f title=x' \
          'gh api repos/o/r/milestones repos/o/r/merges -f title=x' "gh api graphql -f query='mutation { x }'" \
+         'gh api graphql -f query=$(cat q.txt)' 'gh api graphql -f query=mu$(echo t)ation' 'Q=x; gh api graphql -f query=$Q' \
          'rtk gh api -X POST repos/o/r/merges -f base=main' "bash -c 'gh api repos/o/r/merges -f base=main'"; do
   [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
 done
 for c in 'gh api repos/o/r/milestones' 'rtk gh api repos/o/r/milestones' "gh api --paginate 'repos/{owner}/{repo}/milestones?state=all'" \
-         'gh api -X GET search/issues -f q=repo:o/r' "gh api graphql -f query='query { viewer { login } }'" \
+         'gh api -X GET search/issues -f q=repo:o/r' 'gh api graphql -f query=query{viewer{login}}' "gh api graphql -f query='query { viewer { login } }'" \
          "gh api 'repos/{owner}/{repo}/milestones' -f title=v1 -f due_on=2026-12-01T00:00:00Z" \
          'gh api -X POST repos/stanixia-dev/kit-perso/milestones -f title=v1' "gh api -XPATCH 'repos/{owner}/{repo}/milestones/3' -f state=closed" \
          'gh api --method=patch /repos/o/r/milestones/3 -f state=closed' \

@@ -245,9 +245,9 @@ done
 # commandes qui portent les identifiants : un argument qui est un lien vers un chemin protégé est refusé
 echo "contenu" > "$HOME/.ssh/id_x"; ln -sfn "$HOME/.ssh/id_x" "$TMP/w/l"; echo "notes" > "$TMP/w/notes.md"
 for c in 'gh pr create --body-file l' 'gh pr create --body-file=l' 'gh issue view --body-file l' 'gh release upload v1 l' 'git push origin l'; do
-  hk Bash "$TMP/w" command "$c"; bloque "exclue : $c"
+  hk Bash "$TMP/w" command "$c"; bloque "identifiants : $c"
 done
-for c in 'git push -Fl origin b' 'git push -F=l origin b'; do hk Bash "$TMP/w" command "$c"; bloque "exclue : $c"; done
+for c in 'git push -Fl origin b' 'git push -F=l origin b'; do hk Bash "$TMP/w" command "$c"; bloque "identifiants : $c"; done
 hk Bash "$TMP/w" command 'gh pr create --body-file notes.md'; passe "exclue : gh pr create --body-file notes.md"
 rm -f "$TMP/w/l" "$TMP/w/notes.md" "$HOME/.ssh/id_x"
 hk_json 'pas du json'; bloque "entrée JSON invalide"

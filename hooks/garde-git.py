@@ -188,6 +188,8 @@ def verifie_api(args):
         bloque("gh api : un seul endpoint relatif est admis (pas d'URL).")
     endpoint = pos[0].lstrip("/")
     if endpoint == "graphql":
+        if any("$" in x or "`" in x for x in args):
+            bloque("gh api graphql : `$` et les backticks sont interdits (expansion shell : une mutation pourrait être masquée) ; écris la requête en littéral.")
         if any(re.search(r"\bmutation\b", a, re.IGNORECASE) for a in args):
             bloque("gh api graphql : les mutations sont interdites.")
         return
