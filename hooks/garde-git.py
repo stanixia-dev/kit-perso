@@ -37,24 +37,120 @@ def branche_cible(dossier):
     b = branche_courante(dossier) if dossier and os.path.isdir(dossier) else ""
     return b or branche_courante(CWD_SESSION)
 
+# options qui consomment la valeur suivante, par préfixe
+PREFIXES_VALEURS = {
+    "env": {"-u", "-C", "-S", "--unset", "--chdir", "--split-string"},
+    "timeout": {"-k", "-s", "--kill-after", "--signal"},
+    "nice": {"-n", "--adjustment"},
+    "xargs": {"-n", "-I", "-L", "-P", "-s", "-E", "-d", "-a", "-J", "--max-args", "--max-procs", "--delimiter", "--arg-file"},
+    "sudo": {"-u", "-g", "-h", "-p", "-C", "-r", "-t", "-U", "-T", "-D", "-R"},
+    "stdbuf": {"-i", "-o", "-e"},
+    "command": set(), "exec": {"-a"}, "time": set(), "nohup": set(), "busybox": set(),
+    "setsid": set(), "unbuffer": set(), "chrt": set(), "taskset": set(),
+    "ionice": {"-c", "-n", "-p", "-P", "-u", "-t"}, "doas": {"-u", "-C"},
+    "flock": {"-w", "-E", "--timeout", "--conflict-exit-code"}, "watch": {"-n", "-d", "--interval"},
+}
+PREFIXES_POSITIONNEL = {"timeout", "chrt", "taskset", "flock"}  # un argument positionnel avant la commande
+
+def saute_prefixes(toks):
+    """Retire VAR=val et les préfixes (env, timeout, nice, xargs, sudo, stdbuf…) ; renvoie (toks, affecte)."""
+    affecte = False
+    while toks:
+        t = toks[0]
+        nom = t.rsplit("/", 1)[-1]
+        if re.match(r"^\w+=", t):
+            affecte = True
+            toks = toks[1:]
+        elif nom in PREFIXES_VALEURS:
+            if nom == "env":
+                affecte = True
+            valeurs = PREFIXES_VALEURS[nom]
+            toks = toks[1:]
+            while toks and (toks[0].startswith("-") or (nom == "env" and re.match(r"^\w+=", toks[0]))):
+                toks = toks[2:] if toks[0] in valeurs else toks[1:]
+            if nom in PREFIXES_POSITIONNEL and toks:  # durée, priorité, masque, fichier
+                toks = toks[1:]
+            if nom == "flock" and toks and toks[0] in ("-c", "--command"):
+                toks = ["sh"] + toks  # flock f -c 'chaîne' : exécuteur de chaîne
+            elif nom == "watch" and toks:
+                toks = ["sh", "-c", " ".join(toks)]  # watch passe par sh -c
+        elif nom == "rtk" or (t in ("bypass", "proxy") and len(toks) > 1):
+            toks = toks[1:]
+        else:
+            break
+    return toks, affecte
+
+def aplatit(cmd):
+    """Transforme $( ), backticks et parenthèses (hors guillemets) en séparateurs `;`.
+    `\\x` hors guillemets simples est littéral ; un commentaire `# …` est copié tel quel ; le corps d'un heredoc
+    à délimiteur entre guillemets est copié tel quel (`$(` et backticks y sont littéraux) mais reste analysé ligne à ligne."""
+    out, q, i, delim, prof = [], None, 0, None, 0  # prof = nombre de `$(` encore ouverts
+    while i < len(cmd):
+        c = cmd[i]
+        if q != "'" and c == "\\":
+            out.append(cmd[i:i + 2]); i += 2; continue
+        if q is None and c == "#" and (i == 0 or cmd[i - 1] in " \t\n;|&("):
+            j = cmd.find("\n", i)
+            j = len(cmd) if j < 0 else j
+            out.append(cmd[i:j]); i = j; continue
+        if (q is None or (q == '"' and prof > 0)) and cmd.startswith("<<", i) and (i == 0 or cmd[i - 1] != "<"):
+            m = re.match(r"<<(-?)\s*(['\"])(\w+)\2", cmd[i:])
+            if m:
+                delim = (m.group(3), bool(m.group(1)))
+                out.append(m.group(0)); i += len(m.group(0)); continue
+        if c == "\n" and delim:
+            lignes = cmd[i + 1:].split("\n")
+            n = 0
+            while n < len(lignes) and (lignes[n].strip() if delim[1] else lignes[n]) != delim[0]:
+                n += 1
+            corps = "\n".join(lignes[:n + 1])
+            out.append("\n" + corps)
+            i += 1 + len(corps)
+            delim = None
+            continue
+        if q != "'" and cmd.startswith("$(", i):
+            out.append("$;"); i += 2; prof += 1; continue  # garde le `$` (vu par gh api graphql)
+        if q != "'" and c == "`":
+            out.append("`;")
+        elif q is None and c in "()":
+            out.append(";")
+            if c == ")" and prof:
+                prof -= 1
+        else:
+            out.append(c)
+            if c == ")" and prof and q != "'":
+                prof -= 1
+            if q is None and c in "'\"":
+                q = c
+            elif q == c:
+                q = None
+        i += 1
+    return "".join(out)
+
 def segments(cmd):
-    # Découpe sur ; && || | et retours ligne (approximatif mais suffisant)
-    for seg in re.split(r"\|\||&&|[;|\n]", cmd):
+    # Découpe sur ; && || | & et retours ligne (approximatif mais suffisant)
+    for seg in re.split(r"\|\||&&|[;|&\n]", aplatit(cmd)):
+        seg = seg.rstrip()
+        if seg.endswith("\\"):
+            seg = seg[:-1]  # `\;` de find -exec (le `;` a servi de séparateur)
         try:
             toks = shlex.split(seg)
         except ValueError:
             toks = seg.split()
-        # saute les affectations VAR=val et les préfixes courants (en notant s'il y en a eu)
-        affecte = False
-        while toks and (re.match(r"^\w+=", toks[0]) or toks[0] in ("env", "command", "exec", "time", "nohup")
-                        or toks[0].rsplit("/", 1)[-1] == "rtk" or (toks[0] in ("bypass", "proxy") and len(toks) > 1)):
-            affecte = affecte or bool(re.match(r"^\w+=", toks[0])) or toks[0] == "env"
-            env = toks[0] == "env"
-            toks = toks[1:]
-            while env and toks and toks[0].startswith("-"):  # options d'env (-i, -u X, -C d, -S s)
-                toks = toks[2:] if toks[0] in ("-u", "-C", "-S", "--unset", "--chdir", "--split-string") else toks[1:]
+        toks, affecte = saute_prefixes(toks)
         if toks:
             yield toks, affecte
+
+def commande_interne(toks):
+    """eval … ou bash|sh|zsh|dash|ksh -c/-lc … : renvoie la chaîne à ré-analyser (ou None)."""
+    base = toks[0].rsplit("/", 1)[-1]
+    if base == "eval":
+        return " ".join(toks[1:])
+    if base in ("bash", "sh", "zsh", "dash", "ksh"):
+        for k, t in enumerate(toks[1:], 1):
+            if re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", t):
+                return toks[k + 1] if k + 1 < len(toks) else None
+    return None
 
 def sous_commande(toks):
     """Pour git : retire les options globales (-C x, -c x, --no-pager…)."""
@@ -265,6 +361,61 @@ def verifie_issue(args):
         if not milestone:
             bloque("gh issue edit : seul le milestone est modifiable (--milestone ou --remove-milestone requis).")
 
+MOT_LIVRE = re.compile(r"\bgh\b|\bgit\s+push\b")
+
+CMD_BRUT = ""
+
+def est_executeur(toks):
+    """eval, ou shell lancé avec -c/-lc, -s, une redirection << ou sans script (donc alimenté par stdin)."""
+    base = toks[0].rsplit("/", 1)[-1]
+    if base == "eval":
+        return True
+    if base in ("bash", "sh", "zsh", "dash", "ksh"):
+        pos = [t for t in toks[1:] if not t.startswith("-")]
+        return commande_interne(toks) is not None or "-s" in toks or any(t.startswith("<<") for t in toks) or not pos \
+            or any(re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", t) for t in toks[1:])
+    return False
+
+def verifie_segment(toks, affecte, cwd, profondeur):
+    base = toks[0].rsplit("/", 1)[-1]
+    if est_executeur(toks) and MOT_LIVRE.search(CMD_BRUT):
+        # règle simple : le texte brut est contrôlé (heredocs compris), faux positifs admis (ex. bash -c 'echo gh')
+        bloque("exécuteur de chaîne (eval, bash -c, shell sur stdin, watch, flock -c…) dans une commande contenant `gh` ou `git push` : "
+               "lance la commande directement.")
+    if base == "git":
+        sc, args_sc = sous_commande(toks)
+        refuse_affectation("git", sc, affecte)
+        verifie_git(args_sc, sc, dossier_git(toks, cwd))
+    elif base == "gh":
+        refuse_affectation("gh", "", affecte)
+        verifie_gh(toks)
+    elif base == "find":
+        for k, t in enumerate(toks):
+            if t in ("-exec", "-execdir", "-ok", "-okdir"):
+                reste = []
+                for u in toks[k + 1:]:
+                    if u in (";", "+", "\\;", "\\"):
+                        break
+                    reste.append(u)
+                reste, aff = saute_prefixes(reste)
+                if reste:
+                    verifie_segment(reste, aff or affecte, cwd, profondeur)
+    else:
+        interne = commande_interne(toks)
+        if interne:
+            analyse(interne, cwd, profondeur + 1, affecte)  # eval / bash -c : mêmes règles
+
+def analyse(cmd, cwd, profondeur, affecte_parent=False):
+    if profondeur > 5:
+        bloque("commandes imbriquées (eval / bash -c) trop profondes.")
+    for toks, affecte in segments(cmd):
+        base = toks[0].rsplit("/", 1)[-1]
+        if base in ("cd", "pushd"):
+            # suit les `cd <dossier> && …` (worktrees)
+            cwd = resout(cwd, toks[1] if len(toks) > 1 else os.path.expanduser("~"))
+            continue
+        verifie_segment(toks, affecte or affecte_parent, cwd, profondeur)
+
 CWD_SESSION = None
 
 def main():
@@ -272,33 +423,14 @@ def main():
     data = json.load(sys.stdin)
     cmd = (data.get("tool_input") or {}).get("command", "")
     cwd = CWD_SESSION = data.get("cwd") or None
+    global CMD_BRUT
+    CMD_BRUT = cmd
     segs = list(segments(cmd))
     livre = any((t[0].rsplit("/", 1)[-1] == "gh") or (t[0].rsplit("/", 1)[-1] == "git" and sous_commande(t)[0] == "push") for t, _ in segs)
     if livre and any(t[0] in ("export", "declare", "typeset") for t, _ in segs):
         bloque("`export`/`declare`/`typeset` dans la même commande qu'un `git push` ou un `gh` est interdit : "
                "la variable (ex. GIT_SSH_COMMAND) ferait exécuter du code avec les identifiants de l'utilisateur.")
-    for toks, affecte in segs:
-        base = toks[0].rsplit("/", 1)[-1]
-        if base in ("cd", "pushd"):
-            # suit les `cd <dossier> && …` (worktrees)
-            cwd = resout(cwd, toks[1] if len(toks) > 1 else os.path.expanduser("~"))
-        elif base == "git":
-            sc, args_sc = sous_commande(toks)
-            refuse_affectation("git", sc, affecte)
-            verifie_git(args_sc, sc, dossier_git(toks, cwd))
-        elif base == "gh":
-            refuse_affectation("gh", "", affecte)
-            verifie_gh(toks)
-        elif base in ("bash", "sh", "zsh") and "-c" in toks:
-            # sous-shell : on analyse la commande passée à -c
-            k = toks.index("-c")
-            if k + 1 < len(toks):
-                for sub, aff in segments(toks[k + 1]):
-                    b = sub[0].rsplit("/", 1)[-1]
-                    if b == "git":
-                        sc, a = sous_commande(sub); refuse_affectation("git", sc, aff); verifie_git(a, sc, dossier_git(sub, cwd))
-                    elif b == "gh":
-                        refuse_affectation("gh", "", aff); verifie_gh(sub)
+    analyse(cmd, cwd, 0)
     sys.exit(0)
 
 if __name__ == "__main__":
