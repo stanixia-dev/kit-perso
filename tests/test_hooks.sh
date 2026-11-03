@@ -73,7 +73,7 @@ for c in 'GIT_SSH_COMMAND=x eval git push origin claude/x' 'GIT_SSH_COMMAND=x ba
          'bash <<< gh pr merge 1' 'bash <<EOF\ngh pr merge 1\nEOF' 'cat <<EOF\n$(gh pr merge 1)\nEOF'; do
   [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
 done
-for c in 'echo ok | bash' 'gh pr view 1 | cat' 'echo \"\\`gh pr merge\\`\"' 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nx gh pr merge\ngit push origin main\nEOF\n)\"'; do
+for c in 'echo ok | bash' 'gh pr view 1 | cat' 'echo \"\\`gh pr merge\\`\"' 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nx gh pr merge\nx git push origin main\nEOF\n)\"'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
 for c in 'eval \"$(cat <<'"'"'X'"'"'\ngh pr merge 1\nX\n)\"' 'bash -c \"$(cat <<'"'"'X'"'"'\ngh pr merge 1\nX\n)\"' "watch 'gh pr merge 1'" "flock f -c 'gh pr merge 1'" \
@@ -81,6 +81,13 @@ for c in 'eval \"$(cat <<'"'"'X'"'"'\ngh pr merge 1\nX\n)\"' 'bash -c \"$(cat <<
   [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
 done
 for c in 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nx gh pr merge\nEOF\n)\"' 'watch -n1 git status' "gh api repos/o/r/rulesets --jq '.[] // empty'"; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
+for c in 'cat <<<'"'"'X'"'"'\ngh pr merge 1\nX' 'true # <<'"'"'X'"'"'\ngh pr merge 1\nX' 'echo $(date) \"<<'"'"'X'"'"'\"\ngit push origin main\nX' \
+         "ksh -c 'gh pr merge 1'" "busybox sh -c 'gh pr merge 1'"; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nx `gh pr merge` et `git push origin main`\nEOF\n)\"'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
 for c in 'gh issue create -t x -F f' 'gh issue comment 9 -F f' 'gh issue view 1 -R stanixia-dev/Hive' 'gh issue list --author @me --state open'; do

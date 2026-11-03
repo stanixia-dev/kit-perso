@@ -45,7 +45,7 @@ PREFIXES_VALEURS = {
     "xargs": {"-n", "-I", "-L", "-P", "-s", "-E", "-d", "-a", "-J", "--max-args", "--max-procs", "--delimiter", "--arg-file"},
     "sudo": {"-u", "-g", "-h", "-p", "-C", "-r", "-t", "-U", "-T", "-D", "-R"},
     "stdbuf": {"-i", "-o", "-e"},
-    "command": set(), "exec": {"-a"}, "time": set(), "nohup": set(),
+    "command": set(), "exec": {"-a"}, "time": set(), "nohup": set(), "busybox": set(),
     "setsid": set(), "unbuffer": set(), "chrt": set(), "taskset": set(),
     "ionice": {"-c", "-n", "-p", "-P", "-u", "-t"}, "doas": {"-u", "-C"},
     "flock": {"-w", "-E", "--timeout", "--conflict-exit-code"}, "watch": {"-n", "-d", "--interval"},
@@ -82,34 +82,44 @@ def saute_prefixes(toks):
 
 def aplatit(cmd):
     """Transforme $( ), backticks et parenthèses (hors guillemets) en séparateurs `;`.
-    `\\x` hors guillemets simples est littéral ; le corps d'un heredoc à délimiteur entre guillemets est ignoré."""
-    out, q, i, delim, subst = [], None, 0, None, False
+    `\\x` hors guillemets simples est littéral ; un commentaire `# …` est copié tel quel ; le corps d'un heredoc
+    à délimiteur entre guillemets est copié tel quel (`$(` et backticks y sont littéraux) mais reste analysé ligne à ligne."""
+    out, q, i, delim, prof = [], None, 0, None, 0  # prof = nombre de `$(` encore ouverts
     while i < len(cmd):
         c = cmd[i]
         if q != "'" and c == "\\":
             out.append(cmd[i:i + 2]); i += 2; continue
-        if q is None or (q == '"' and subst):
-            m = re.match(r"<<-?\s*(['\"])(\w+)\1", cmd[i:])
+        if q is None and c == "#" and (i == 0 or cmd[i - 1] in " \t\n;|&("):
+            j = cmd.find("\n", i)
+            j = len(cmd) if j < 0 else j
+            out.append(cmd[i:j]); i = j; continue
+        if (q is None or (q == '"' and prof > 0)) and cmd.startswith("<<", i) and (i == 0 or cmd[i - 1] != "<"):
+            m = re.match(r"<<(-?)\s*(['\"])(\w+)\2", cmd[i:])
             if m:
-                delim = (m.group(2), cmd[i:].startswith("<<-"))
+                delim = (m.group(3), bool(m.group(1)))
                 out.append(m.group(0)); i += len(m.group(0)); continue
         if c == "\n" and delim:
             lignes = cmd[i + 1:].split("\n")
             n = 0
             while n < len(lignes) and (lignes[n].strip() if delim[1] else lignes[n]) != delim[0]:
                 n += 1
-            out.append("\n")
-            i += 1 + sum(len(l) + 1 for l in lignes[:n + 1])
+            corps = "\n".join(lignes[:n + 1])
+            out.append("\n" + corps)
+            i += 1 + len(corps)
             delim = None
             continue
         if q != "'" and cmd.startswith("$(", i):
-            out.append("$;"); i += 2; subst = True; continue  # garde le `$` (vu par gh api graphql)
+            out.append("$;"); i += 2; prof += 1; continue  # garde le `$` (vu par gh api graphql)
         if q != "'" and c == "`":
             out.append("`;")
         elif q is None and c in "()":
             out.append(";")
+            if c == ")" and prof:
+                prof -= 1
         else:
             out.append(c)
+            if c == ")" and prof and q != "'":
+                prof -= 1
             if q is None and c in "'\"":
                 q = c
             elif q == c:
@@ -136,7 +146,7 @@ def commande_interne(toks):
     base = toks[0].rsplit("/", 1)[-1]
     if base == "eval":
         return " ".join(toks[1:])
-    if base in ("bash", "sh", "zsh", "dash"):
+    if base in ("bash", "sh", "zsh", "dash", "ksh"):
         for k, t in enumerate(toks[1:], 1):
             if re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", t):
                 return toks[k + 1] if k + 1 < len(toks) else None
@@ -360,7 +370,7 @@ def est_executeur(toks):
     base = toks[0].rsplit("/", 1)[-1]
     if base == "eval":
         return True
-    if base in ("bash", "sh", "zsh", "dash"):
+    if base in ("bash", "sh", "zsh", "dash", "ksh"):
         pos = [t for t in toks[1:] if not t.startswith("-")]
         return commande_interne(toks) is not None or "-s" in toks or any(t.startswith("<<") for t in toks) or not pos \
             or any(re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", t) for t in toks[1:])

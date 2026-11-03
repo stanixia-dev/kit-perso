@@ -4,6 +4,8 @@
 
 - garde-git détecte `gh` et `git push` derrière `timeout`, `nice`, `xargs`, `sudo`, `stdbuf`, `env`, `command`, `eval`, `bash -c`, un sous-shell `( )`, `$( )` ou des backticks, ainsi que derrière `exec -a`, `setsid`, `ionice`, `doas`, `chrt`, `taskset`, `flock`, `unbuffer`, `watch` et `find -exec` ; une affectation devant `eval`/`bash -c` reste refusée ; un shell alimenté par l'entrée standard (pipe, heredoc, `<<<`) avec `gh` ou `git push` est bloqué ; les heredocs à délimiteur entre guillemets et `\x` sont ignorés. Règle simple pour les exécuteurs de chaîne (`eval`, `bash|sh|zsh|dash -c`/`-s`/stdin, `watch`, `flock -c`, `find -exec sh -c`, `xargs sh`) : le texte brut de la commande entière est bloqué s'il contient le mot `gh` ou `git push` ; faux positifs admis (ex. `bash -c 'echo gh'` est bloqué).
 
+Limites : la détection n'est pas étanche face à l'obfuscation (`${x}h`, `base64 -d | bash`, `source /dev/stdin`, `. <(…)`, autres interpréteurs que bash/sh/zsh/dash/ksh via busybox). C'est un garde-fou contre les erreurs de l'IA, pas une frontière de sécurité.
+
 ## 3.0.0 — 2026-11-03
 
 - `gh api` en liste blanche : lecture libre, écriture limitée aux milestones (`POST …/milestones`, `PATCH …/milestones/<n>`) ; fichiers locaux, hôtes autres que github.com et mutations GraphQL bloqués.
