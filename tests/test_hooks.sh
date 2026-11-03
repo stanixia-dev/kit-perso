@@ -66,6 +66,16 @@ done
 for c in 'timeout 5 gh pr view 1' "bash -c 'echo ok'" 'echo $(date)' 'nice make test' 'echo `date`' '(cd /tmp && ls)' 'timeout 5 git status'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
+for c in 'GIT_SSH_COMMAND=x eval git push origin claude/x' 'GIT_SSH_COMMAND=x bash -c \"git push origin claude/x\"' "env GH_PAGER=x bash -lc 'gh pr view 1'" \
+         'echo \\'"'"' $(gh pr merge 1)' 'exec -a n gh pr merge 1' 'setsid gh pr merge 1' 'ionice -c 3 gh pr merge 1' 'doas -u x gh pr merge 1' \
+         'chrt -f 10 gh pr merge 1' 'taskset 0x1 gh pr merge 1' 'flock /tmp/l gh pr merge 1' 'unbuffer gh pr merge 1' 'watch -n 5 gh pr merge 1' \
+         'find . -exec gh pr merge 1 \\;' 'find . -execdir gh pr merge {} +' 'echo gh pr merge 1 | bash' "printf 'git push origin main' | sh -s" \
+         'bash <<< gh pr merge 1' 'bash <<EOF\ngh pr merge 1\nEOF' 'cat <<EOF\n$(gh pr merge 1)\nEOF'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'echo ok | bash' 'gh pr view 1 | cat' 'echo \"\\`gh pr merge\\`\"' 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nx gh pr merge\ngit push origin main\nEOF\n)\"'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 for c in 'gh issue create -t x -F f' 'gh issue comment 9 -F f' 'gh issue view 1 -R stanixia-dev/Hive' 'gh issue list --author @me --state open'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done

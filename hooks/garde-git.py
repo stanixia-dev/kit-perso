@@ -45,8 +45,12 @@ PREFIXES_VALEURS = {
     "xargs": {"-n", "-I", "-L", "-P", "-s", "-E", "-d", "-a", "-J", "--max-args", "--max-procs", "--delimiter", "--arg-file"},
     "sudo": {"-u", "-g", "-h", "-p", "-C", "-r", "-t", "-U", "-T", "-D", "-R"},
     "stdbuf": {"-i", "-o", "-e"},
-    "command": set(), "exec": set(), "time": set(), "nohup": set(),
+    "command": set(), "exec": {"-a"}, "time": set(), "nohup": set(),
+    "setsid": set(), "unbuffer": set(), "chrt": set(), "taskset": set(),
+    "ionice": {"-c", "-n", "-p", "-P", "-u", "-t"}, "doas": {"-u", "-C"},
+    "flock": {"-w", "-E", "--timeout", "--conflict-exit-code"}, "watch": {"-n", "-d", "--interval"},
 }
+PREFIXES_POSITIONNEL = {"timeout", "chrt", "taskset", "flock"}  # un argument positionnel avant la commande
 
 def saute_prefixes(toks):
     """Retire VAR=val et les préfixes (env, timeout, nice, xargs, sudo, stdbuf…) ; renvoie (toks, affecte)."""
@@ -64,7 +68,7 @@ def saute_prefixes(toks):
             toks = toks[1:]
             while toks and (toks[0].startswith("-") or (nom == "env" and re.match(r"^\w+=", toks[0]))):
                 toks = toks[2:] if toks[0] in valeurs else toks[1:]
-            if nom == "timeout" and toks:  # durée
+            if nom in PREFIXES_POSITIONNEL and toks:  # durée, priorité, masque, fichier
                 toks = toks[1:]
         elif nom == "rtk" or (t in ("bypass", "proxy") and len(toks) > 1):
             toks = toks[1:]
@@ -73,10 +77,27 @@ def saute_prefixes(toks):
     return toks, affecte
 
 def aplatit(cmd):
-    """Transforme $( ), backticks et parenthèses (hors guillemets) en séparateurs `;`."""
-    out, q, i = [], None, 0
+    """Transforme $( ), backticks et parenthèses (hors guillemets) en séparateurs `;`.
+    `\\x` hors guillemets simples est littéral ; le corps d'un heredoc à délimiteur entre guillemets est ignoré."""
+    out, q, i, delim = [], None, 0, None
     while i < len(cmd):
         c = cmd[i]
+        if q != "'" and c == "\\":
+            out.append(cmd[i:i + 2]); i += 2; continue
+        if q != "'":
+            m = re.match(r"<<-?\s*(['\"])(\w+)\1", cmd[i:])
+            if m:
+                delim = (m.group(2), cmd[i:].startswith("<<-"))
+                out.append(m.group(0)); i += len(m.group(0)); continue
+        if c == "\n" and delim:
+            lignes = cmd[i + 1:].split("\n")
+            n = 0
+            while n < len(lignes) and (lignes[n].strip() if delim[1] else lignes[n]) != delim[0]:
+                n += 1
+            out.append("\n")
+            i += 1 + sum(len(l) + 1 for l in lignes[:n + 1])
+            delim = None
+            continue
         if q != "'" and cmd.startswith("$(", i):
             out.append("$;"); i += 2; continue  # garde le `$` (vu par gh api graphql)
         if q != "'" and c == "`":
@@ -323,7 +344,34 @@ def verifie_issue(args):
         if not milestone:
             bloque("gh issue edit : seul le milestone est modifiable (--milestone ou --remove-milestone requis).")
 
-def analyse(cmd, cwd, profondeur):
+MOT_LIVRE = re.compile(r"\bgh\b|\bgit\s+push\b")
+
+def verifie_segment(toks, affecte, cwd, profondeur):
+    base = toks[0].rsplit("/", 1)[-1]
+    if base == "git":
+        sc, args_sc = sous_commande(toks)
+        refuse_affectation("git", sc, affecte)
+        verifie_git(args_sc, sc, dossier_git(toks, cwd))
+    elif base == "gh":
+        refuse_affectation("gh", "", affecte)
+        verifie_gh(toks)
+    elif base == "find":
+        for k, t in enumerate(toks):
+            if t in ("-exec", "-execdir", "-ok", "-okdir"):
+                reste = []
+                for u in toks[k + 1:]:
+                    if u in (";", "+", "\\;", "\\"):
+                        break
+                    reste.append(u)
+                reste, aff = saute_prefixes(reste)
+                if reste:
+                    verifie_segment(reste, aff or affecte, cwd, profondeur)
+    else:
+        interne = commande_interne(toks)
+        if interne:
+            analyse(interne, cwd, profondeur + 1, affecte)  # eval / bash -c : mêmes règles
+
+def analyse(cmd, cwd, profondeur, affecte_parent=False):
     if profondeur > 5:
         bloque("commandes imbriquées (eval / bash -c) trop profondes.")
     for toks, affecte in segments(cmd):
@@ -331,17 +379,12 @@ def analyse(cmd, cwd, profondeur):
         if base in ("cd", "pushd"):
             # suit les `cd <dossier> && …` (worktrees)
             cwd = resout(cwd, toks[1] if len(toks) > 1 else os.path.expanduser("~"))
-        elif base == "git":
-            sc, args_sc = sous_commande(toks)
-            refuse_affectation("git", sc, affecte)
-            verifie_git(args_sc, sc, dossier_git(toks, cwd))
-        elif base == "gh":
-            refuse_affectation("gh", "", affecte)
-            verifie_gh(toks)
-        else:
-            interne = commande_interne(toks)
-            if interne:
-                analyse(interne, cwd, profondeur + 1)  # eval / bash -c : mêmes règles
+            continue
+        if base in ("bash", "sh", "zsh", "dash") and commande_interne(toks) is None and MOT_LIVRE.search(cmd):
+            pos = [t for t in toks[1:] if not t.startswith("-")]
+            if any(t.startswith("<<") for t in toks) or not pos or "-s" in toks:
+                bloque("shell alimenté par l'entrée standard (pipe, heredoc, <<<) avec `gh` ou `git push` : interdit, lance la commande directement.")
+        verifie_segment(toks, affecte or affecte_parent, cwd, profondeur)
 
 CWD_SESSION = None
 

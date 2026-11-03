@@ -2,7 +2,7 @@
 
 ## 3.0.1 — 2026-11-03
 
-- garde-git détecte `gh` et `git push` derrière `timeout`, `nice`, `xargs`, `sudo`, `stdbuf`, `env`, `command`, `eval`, `bash -c`, un sous-shell `( )`, `$( )` ou des backticks.
+- garde-git détecte `gh` et `git push` derrière `timeout`, `nice`, `xargs`, `sudo`, `stdbuf`, `env`, `command`, `eval`, `bash -c`, un sous-shell `( )`, `$( )` ou des backticks, ainsi que derrière `exec -a`, `setsid`, `ionice`, `doas`, `chrt`, `taskset`, `flock`, `unbuffer`, `watch` et `find -exec` ; une affectation devant `eval`/`bash -c` reste refusée ; un shell alimenté par l'entrée standard (pipe, heredoc, `<<<`) avec `gh` ou `git push` est bloqué ; les heredocs à délimiteur entre guillemets et `\x` sont ignorés.
 
 ## 3.0.0 — 2026-11-03
 
