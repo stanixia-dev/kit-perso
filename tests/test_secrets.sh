@@ -237,6 +237,14 @@ for c in 'cat .env' 'cat < .env' 'cat .env*' 'dd if=.env' 'echo x > .env' 'git s
          "bash <<'EOF'"$'\ncat .env\nEOF' 'x=1 cat .env' 'env A=1 cat .env' 'head -n1 -- .env'; do
   hk Bash "$TMP/w" command "$c"; bloque "$c"
 done
+for c in 'cat "mon dossier/.env"' 'cat mon\ dossier/.env'; do
+  hk Bash "$TMP/w" command "$c"; bloque "$c"
+done
+for c in "node --eval=\"readFileSync('.env','utf8')\"" "node --print=\"readFileSync('.env')\"" "node -e\"readFileSync('.env')\"" \
+         "deno eval \"Deno.readTextFileSync('.env')\""; do
+  hk Bash "$TMP/w" command "$c"; bloque "$c"
+done
+hk Bash "$TMP/w" command "python3 x.py --msg 'voir la doc .env'"; passe "jeton à blanc qui n'est pas un chemin"
 for c in "git commit -m 'protège .env'" "git commit -m \"\$(cat <<'EOF'"$'\nprotège .env et ~/.ssh\nEOF\n)"' 'echo .env >> .gitignore' \
          'grep .env .gitignore' 'ls ~/.ssh' 'git check-ignore .env' "gh pr create --body 'voir ~/.ssh/ et .env'" \
          'cat .env.example' 'ls -la' 'echo "ok" | wc -l' 'git status' 'grep -rn "\.env" src' 'cat README.md'; do
@@ -272,7 +280,7 @@ hk Bash "$TMP/w" command "echo $GH"; bloque "commande Bash contenant un fort"
 # scan avant commit et push
 d=$(depot precommit)
 printf 'T=%s\n' "$GH" > "$d/n.txt"
-for c in 'git add -A && git commit -m x' 'git push origin f' 'gh pr create --fill'; do
+for c in 'git add -A && git commit -m x' 'git push origin f' 'gh pr create --fill' 'gh -R o/r pr create --fill' 'gh pr -R o/r create --fill' 'git --namespace x push origin f' 'gh pr --body x create --fill' 'gh pr -b x create --fill' 'gh -b x pr create --fill'; do
   hk Bash "$d" command "$c"; bloque "$c avec un secret dans le dépôt"
 done
 sans_valeur "scan avant commit"
@@ -294,6 +302,13 @@ hk Read "$d" file_path "$HOME/.ssh/config"; bloque "Read ~/.ssh/config malgré u
 hk Read "$d" file_path "$d/.env"; passe "Read .env couvert par une exception *"
 hk Read "$d" file_path "$d/.env.local"; passe "Read .env.local couvert par le joker *"
 hk Read "$TMP/w" file_path "$d/.env"; bloque "Read .env d'un autre dépôt que le cwd (exception sans effet)"
+
+# CLI et mode pre : fail-closed
+d=$(depot cli-base)
+lance "$d" --base inexistant
+[ "$CODE" = 2 ] && grep -q 'a échoué' <<<"$ERREUR" && ok "CLI --base inexistant : code 2" || ko "CLI --base inexistant"
+printf '' | python3 "$S" --hook pre --depot x >/dev/null 2>&1
+[ "$?" = 2 ] && ok "--hook pre --depot x sur entrée vide : code 2" || ko "--hook pre entrée vide"
 
 # ---------- PostToolUse, PostToolUseFailure, Stop ----------
 VC="valeur""connue-${A36:0:10}"
@@ -479,6 +494,9 @@ python3 -c 'print("eyJ-" * 100000)' | an >/dev/null
 hk Bash "$TMP/w" command 'git -C credential credential fill'; bloque "git -C credential credential fill"
 hk Bash "$TMP/w" command 'gh gist create .env'; bloque "gh gist create .env"
 hk Bash "$TMP/w" command 'gh gist edit abc ~/.ssh/id_x'; bloque "gh gist edit ~/.ssh/id_x"
+hk Bash "$TMP/w" command 'gh auth -h github.com token'; bloque "gh auth -h github.com token"
+hk Bash "$TMP/w" command 'gh auth --hostname github.com status --show-token'; bloque "gh auth --hostname … status --show-token"
+hk Bash "$TMP/w" command 'gh -R o/r gist create .env'; bloque "gh -R o/r gist create .env"
 hk Bash "$TMP/w" command 'gh gist create README.md'; passe "gh gist create README.md"
 grep -q '"matcher": "Bash|Read|Grep|BashOutput|TaskOutput"' "$RACINE/hooks/hooks.json" && ok "hooks.json : masquage aussi sur BashOutput et TaskOutput" || ko "hooks.json : matcher BashOutput|TaskOutput"
 d=$(depot budget-log)

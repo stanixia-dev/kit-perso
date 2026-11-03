@@ -206,7 +206,8 @@ ECRIVAINS = {"cp", "mv", "rm", "ln", "install", "rsync", "dd", "truncate", "tee"
              "tar", "unzip", "unlink", "rmdir", "sponge"}
 INTERPRETES = re.compile(r"(python[\d.]*|node|ruby|perl|php|deno|bun)")
 GIT_ECRIT = {"checkout", "restore", "rm", "mv", "apply", "am", "clean", "clone", "worktree", "init"}
-GIT_OPT_VALEUR = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+GIT_OPT_VALEUR = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env", "--attr-source",
+                  "--super-prefix"}
 
 def developpe(t):
     home = os.path.expanduser("~")
@@ -216,6 +217,7 @@ def developpe(t):
 def motif(t):
     """Vrai si `t` cite un chemin protégé (ou un dossier qui les contient : ~/.claude, .claude, .github)."""
     t = developpe(t)
+    t = t if not t else os.path.normpath(t)  # `.github/./workflows`, `.github//workflows`, `a/../.github/workflows`
     if any(m in t for m in MOTIFS):
         return True
     n = t.rstrip("/")

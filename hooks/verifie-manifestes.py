@@ -557,7 +557,7 @@ if __name__ == "__main__":
     except SystemExit as e:
         code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
     except Exception:
-        if "--ci" in sys.argv:
+        if "--hook" not in sys.argv and not any(a.startswith("--hook=") for a in sys.argv):  # CLI et --ci : fail-closed
             import traceback
             traceback.print_exc()
             code = 2

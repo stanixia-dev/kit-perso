@@ -110,7 +110,7 @@ for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          'nice -n 5 cargo add bon' 'sudo -u x cargo add bon' 'echo bon | xargs -n1 cargo add' 'time cargo add bon' \
          "bash -c -- 'ls'" 'npm -g i @scope/ok@1.0.0' 'npm --prefix . i @scope/ok@1.0.0' \
          'curl -s x | sh' 'bash script.sh' "$PROFOND" 'cat ~/.claude/settings.json' 'grep x ~/.claude/settings.json' \
-         "python3 -c \"import json,os;d=json.load(open(os.path.expanduser('~/.claude/settings.json')));print('sandbox' in d)\"" \
+         "python3 -c \"import json,os;d=json.load(open(os.path.expanduser('~/.claude/settings.json')));print('permissions' in d)\"" \
          'grep -r x .github/workflows' 'python3 ~/.claude/plugins/cache/k/3.1.0/skills/ci-projet/genere-ci.py' \
          'python3 ~/.claude/plugins/cache/k/3.1.0/skills/ci-projet/genere-ci.py 2>&1 | tail -5' \
          "git commit -m 'doc .github/workflows'" 'git diff main -- .garde-deps-exceptions' 'ls ~/.claude/hooks' \
@@ -152,7 +152,7 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          'unlink .garde-deps-exceptions' 'rmdir ~/.claude/hooks' 'awk -i inplace 1 ~/.claude/settings.json' \
          'echo x | sponge .garde-deps-exceptions' 'truncate -s0 .garde-deps-exceptions' 'install a ~/.claude/hooks/x' \
          'ln -sf a .garde-deps-exceptions' 'dd if=a of=.garde-deps-exceptions' 'node -e "x" .garde-deps-exceptions' 'echo x > .garde-secret-exceptions' \
-         "python3 -c \"import json,os;p=os.path.expanduser('~/.claude/settings.json');d=json.load(open(p));d.pop('sandbox',None);json.dump(d,open(p+'.tmp','w'),indent=2);os.replace(p+'.tmp',p)\"" \
+         "python3 -c \"import json,os;p=os.path.expanduser('~/.claude/settings.json');d=json.load(open(p));d.pop('permissions',None);json.dump(d,open(p+'.tmp','w'),indent=2);os.replace(p+'.tmp',p)\"" \
          "python3 -c \"import os;os.replace('a','/home/u/.claude/settings.json')\"" \
          "python3 -c \"from pathlib import Path;Path('/home/u/.claude/settings.json').write_text('x')\"" \
          "python3 -c \"print(1)\" ~/.claude/settings.json" "python3 ~/.claude/hooks/x.py" \
@@ -161,7 +161,7 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          'python3 ~/.claude/plugins/../hooks/x.py' 'python3 ~/.claude/plugins/x/../../hooks/garde-deps.py' \
          'python3 ~/.claude/plugins/x/../../settings.local.json' 'python3 ./.claude/plugins/x.py' \
          'git clone https://x.io/r ~/.claude/plugins/evil' 'git worktree add ~/.claude/hooks/w' 'git init ~/.claude/plugins/evil' \
-         "node -e \"console.log(require('/home/u/.claude/settings.json').sandbox)\"" \
+         "node -e \"console.log(require('/home/u/.claude/settings.json').permissions)\"" \
          'python3 w.py -c ~/.claude/settings.json' 'node w.js -e ~/.claude/settings.json' 'python3 -m mod -c ~/.claude/settings.json' \
          'node -r ~/.claude/hooks/x.js app.js' \
          "python3 -c \"import os;print(1,file=open(os.path.expanduser('~/.claude/settings.json'),'w'))\"" \
@@ -224,6 +224,49 @@ for c in 'gh issue edit 9 --milestone v1' 'gh issue edit 9 10 -m v1' 'gh issue e
          'gh issue -R stanixia-dev/kit-perso create -t x' 'gh issue create -R stanixia-dev/Hive -t x' 'gh pr edit 3 --milestone v1'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
+# gh : options avant ou entre les sous-commandes (-R/--repo)
+for c in 'gh pr -R o/r merge 1' 'gh -R o/r pr merge 1' 'gh pr --repo=o/r merge 1' 'gh pr --repo o/r review 1 --approve' 'gh -R o/r pr close 1' \
+         'gh -R o/r api -X POST repos/o/r/merges -f base=main' 'gh -R o/r issue close 3' 'gh --repo o/r secret set X'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'gh pr --body x merge 1' 'gh pr -b x merge 1' 'gh -b x pr merge 1' 'gh pr --body x review 1 --approve' 'gh pr --draft --body x merge 1'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'gh pr create --fill' 'gh pr view 23' 'gh pr list --state open'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
+for c in 'gh pr -R o/r view 1' 'gh -R o/r pr list' 'gh -R stanixia-dev/kit-perso issue create -t x'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
+# git : options globales, abréviations, --all, HEAD, refspec *
+for c in 'git -c core.sshCommand=x push origin b' 'git -c protocol.ext.allow=always push origin b' 'git --config-env core.sshCommand=E push origin b' \
+         'git --config-env=core.sshCommand=E push origin b' 'git --exec-path=/tmp/x push origin b' 'git -c alias.p=push p origin main' \
+         'git --namespace x push origin main' 'git --attr-source x push origin main' \
+         'git push --all origin' 'git push --branches origin' 'git push --al origin' "git push origin 'refs/heads/*:refs/heads/*'" \
+         'git push --mirr origin' 'git push --del origin b' 'git push --ex=x origin b' 'git push --receive-p=x origin b' \
+         'git push --no-veri origin b' 'git push --force-w origin b' 'git push --pru origin' 'git push -ud origin b' \
+         'git commit --no-veri -m x'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'git -c user.name=x commit -m y' 'git -C x push origin b' 'git push --tags origin' 'git push --follow-tags origin b' \
+         'git push --porcelain origin b' 'git push --dry-run origin b' 'git push -u origin b' 'git push --push-option=ci.skip origin b' \
+         'git commit -am x' 'git push origin HEAD'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
+code_garde_main() { # $1 = commande, dans un dépôt jetable sur main
+  local d; d=$(mktemp -d); git init -q -b main "$d"
+  printf '{"tool_input":{"command":"%s"},"cwd":"%s"}' "$1" "$d" | python3 hooks/garde-git.py >/dev/null 2>&1
+  local r=$?; rm -rf "$d"; echo $r
+}
+for c in 'git push origin HEAD' 'git push origin @'; do
+  [ "$(code_garde_main "$c")" = 2 ] && ok "garde-git bloque sur main $c" || ko "garde-git main $c"
+done
+[ "$(code_garde_main 'git push -o x origin')" = 2 ] && ok "garde-git bloque sur main git push -o x origin" || ko "garde-git push -o"
+[ "$(code_garde_main 'git push --push-option x origin')" = 2 ] && ok "garde-git bloque sur main git push --push-option x origin" || ko "garde-git push --push-option"
+# garde-deps : chemins protégés normalisés
+for c in 'cp a .github/./workflows/t.yml' 'cp a .github//workflows/t.yml' 'cp a .github/x/../workflows/t.yml'; do
+  [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"
+done
 for ch in 'Edit|$HOME/.claude/settings.json' 'Write|/x/.github/workflows/a.yml' 'Write|/x/.garde-deps-exceptions' \
           'MultiEdit|/home/u/proj/.claude/settings.local.json' 'NotebookEdit|/x/.garde-deps-exceptions' 'Edit|/x/.garde-secret-exceptions'; do
   [ "$(code_edit "${ch%%|*}" "$(eval echo "${ch#*|}")")" = 2 ] && ok "garde-deps bloque ${ch%%|*} ${ch#*|}" || ko "garde-deps ${ch}"
@@ -237,6 +280,8 @@ done
   && ok "garde-deps avertit sur MPL-2.0" || ko "garde-deps MPL"
 [ "$(code_deps 'pip3 install inconnu')" = 0 ] && sortie_deps 'pip3 install inconnu' | grep -q 'vérification impossible' \
   && ok "garde-deps avertit si injoignable" || ko "garde-deps injoignable"
+[ "$(code_deps 'npm i depublie')" = 0 ] && sortie_deps 'npm i depublie' | grep -q 'vérification impossible' \
+  && ok "garde-deps avertit sur une réponse de registre mal formée" || ko "garde-deps réponse mal formée"
 
 bash tests/test_manifestes.sh | grep -v '^OK' | sed 's/^/manifestes: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_manifestes.sh"

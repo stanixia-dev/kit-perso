@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.1.2 — 2026-11-03
+
+- garde-git et garde-secret : les options `gh` placées avant ou entre les sous-commandes (`gh -R o/r pr merge`, `gh pr -R o/r merge`, `gh pr --body x merge`) ne contournent plus les règles (`merge`, `approve`, `api`, `issue`, `auth token`, `pr create`).
+- garde-git : `-c`, `--config-env` et `--exec-path` devant `git push` sont bloqués, ainsi que `-c alias.*` pour toute sous-commande ; options globales à valeur (`--namespace`…) reconnues.
+- garde-git : `git push --all` / `--branches`, refspec `*`, `HEAD`/`@` sur main, abréviations d'options longues (`--del`, `--mirr`, `--ex=`…) et groupes d'options courtes (`-ud`) sont bloqués.
+- garde-secret : un chemin contenant un blanc (`cat "mon dossier/.env"`) est contrôlé ; le CLI (utilisé par le relecteur) est fail-closed : une erreur interne ou un fichier illisible sort en 2, jamais en 0 silencieux.
+- verifie-manifestes : une erreur interne en CLI sort en 2 avec la trace, au lieu de « conforme ».
+- deps_communs : une réponse de registre mal formée donne « vérification impossible » au lieu de laisser passer.
+- garde-deps : `.github/./workflows` et `.github//workflows` sont traités comme `.github/workflows`.
+- README : le check à rendre obligatoire est `deps / deps` (et non plus `tests / deps`) ; résidus `sandbox` retirés des tests.
+- Correctif : commandes déjà interdites par les règles, détection complétée. Résiduels : `git config alias.x …` puis `git x`, `-C`/`--git-dir` vers un dépôt dont la config exécute du code.
+
 ## 3.1.1 — 2026-11-03
 
 - `ci-projet` : la consigne « Require status checks » ne liste plus `pull_request`, `push` ni `contents`, seulement `deps` et les jobs de tests réels (#22).

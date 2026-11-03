@@ -286,7 +286,7 @@ def commande(args):
     trouv = sans_exceptions(trouv, exceptions)
     bloquants = [t for t in trouv if t[2] == "fort" or args.ci]
     faibles = [t for t in trouv if t not in bloquants]
-    blocs = [ligne_trouvaille(t)[2:] for t in bloquants] + (illis if args.ci else [])
+    blocs = [ligne_trouvaille(t)[2:] for t in bloquants] + illis
     warns = avert + [ligne_trouvaille(t)[2:] for t in faibles]
     if args.ci:
         resume_ci(blocs, warns + [f"exception non appliquée tant qu'elle n'est pas sur main : {l}" for l in ajoutees],
@@ -363,6 +363,33 @@ def candidats(texte):
 def chemin_protege(texte):
     return next((c for c in candidats(texte) if classe(developpe(c))), None)
 
+def lectures_gh(args, valeurs=("-R", "--repo", "-h", "--hostname")):
+    """Lectures possibles d'une ligne `gh` : liste de (mots, reste, pos0). `mots` = les 2 premiers jetons positionnels,
+    `reste` = les autres jetons, `pos0` = indice du 1er mot dans `args`. Avant le 2e mot, une option sans `=` peut ou non
+    consommer le jeton suivant (gh accepte `--body x`) : on énumère les deux (jusqu'à 6 options, au-delà aucune consommation) ;
+    les options de `valeurs` consomment toujours."""
+    res = []
+    def rec(i, mots, reste, pos0, libres):
+        while i < len(args):
+            a = args[i]
+            if a.startswith("-"):
+                suite = i + 1 < len(args)
+                if suite and a in valeurs:
+                    reste = reste + [a, args[i + 1]]; i += 2; continue
+                if suite and "=" not in a and len(mots) < 2 and libres < 6:
+                    rec(i + 2, mots, reste + [a, args[i + 1]], pos0, libres + 1)  # l'option consomme le jeton suivant
+                    libres += 1
+                reste = reste + [a]
+            elif len(mots) < 2:
+                mots = mots + [a]
+                pos0 = i if pos0 < 0 else pos0
+            else:
+                reste = reste + [a]
+            i += 1
+        res.append((mots, reste, pos0))
+    rec(0, [], [], -1, 0)
+    return res
+
 def indice_git(gd, args):
     """Indice de la sous-commande git dans `args` (options globales et leurs valeurs sautées)."""
     i = 0
@@ -411,19 +438,21 @@ def bash_chemins(cmd, ctx, prof=0):
             continue
         base, args = toks[0].rsplit("/", 1)[-1], toks[1:]
         sous = gd.sous_commande_git(args) if base == "git" else ""
-        if (base == "gh" and (args[:2] == ["auth", "token"] or (args[:2] == ["auth", "status"] and any(
-                a in ("-t", "--show-token") for a in args)))) or (
+        lects = [(m, r) for m, r, _ in lectures_gh(args)] if base == "gh" else []
+        if (base == "gh" and any(m == ["auth", "token"] or (m == ["auth", "status"] and any(
+                a in ("-t", "--show-token") for a in r)) for m, r in lects)) or (
                 base == "git" and sous == "credential" and args[indice_git(gd, args) + 1:][:1] == ["fill"]):
             ctx["hits"].append("identifiants git/gh")
-        if (base == "git" and sous in ("commit", "push")) or (base == "gh" and args[:2] == ["pr", "create"]):
+        if (base == "git" and sous in ("commit", "push")) or (base == "gh" and any(m == ["pr", "create"] for m, _ in lects)):
             ctx["scan"] = True
             if sous == "push" or base == "gh":
                 ctx["livre"] = True
-        if base == "gh" and args[:2] in (["gist", "create"], ["gist", "edit"]):  # publie des fichiers
-            for t in args[2:]:
-                c = chemin_protege(t)
-                if c:
-                    ctx["hits"].append(c)
+        for m, r in lects:
+            if m in (["gist", "create"], ["gist", "edit"]):  # publie des fichiers
+                for t in r:
+                    c = chemin_protege(t)
+                    if c:
+                        ctx["hits"].append(c)
         if sous == "push" or base == "gh":
             # commande qui porte les identifiants : un argument qui désigne un fichier (lien compris) vers un chemin protégé
             for t in args:
@@ -449,9 +478,16 @@ def bash_chemins(cmd, ctx, prof=0):
             while i < len(args) and args[i].startswith("-") and args[i] != "--":
                 i += 2 if args[i] in MOTIF_OPT_VALEUR else 1
             a_tester = args[:i] + args[i + 1:]
-        interprete = bool(gd.INTERPRETES.fullmatch(base))
+        # interpréteur : le code inline (-c, -e, -r, -p…) cite des chemins au milieu d'un texte ; un script avec ses arguments, non
+        interprete = bool(gd.INTERPRETES.fullmatch(base)) and (
+            (base == "deno" and "eval" in args)
+            or any(re.match(r"-[a-zA-Z]*[ceEpr]", t) or re.match(r"--(eval|print)\b", t) for t in args))  # -eCODE, --eval=CODE inclus
         for t in a_tester:
             if any(c.isspace() for c in t) and not interprete:
+                # jeton à blanc (chemin avec espace, ou texte) : testé entier, s'il ressemble à un chemin
+                if ("/" in t or os.path.lexists(os.path.join(ctx.get("cwd") or os.getcwd(), os.path.expanduser(t)))) \
+                        and classe(developpe(t)):
+                    ctx["hits"].append(t)
                 continue
             c = chemin_protege(t)
             if c:
@@ -605,6 +641,8 @@ def stop(data):
            + "\nRetire-le (commits non poussés : `git reset --soft <base>` puis recommite) ; déjà poussé : "
            "préviens l'utilisateur, il est à révoquer.")
 
+MODE = "cli"  # posé par main() : "ci", "pre", "post", "stop" ou "cli"
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--depot")
@@ -613,6 +651,8 @@ def main():
     ap.add_argument("--hook", choices=("pre", "post", "stop"))
     ap.add_argument("--ci", action="store_true")
     args = ap.parse_args()
+    global MODE
+    MODE = "ci" if args.ci else (args.hook or "cli")
     if not args.hook:
         sys.exit(commande(args))
     data = json.load(sys.stdin)
@@ -625,12 +665,9 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception:
-        if sys.argv[1:][-2:] == ["--hook", "pre"] or "--hook=pre" in sys.argv:  # PreToolUse : un échec est un bug ou une entrée anormale, on bloque
-            import traceback
+        # pre (un échec est un bug ou une entrée anormale), ci et CLI : on bloque ; post et stop restent fail-open
+        import traceback
+        if MODE in ("pre", "ci", "cli"):
             print("⛔ garde-secret : erreur interne.\n" + traceback.format_exc(), file=sys.stderr)
-            sys.exit(2)
-        if "--ci" in sys.argv:
-            import traceback
-            traceback.print_exc()
             sys.exit(2)
         sys.exit(0)
