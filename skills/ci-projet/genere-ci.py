@@ -121,7 +121,7 @@ def main():
     copies = " && ".join(f'cp "{os.path.join(sortie, n)}" .github/workflows/{n}' for n in fichiers)
     print(f'git switch main && git pull --ff-only && mkdir -p .github/workflows && {copies} '
           f'&& git add {cibles} && git commit -m "Ajoute la CI kit-perso {version} ({sha[:12]})" && git push origin main')
-    noms = "`deps`" + "".join(f", `{n}`" for n in (re.findall(r"^  (\w+):", ecrits.get(TESTS, ""), re.M)))
+    noms = "`deps`" + "".join(f", `{n}`" for n in (re.findall(r"^  (\w+):", ecrits.get(TESTS, "").partition("\njobs:\n")[2], re.M)))
     print("`deps` ne tourne qu'une fois ces workflows sur main. Ensuite : Settings > Rules > Rulesets > New branch ruleset, "
           f"cible `main`, Require status checks : {noms} (noms de jobs ; GitHub les affiche `kit-perso-deps / deps`, "
           "`kit-perso-tests / <job>`). Mise à jour du kit : relancer /kit-perso:ci-projet et recopier.")
