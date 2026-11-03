@@ -26,5 +26,11 @@ Format de la spec (≤ 120 lignes, ≤ 200 si la section Conception est présent
    ```
    Après chaque lot, les tests du projet doivent passer. Insère la ligne `> Coupure PR` entre deux lots là où une PR doit s'arrêter ; obligatoire au-delà de 5 lots (5 au plus par PR). Les commandes « Fait quand » ne citent pas le chemin de la spec : elle est archivée au dernier lot.
 
+Avant d'écrire, détecte la CI du dépôt (lecture seule, sans `git fetch` ; `main` si `origin/main` est absent) :
+- `W` : `git ls-tree --name-only origin/main .github/workflows/` filtré sur `*.yml|*.yaml` ; `D` : `git grep -q verifie-manifestes origin/main -- .github/workflows` (job `deps` du kit présent).
+- `R` : `gh api repos/{owner}/{repo}/rules/branches/main --jq '[.[] | select(.type == "required_status_checks")] | length'` ; échec = inconnu.
+- `P` : `gh api repos/{owner}/{repo}/branches/main/protection --jq '.required_status_checks.checks | length'` ; échec avec `HTTP 404` = 0 ; autre échec = inconnu. Pas de `//` dans `--jq`.
+- « Checks exigés » = `R` > 0 ou `P` > 0. Si un message s'applique, ajoute-le en ligne `CI : …` du rapport final : `W` vide et aucun check exigé → « ce dépôt n'a aucune CI : rien ne vérifiera la PR. Lance /kit-perso:ci-projet. » ; `W` sans `D` → « workflows présents sans le job deps du kit (/kit-perso:ci-projet --sans-tests) » ; `W` non vide sans check exigé → « checks non obligatoires sur main : Settings > Rules > Rulesets » ; check exigé et `W` vide → « des checks sont exigés mais aucun workflow sur main : la PR restera bloquée » ; `R` ou `P` inconnu → « règles de main illisibles (droits ou réseau) ».
+
 Choisis la solution la plus simple qui marche ; justifie en une ligne les choix non évidents.
-Rapport final ≤ 10 lignes : chemin de la spec + questions ouvertes.
+Rapport final ≤ 10 lignes : chemin de la spec, ligne `CI :` éventuelle, questions ouvertes.

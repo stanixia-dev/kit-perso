@@ -1,0 +1,9 @@
+name: kit-perso-tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+# JOBS-TESTS

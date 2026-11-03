@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.0 — 2026-11-03
+
+- Skill `ci-projet` : génère hors de `.github/` le workflow CI kit-perso d'un projet (job `deps` fail-closed avec kit public à SHA figé, jobs de tests rust/node/python selon les manifestes) ; l'utilisateur le copie et le commite (#16).
+- `livrer` et l'agent `specs` signalent un dépôt sans CI, sans le job `deps` ou à checks non obligatoires, et distinguent « pas de CI configurée » de « CI configurée mais pas déclenchée » (#17).
+- Mineur : ajout d'un skill ; `livrer` ne bloque pas davantage.
+
 ## 3.0.1 — 2026-11-03
 
 - garde-git détecte `gh` et `git push` derrière `timeout`, `nice`, `xargs`, `sudo`, `stdbuf`, `env`, `command`, `eval`, `bash -c`, un sous-shell `( )`, `$( )` ou des backticks, ainsi que derrière `exec -a`, `setsid`, `ionice`, `doas`, `chrt`, `taskset`, `flock`, `unbuffer`, `watch` et `find -exec` ; une affectation devant `eval`/`bash -c` reste refusée ; un shell alimenté par l'entrée standard (pipe, heredoc, `<<<`) avec `gh` ou `git push` est bloqué ; le corps des heredocs est analysé ligne à ligne (`$( )` et backticks y restent littéraux si le délimiteur est entre guillemets), `\x` et les commentaires `#` sont ignorés. Règle simple pour les exécuteurs de chaîne (`eval`, `bash|sh|zsh|dash|ksh -c`/`-s`/stdin, `busybox sh`, `watch`, `flock -c`, `find -exec sh -c`, `xargs sh`) : le texte brut de la commande entière est bloqué s'il contient le mot `gh` ou `git push` ; faux positifs admis (ex. `bash -c 'echo gh'` est bloqué).
