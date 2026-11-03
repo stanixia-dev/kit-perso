@@ -272,7 +272,7 @@ hk Bash "$TMP/w" command "echo $GH"; bloque "commande Bash contenant un fort"
 # scan avant commit et push
 d=$(depot precommit)
 printf 'T=%s\n' "$GH" > "$d/n.txt"
-for c in 'git add -A && git commit -m x' 'git push origin f' 'gh pr create --fill'; do
+for c in 'git add -A && git commit -m x' 'git push origin f' 'gh pr create --fill' 'gh -R o/r pr create --fill' 'gh pr -R o/r create --fill'; do
   hk Bash "$d" command "$c"; bloque "$c avec un secret dans le dépôt"
 done
 sans_valeur "scan avant commit"
@@ -479,6 +479,9 @@ python3 -c 'print("eyJ-" * 100000)' | an >/dev/null
 hk Bash "$TMP/w" command 'git -C credential credential fill'; bloque "git -C credential credential fill"
 hk Bash "$TMP/w" command 'gh gist create .env'; bloque "gh gist create .env"
 hk Bash "$TMP/w" command 'gh gist edit abc ~/.ssh/id_x'; bloque "gh gist edit ~/.ssh/id_x"
+hk Bash "$TMP/w" command 'gh auth -h github.com token'; bloque "gh auth -h github.com token"
+hk Bash "$TMP/w" command 'gh auth --hostname github.com status --show-token'; bloque "gh auth --hostname … status --show-token"
+hk Bash "$TMP/w" command 'gh -R o/r gist create .env'; bloque "gh -R o/r gist create .env"
 hk Bash "$TMP/w" command 'gh gist create README.md'; passe "gh gist create README.md"
 grep -q '"matcher": "Bash|Read|Grep|BashOutput|TaskOutput"' "$RACINE/hooks/hooks.json" && ok "hooks.json : masquage aussi sur BashOutput et TaskOutput" || ko "hooks.json : matcher BashOutput|TaskOutput"
 d=$(depot budget-log)

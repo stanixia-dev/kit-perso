@@ -210,9 +210,26 @@ def verifie_git(args_sc, sc, cwd):
         if branche_cible(cwd) in PROTEGEES:
             bloque("commit directement sur main interdit : crée une branche claude/<sujet>.")
 
+def mots_gh(args, valeurs=("-R", "--repo")):
+    """(mots, reste) : les 2 premiers jetons positionnels de `gh` (options sautées, y compris -R/--repo et leur valeur) et tous les autres jetons."""
+    mots, reste, i = [], [], 0
+    while i < len(args):
+        a = args[i]
+        if a.startswith("-"):
+            reste.append(a)
+            if a in valeurs and i + 1 < len(args):
+                reste.append(args[i + 1])
+                i += 1
+        elif len(mots) < 2:
+            mots.append(a)
+        else:
+            reste.append(a)
+        i += 1
+    return mots, reste
+
 def verifie_gh(toks):
-    t = toks[1:]
-    j = " ".join(t)
+    mots, reste = mots_gh(toks[1:])
+    j = " ".join(mots + reste)
     regles = [
         (r"^pr merge\b", "fusionner une PR est réservé à l'utilisateur."),
         (r"^pr review\b.*(--approve|-a\b)", "approuver une PR est interdit."),
@@ -227,10 +244,10 @@ def verifie_gh(toks):
     for motif, raison in regles:
         if re.search(motif, j, re.IGNORECASE):
             bloque(raison)
-    if t and t[0] == "api":
-        verifie_api(t[1:])
-    if t and t[0] == "issue":
-        verifie_issue(t[1:])
+    t = toks[1:]
+    if mots and mots[0] in ("api", "issue"):
+        k = t.index(mots[0])  # le jeton lui-même, sans les options qui le précèdent
+        (verifie_api if mots[0] == "api" else verifie_issue)(t[:k] + t[k + 1:])
 
 API_VALEURS_LONGUES = {"--header", "--preview", "--jq", "--template", "--cache", "--hostname", "--method",
                        "--field", "--raw-field", "--input"}

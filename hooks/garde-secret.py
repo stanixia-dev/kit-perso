@@ -363,6 +363,23 @@ def candidats(texte):
 def chemin_protege(texte):
     return next((c for c in candidats(texte) if classe(developpe(c))), None)
 
+def mots_gh(args):
+    """(mots, reste) : les 2 premiers jetons positionnels de `gh` (options sautées, avec la valeur de -R/--repo/-h/--hostname) et les autres jetons."""
+    mots, reste, i = [], [], 0
+    while i < len(args):
+        a = args[i]
+        if a.startswith("-"):
+            reste.append(a)
+            if a in ("-R", "--repo", "-h", "--hostname") and i + 1 < len(args):
+                reste.append(args[i + 1])
+                i += 1
+        elif len(mots) < 2:
+            mots.append(a)
+        else:
+            reste.append(a)
+        i += 1
+    return mots, reste
+
 def indice_git(gd, args):
     """Indice de la sous-commande git dans `args` (options globales et leurs valeurs sautées)."""
     i = 0
@@ -411,16 +428,17 @@ def bash_chemins(cmd, ctx, prof=0):
             continue
         base, args = toks[0].rsplit("/", 1)[-1], toks[1:]
         sous = gd.sous_commande_git(args) if base == "git" else ""
-        if (base == "gh" and (args[:2] == ["auth", "token"] or (args[:2] == ["auth", "status"] and any(
-                a in ("-t", "--show-token") for a in args)))) or (
+        mots, reste_gh = mots_gh(args) if base == "gh" else ([], [])
+        if (base == "gh" and (mots == ["auth", "token"] or (mots == ["auth", "status"] and any(
+                a in ("-t", "--show-token") for a in reste_gh)))) or (
                 base == "git" and sous == "credential" and args[indice_git(gd, args) + 1:][:1] == ["fill"]):
             ctx["hits"].append("identifiants git/gh")
-        if (base == "git" and sous in ("commit", "push")) or (base == "gh" and args[:2] == ["pr", "create"]):
+        if (base == "git" and sous in ("commit", "push")) or (base == "gh" and mots == ["pr", "create"]):
             ctx["scan"] = True
             if sous == "push" or base == "gh":
                 ctx["livre"] = True
-        if base == "gh" and args[:2] in (["gist", "create"], ["gist", "edit"]):  # publie des fichiers
-            for t in args[2:]:
+        if base == "gh" and mots in (["gist", "create"], ["gist", "edit"]):  # publie des fichiers
+            for t in reste_gh:
                 c = chemin_protege(t)
                 if c:
                     ctx["hits"].append(c)

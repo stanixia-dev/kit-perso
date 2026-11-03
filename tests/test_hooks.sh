@@ -214,6 +214,14 @@ for c in 'gh issue edit 9 --milestone v1' 'gh issue edit 9 10 -m v1' 'gh issue e
          'gh issue -R stanixia-dev/kit-perso create -t x' 'gh issue create -R stanixia-dev/Hive -t x' 'gh pr edit 3 --milestone v1'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
+# gh : options avant ou entre les sous-commandes (-R/--repo)
+for c in 'gh pr -R o/r merge 1' 'gh -R o/r pr merge 1' 'gh pr --repo=o/r merge 1' 'gh pr --repo o/r review 1 --approve' 'gh -R o/r pr close 1' \
+         'gh -R o/r api -X POST repos/o/r/merges -f base=main' 'gh -R o/r issue close 3' 'gh --repo o/r secret set X'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'gh pr -R o/r view 1' 'gh -R o/r pr list' 'gh -R stanixia-dev/kit-perso issue create -t x'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 for ch in 'Edit|$HOME/.claude/settings.json' 'Write|/x/.github/workflows/a.yml' 'Write|/x/.garde-deps-exceptions' \
           'MultiEdit|/home/u/proj/.claude/settings.local.json' 'NotebookEdit|/x/.garde-deps-exceptions' 'Edit|/x/.garde-secret-exceptions'; do
   [ "$(code_edit "${ch%%|*}" "$(eval echo "${ch#*|}")")" = 2 ] && ok "garde-deps bloque ${ch%%|*} ${ch#*|}" || ko "garde-deps ${ch}"
