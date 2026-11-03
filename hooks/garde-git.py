@@ -23,13 +23,16 @@ def resout(base, chemin):
         return base
     return os.path.normpath(os.path.join(base or os.getcwd(), os.path.expanduser(chemin)))
 
+# options globales de git qui consomment la valeur suivante (la forme `--opt=v` ne consomme rien)
+GIT_GLOBALES_VALEUR = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env", "--attr-source"}
+
 def dossier_git(toks, cwd):
     """Dossier visé par `-C a -C b …` (cumulatif, comme git)."""
     i = 1
     while i < len(toks) and toks[i].startswith("-"):
         if toks[i] == "-C" and i + 1 < len(toks):
             cwd = resout(cwd, toks[i + 1])
-        i += 2 if toks[i] in ("-C", "-c", "--git-dir", "--work-tree") else 1
+        i += 2 if toks[i] in GIT_GLOBALES_VALEUR else 1
     return cwd
 
 def branche_cible(dossier):
@@ -156,8 +159,35 @@ def sous_commande(toks):
     """Pour git : retire les options globales (-C x, -c x, --no-pager…)."""
     i = 1
     while i < len(toks) and toks[i].startswith("-"):
-        i += 2 if toks[i] in ("-C", "-c", "--git-dir", "--work-tree") else 1
+        i += 2 if toks[i] in GIT_GLOBALES_VALEUR else 1
     return toks[i] if i < len(toks) else "", toks[i + 1:]
+
+def globales_git(toks):
+    """Options globales de git (avant la sous-commande) sous forme de couples (option, valeur ou "")."""
+    out, i = [], 1
+    while i < len(toks) and toks[i].startswith("-"):
+        nom, eq, val = toks[i].partition("=")
+        if toks[i] in GIT_GLOBALES_VALEUR:
+            out.append((toks[i], toks[i + 1] if i + 1 < len(toks) else ""))
+            i += 2
+        else:
+            out.append((nom, val))
+            i += 1
+    return out
+
+def verifie_globales(toks, sc):
+    for nom, val in globales_git(toks):
+        if nom in ("-c", "--config-env") and val.split("=", 1)[0].lower().startswith("alias."):
+            bloque(f"`git {nom} {val}` interdit : un alias défini à la volée contourne les contrôles.")
+        if sc == "push" and nom in ("-c", "--config-env", "--exec-path"):
+            bloque("configuration à la volée devant `git push` interdite : elle peut exécuter du code avec les identifiants.")
+
+def option_dangereuse(a, liste):
+    """Option de `liste` visée par `a`, abréviation d'option longue comprise (git accepte --rec pour --receive-pack)."""
+    nom = a.split("=", 1)[0]
+    if nom.startswith("--") and len(nom) > 2:
+        return next((o for o in liste if o.startswith(nom)), None)
+    return None
 
 def refuse_affectation(base, sc, affecte):
     """git push et gh portent les identifiants de l'utilisateur : une affectation (GIT_SSH_COMMAND…) ferait exécuter du code avec eux."""
@@ -165,12 +195,14 @@ def refuse_affectation(base, sc, affecte):
         bloque(f"`{base}{' push' if base == 'git' else ''}` précédé d'une affectation de variable (VAR=… ou env VAR=…) est interdit : "
                "cette commande porte les identifiants de l'utilisateur et la variable (ex. GIT_SSH_COMMAND) pourrait exécuter du code.")
 
+PUSH_DANGEREUX = ["--force", "--force-with-lease", "--force-if-includes", "--mirror", "--delete", "--no-verify", "--prune",
+                  "--all", "--branches", "--receive-pack", "--exec"]
+
 def verifie_git(args_sc, sc, cwd):
     if sc == "push":
         for a in args_sc:
-            nom = a.split("=", 1)[0]
-            # git accepte les abréviations d'options longues (--rec, --exe…) : préfixe d'au moins 3 caractères
-            if len(nom) >= 5 and nom.startswith("--") and ("--receive-pack".startswith(nom) or "--exec".startswith(nom)):
+            o = option_dangereuse(a, PUSH_DANGEREUX)
+            if o in ("--receive-pack", "--exec"):
                 bloque(f"`git push {a}` est interdit : le programme désigné s'exécuterait en local.")
         pos = [a for a in args_sc if not a.startswith("-")]
         depots = [a.split("=", 1)[1] for a in args_sc if a.startswith("--repo=")]
@@ -184,8 +216,10 @@ def verifie_git(args_sc, sc, cwd):
                 bloque(f"`git push {d}` est interdit : seuls un nom de remote ou une URL https/ssh sont admis "
                        "(les hooks d'un dépôt cible local s'exécuteraient en local).")
         for a in args_sc:
-            if a in ("--force", "-f", "--force-with-lease", "--force-if-includes", "--mirror", "--delete", "-d", "--no-verify", "--prune") \
-               or a.startswith("--force-with-lease=") or (re.match(r"^-[a-zA-Z]+$", a) and "f" in a):
+            o = option_dangereuse(a, PUSH_DANGEREUX)
+            if o in ("--all", "--branches"):
+                bloque(f"`git push {a}` est interdit : pousse toutes les branches, main comprise.")
+            if o or a in ("-f", "-d") or (re.match(r"^-[a-zA-Z]+$", a) and re.match(r"^[^o]*[fd]", a[1:])):
                 bloque(f"`git push {a}` est interdit (force/suppression/contournement des hooks).")
         refs = [a for a in args_sc if not a.startswith("-")][1:]  # après le remote
         for r in refs:
@@ -193,7 +227,11 @@ def verifie_git(args_sc, sc, cwd):
                 bloque("push forcé via refspec `+…` interdit.")
             if r.startswith(":"):
                 bloque("suppression de branche distante interdite.")
+            if "*" in r:
+                bloque("push d'une refspec avec `*` interdit : elle peut viser main.")
             cible = r.split(":")[-1].removeprefix("refs/heads/")
+            if cible in ("HEAD", "@"):
+                cible = branche_cible(cwd)
             if cible in PROTEGEES:
                 bloque(f"push vers `{cible}` interdit : passe par une branche claude/<sujet> et une PR.")
         if not refs and branche_cible(cwd) in PROTEGEES:
@@ -204,7 +242,7 @@ def verifie_git(args_sc, sc, cwd):
             a = args_sc[i]
             if a in ("-m", "-F", "-C", "-c", "--author", "--date", "--fixup", "--squash"):
                 i += 2; continue
-            if a == "--no-verify" or (re.match(r"^-[a-zA-Z]+$", a) and "n" in a and not a.startswith("-m")):
+            if option_dangereuse(a, ["--no-verify"]) or (re.match(r"^-[a-zA-Z]+$", a) and re.match(r"^[^mFCct]*n", a[1:])):
                 bloque("`git commit --no-verify` / `-n` interdit.")
             i += 1
         if branche_cible(cwd) in PROTEGEES:
@@ -402,6 +440,7 @@ def verifie_segment(toks, affecte, cwd, profondeur):
     if base == "git":
         sc, args_sc = sous_commande(toks)
         refuse_affectation("git", sc, affecte)
+        verifie_globales(toks, sc)
         verifie_git(args_sc, sc, dossier_git(toks, cwd))
     elif base == "gh":
         refuse_affectation("gh", "", affecte)

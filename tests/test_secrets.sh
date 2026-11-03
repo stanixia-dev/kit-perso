@@ -272,7 +272,7 @@ hk Bash "$TMP/w" command "echo $GH"; bloque "commande Bash contenant un fort"
 # scan avant commit et push
 d=$(depot precommit)
 printf 'T=%s\n' "$GH" > "$d/n.txt"
-for c in 'git add -A && git commit -m x' 'git push origin f' 'gh pr create --fill' 'gh -R o/r pr create --fill' 'gh pr -R o/r create --fill'; do
+for c in 'git add -A && git commit -m x' 'git push origin f' 'gh pr create --fill' 'gh -R o/r pr create --fill' 'gh pr -R o/r create --fill' 'git --namespace x push origin f'; do
   hk Bash "$d" command "$c"; bloque "$c avec un secret dans le dépôt"
 done
 sans_valeur "scan avant commit"

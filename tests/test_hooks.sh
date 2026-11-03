@@ -222,6 +222,33 @@ done
 for c in 'gh pr -R o/r view 1' 'gh -R o/r pr list' 'gh -R stanixia-dev/kit-perso issue create -t x'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
+# git : options globales, abréviations, --all, HEAD, refspec *
+for c in 'git -c core.sshCommand=x push origin b' 'git -c protocol.ext.allow=always push origin b' 'git --config-env core.sshCommand=E push origin b' \
+         'git --config-env=core.sshCommand=E push origin b' 'git --exec-path=/tmp/x push origin b' 'git -c alias.p=push p origin main' \
+         'git --namespace x push origin main' 'git --attr-source x push origin main' \
+         'git push --all origin' 'git push --branches origin' 'git push --al origin' "git push origin 'refs/heads/*:refs/heads/*'" \
+         'git push --mirr origin' 'git push --del origin b' 'git push --ex=x origin b' 'git push --receive-p=x origin b' \
+         'git push --no-veri origin b' 'git push --force-w origin b' 'git push --pru origin' 'git push -ud origin b' \
+         'git commit --no-veri -m x'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'git -c user.name=x commit -m y' 'git -C x push origin b' 'git push --tags origin' 'git push --follow-tags origin b' \
+         'git push --porcelain origin b' 'git push --dry-run origin b' 'git push -u origin b' 'git push --push-option=ci.skip origin b' \
+         'git commit -am x' 'git push origin HEAD'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
+code_garde_main() { # $1 = commande, dans un dépôt jetable sur main
+  local d; d=$(mktemp -d); git init -q -b main "$d"
+  printf '{"tool_input":{"command":"%s"},"cwd":"%s"}' "$1" "$d" | python3 hooks/garde-git.py >/dev/null 2>&1
+  local r=$?; rm -rf "$d"; echo $r
+}
+for c in 'git push origin HEAD' 'git push origin @'; do
+  [ "$(code_garde_main "$c")" = 2 ] && ok "garde-git bloque sur main $c" || ko "garde-git main $c"
+done
+# garde-deps : chemins protégés normalisés
+for c in 'cp a .github/./workflows/t.yml' 'cp a .github//workflows/t.yml' 'cp a .github/x/../workflows/t.yml'; do
+  [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"
+done
 for ch in 'Edit|$HOME/.claude/settings.json' 'Write|/x/.github/workflows/a.yml' 'Write|/x/.garde-deps-exceptions' \
           'MultiEdit|/home/u/proj/.claude/settings.local.json' 'NotebookEdit|/x/.garde-deps-exceptions' 'Edit|/x/.garde-secret-exceptions'; do
   [ "$(code_edit "${ch%%|*}" "$(eval echo "${ch#*|}")")" = 2 ] && ok "garde-deps bloque ${ch%%|*} ${ch#*|}" || ko "garde-deps ${ch}"

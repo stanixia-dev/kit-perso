@@ -90,7 +90,7 @@ Fermer les contournements relevés dans `garde-git` et `garde-secret` (options `
 - [x] L1 — Options `gh` avant ou entre les sous-commandes, dans garde-git et garde-secret (étapes 1-2)
   Fichiers : `hooks/garde-git.py`, `hooks/garde-secret.py`, `tests/test_hooks.sh`, `tests/test_secrets.sh`
   Fait quand : cas gh bloqués/autorisés verts — `bash tests/test_hooks.sh`
-- [ ] L2 — `git push`/`commit` : options globales, abréviations, `--all`, `HEAD`, refspec `*` (étapes 3-5)
+- [x] L2 — `git push`/`commit` : options globales, abréviations, `--all`, `HEAD`, refspec `*` (étapes 3-5)
   Fichiers : `hooks/garde-git.py`, `hooks/garde-deps.py`, `tests/test_hooks.sh`, `tests/test_secrets.sh`
   Fait quand : cas git bloqués/autorisés et scan `git --namespace x push` verts — `bash tests/test_hooks.sh`
 - [ ] L3 — Fail-closed en CLI (garde-secret, verifie-manifestes) et jetons à blanc (étapes 6-8)
