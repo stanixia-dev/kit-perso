@@ -3,6 +3,10 @@
 Statut : livrée
 Tickets : #16, #17
 
+## Écart à la conception (relecture)
+
+Deux workflows au lieu d'un : `kit-perso-deps.yml` (`pull_request_target`, job `deps`) et `kit-perso-tests.yml` (`pull_request` et `push` sur `main`, jobs de tests), sans `if:` sur l'événement. Dans un même workflow, chaque événement créait un check du même nom sauté, compté comme réussi par GitHub : un check obligatoire était satisfait sans rien vérifier. Modèles `modele-deps.yml` et `modele-tests.yml` (au lieu de `modele-ci.yml`) ; `--sortie` désigne un dossier ; la commande imprimée copie et ajoute les deux fichiers ; `--sans-tests` = `kit-perso-deps.yml` seul. Check affiché `kit-perso-deps / deps` (nom de job `deps` dans le ruleset). Là où le texte ci-dessous parle d'un workflow ou de `kit-perso.yml`, lire ces deux fichiers.
+
 ## Objectif
 
 Fournir aux projets le filet CI du kit (job `deps` fail-closed + job de tests par langage) via un skill `ci-projet` qui génère le workflow hors de la zone protégée ; l'utilisateur le copie et le commite lui-même. Faire signaler par `livrer` (avant le push) et par l'agent `specs` (au démarrage) un dépôt sans CI ou à checks non obligatoires, en distinguant « pas de CI configurée » de « CI configurée mais pas déclenchée ».
@@ -114,7 +118,7 @@ Aucune.
 ## Lots
 
 - [x] L1 — Modèle, générateur et skill ci-projet (étapes 1-4)
-  Fichiers : `skills/ci-projet/SKILL.md`, `skills/ci-projet/genere-ci.py`, `skills/ci-projet/modele-ci.yml`, `tests/test_ci_projet.sh`, `tests/test_hooks.sh`
+  Fichiers : `skills/ci-projet/SKILL.md`, `skills/ci-projet/genere-ci.py`, `skills/ci-projet/modele-deps.yml`, `skills/ci-projet/modele-tests.yml`, `tests/test_ci_projet.sh`, `tests/test_hooks.sh`
   Fait quand : génération, SHA, refus et ligne `run` du job deps testés hors réseau — `bash tests/test_hooks.sh`
 - [x] L2 — Détection de la CI dans livrer et specs (étapes 5-6)
   Fichiers : `skills/livrer/SKILL.md`, `agents/specs.md`, `tests/test_hooks.sh`, `tests/test_ci_projet.sh`
