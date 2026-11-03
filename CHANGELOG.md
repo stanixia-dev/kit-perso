@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.1 — 2026-11-03
+
+- garde-git détecte `gh` et `git push` derrière `timeout`, `nice`, `xargs`, `sudo`, `stdbuf`, `env`, `command`, `eval`, `bash -c`, un sous-shell `( )`, `$( )` ou des backticks.
+
 ## 3.0.0 — 2026-11-03
 
 - `gh api` en liste blanche : lecture libre, écriture limitée aux milestones (`POST …/milestones`, `PATCH …/milestones/<n>`) ; fichiers locaux, hôtes autres que github.com et mutations GraphQL bloqués.

@@ -37,24 +37,82 @@ def branche_cible(dossier):
     b = branche_courante(dossier) if dossier and os.path.isdir(dossier) else ""
     return b or branche_courante(CWD_SESSION)
 
+# options qui consomment la valeur suivante, par préfixe
+PREFIXES_VALEURS = {
+    "env": {"-u", "-C", "-S", "--unset", "--chdir", "--split-string"},
+    "timeout": {"-k", "-s", "--kill-after", "--signal"},
+    "nice": {"-n", "--adjustment"},
+    "xargs": {"-n", "-I", "-L", "-P", "-s", "-E", "-d", "-a", "-J", "--max-args", "--max-procs", "--delimiter", "--arg-file"},
+    "sudo": {"-u", "-g", "-h", "-p", "-C", "-r", "-t", "-U", "-T", "-D", "-R"},
+    "stdbuf": {"-i", "-o", "-e"},
+    "command": set(), "exec": set(), "time": set(), "nohup": set(),
+}
+
+def saute_prefixes(toks):
+    """Retire VAR=val et les préfixes (env, timeout, nice, xargs, sudo, stdbuf…) ; renvoie (toks, affecte)."""
+    affecte = False
+    while toks:
+        t = toks[0]
+        nom = t.rsplit("/", 1)[-1]
+        if re.match(r"^\w+=", t):
+            affecte = True
+            toks = toks[1:]
+        elif nom in PREFIXES_VALEURS:
+            if nom == "env":
+                affecte = True
+            valeurs = PREFIXES_VALEURS[nom]
+            toks = toks[1:]
+            while toks and (toks[0].startswith("-") or (nom == "env" and re.match(r"^\w+=", toks[0]))):
+                toks = toks[2:] if toks[0] in valeurs else toks[1:]
+            if nom == "timeout" and toks:  # durée
+                toks = toks[1:]
+        elif nom == "rtk" or (t in ("bypass", "proxy") and len(toks) > 1):
+            toks = toks[1:]
+        else:
+            break
+    return toks, affecte
+
+def aplatit(cmd):
+    """Transforme $( ), backticks et parenthèses (hors guillemets) en séparateurs `;`."""
+    out, q, i = [], None, 0
+    while i < len(cmd):
+        c = cmd[i]
+        if q != "'" and cmd.startswith("$(", i):
+            out.append("$;"); i += 2; continue  # garde le `$` (vu par gh api graphql)
+        if q != "'" and c == "`":
+            out.append("`;")
+        elif q is None and c in "()":
+            out.append(";")
+        else:
+            out.append(c)
+            if q is None and c in "'\"":
+                q = c
+            elif q == c:
+                q = None
+        i += 1
+    return "".join(out)
+
 def segments(cmd):
-    # Découpe sur ; && || | et retours ligne (approximatif mais suffisant)
-    for seg in re.split(r"\|\||&&|[;|\n]", cmd):
+    # Découpe sur ; && || | & et retours ligne (approximatif mais suffisant)
+    for seg in re.split(r"\|\||&&|[;|&\n]", aplatit(cmd)):
         try:
             toks = shlex.split(seg)
         except ValueError:
             toks = seg.split()
-        # saute les affectations VAR=val et les préfixes courants (en notant s'il y en a eu)
-        affecte = False
-        while toks and (re.match(r"^\w+=", toks[0]) or toks[0] in ("env", "command", "exec", "time", "nohup")
-                        or toks[0].rsplit("/", 1)[-1] == "rtk" or (toks[0] in ("bypass", "proxy") and len(toks) > 1)):
-            affecte = affecte or bool(re.match(r"^\w+=", toks[0])) or toks[0] == "env"
-            env = toks[0] == "env"
-            toks = toks[1:]
-            while env and toks and toks[0].startswith("-"):  # options d'env (-i, -u X, -C d, -S s)
-                toks = toks[2:] if toks[0] in ("-u", "-C", "-S", "--unset", "--chdir", "--split-string") else toks[1:]
+        toks, affecte = saute_prefixes(toks)
         if toks:
             yield toks, affecte
+
+def commande_interne(toks):
+    """eval … ou bash|sh|zsh|dash -c/-lc … : renvoie la chaîne à ré-analyser (ou None)."""
+    base = toks[0].rsplit("/", 1)[-1]
+    if base == "eval":
+        return " ".join(toks[1:])
+    if base in ("bash", "sh", "zsh", "dash"):
+        for k, t in enumerate(toks[1:], 1):
+            if re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", t):
+                return toks[k + 1] if k + 1 < len(toks) else None
+    return None
 
 def sous_commande(toks):
     """Pour git : retire les options globales (-C x, -c x, --no-pager…)."""
@@ -265,6 +323,26 @@ def verifie_issue(args):
         if not milestone:
             bloque("gh issue edit : seul le milestone est modifiable (--milestone ou --remove-milestone requis).")
 
+def analyse(cmd, cwd, profondeur):
+    if profondeur > 5:
+        bloque("commandes imbriquées (eval / bash -c) trop profondes.")
+    for toks, affecte in segments(cmd):
+        base = toks[0].rsplit("/", 1)[-1]
+        if base in ("cd", "pushd"):
+            # suit les `cd <dossier> && …` (worktrees)
+            cwd = resout(cwd, toks[1] if len(toks) > 1 else os.path.expanduser("~"))
+        elif base == "git":
+            sc, args_sc = sous_commande(toks)
+            refuse_affectation("git", sc, affecte)
+            verifie_git(args_sc, sc, dossier_git(toks, cwd))
+        elif base == "gh":
+            refuse_affectation("gh", "", affecte)
+            verifie_gh(toks)
+        else:
+            interne = commande_interne(toks)
+            if interne:
+                analyse(interne, cwd, profondeur + 1)  # eval / bash -c : mêmes règles
+
 CWD_SESSION = None
 
 def main():
@@ -277,28 +355,7 @@ def main():
     if livre and any(t[0] in ("export", "declare", "typeset") for t, _ in segs):
         bloque("`export`/`declare`/`typeset` dans la même commande qu'un `git push` ou un `gh` est interdit : "
                "la variable (ex. GIT_SSH_COMMAND) ferait exécuter du code avec les identifiants de l'utilisateur.")
-    for toks, affecte in segs:
-        base = toks[0].rsplit("/", 1)[-1]
-        if base in ("cd", "pushd"):
-            # suit les `cd <dossier> && …` (worktrees)
-            cwd = resout(cwd, toks[1] if len(toks) > 1 else os.path.expanduser("~"))
-        elif base == "git":
-            sc, args_sc = sous_commande(toks)
-            refuse_affectation("git", sc, affecte)
-            verifie_git(args_sc, sc, dossier_git(toks, cwd))
-        elif base == "gh":
-            refuse_affectation("gh", "", affecte)
-            verifie_gh(toks)
-        elif base in ("bash", "sh", "zsh") and "-c" in toks:
-            # sous-shell : on analyse la commande passée à -c
-            k = toks.index("-c")
-            if k + 1 < len(toks):
-                for sub, aff in segments(toks[k + 1]):
-                    b = sub[0].rsplit("/", 1)[-1]
-                    if b == "git":
-                        sc, a = sous_commande(sub); refuse_affectation("git", sc, aff); verifie_git(a, sc, dossier_git(sub, cwd))
-                    elif b == "gh":
-                        refuse_affectation("gh", "", aff); verifie_gh(sub)
+    analyse(cmd, cwd, 0)
     sys.exit(0)
 
 if __name__ == "__main__":

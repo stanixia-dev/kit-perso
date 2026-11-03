@@ -55,6 +55,17 @@ for c in 'gh issue close 9' 'gh issue edit 9 -t x' 'gh issue delete 9' 'gh issue
          'gh repo set-default o/r' 'gh alias set x y' 'gh alias import f'; do
   [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
 done
+for c in 'timeout 5 gh pr merge 1' 'nice gh pr merge 1' 'nice -n 5 gh pr merge 1' 'echo 1 | xargs gh pr merge' 'xargs -n1 gh pr merge' \
+         'eval gh pr merge 1' "bash -lc 'gh pr merge 1'" "sh -c 'gh pr merge 1'" '( gh pr merge 1 )' '(gh pr merge 1)' 'echo $(gh pr merge 1)' \
+         'echo `gh pr merge 1`' 'env gh pr merge 1' 'command gh pr merge 1' 'sudo gh pr merge 1' 'sudo -u x gh pr merge 1' 'stdbuf -oL gh pr merge 1' \
+         'stdbuf -o L gh pr merge 1' '/usr/bin/gh pr merge 1' 'nohup gh pr merge 1' 'timeout -k 1 5 gh pr merge 1' \
+         'timeout 5 gh api -X POST repos/o/r/merges' 'timeout 5 git push origin main' 'nice git push origin main' "bash -c 'eval gh pr merge 1'" \
+         'eval git push origin main' "bash -ic 'git push origin main'"; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'timeout 5 gh pr view 1' "bash -c 'echo ok'" 'echo $(date)' 'nice make test' 'echo `date`' '(cd /tmp && ls)' 'timeout 5 git status'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 for c in 'gh issue create -t x -F f' 'gh issue comment 9 -F f' 'gh issue view 1 -R stanixia-dev/Hive' 'gh issue list --author @me --state open'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
