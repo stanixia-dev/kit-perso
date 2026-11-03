@@ -225,6 +225,12 @@ for c in 'gh pr -R o/r merge 1' 'gh -R o/r pr merge 1' 'gh pr --repo=o/r merge 1
          'gh -R o/r api -X POST repos/o/r/merges -f base=main' 'gh -R o/r issue close 3' 'gh --repo o/r secret set X'; do
   [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
 done
+for c in 'gh pr --body x merge 1' 'gh pr -b x merge 1' 'gh -b x pr merge 1' 'gh pr --body x review 1 --approve' 'gh pr --draft --body x merge 1'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'gh pr create --fill' 'gh pr view 23' 'gh pr list --state open'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 for c in 'gh pr -R o/r view 1' 'gh -R o/r pr list' 'gh -R stanixia-dev/kit-perso issue create -t x'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
@@ -251,6 +257,8 @@ code_garde_main() { # $1 = commande, dans un dépôt jetable sur main
 for c in 'git push origin HEAD' 'git push origin @'; do
   [ "$(code_garde_main "$c")" = 2 ] && ok "garde-git bloque sur main $c" || ko "garde-git main $c"
 done
+[ "$(code_garde_main 'git push -o x origin')" = 2 ] && ok "garde-git bloque sur main git push -o x origin" || ko "garde-git push -o"
+[ "$(code_garde_main 'git push --push-option x origin')" = 2 ] && ok "garde-git bloque sur main git push --push-option x origin" || ko "garde-git push --push-option"
 # garde-deps : chemins protégés normalisés
 for c in 'cp a .github/./workflows/t.yml' 'cp a .github//workflows/t.yml' 'cp a .github/x/../workflows/t.yml'; do
   [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"

@@ -204,7 +204,14 @@ def verifie_git(args_sc, sc, cwd):
             o = option_dangereuse(a, PUSH_DANGEREUX)
             if o in ("--receive-pack", "--exec"):
                 bloque(f"`git push {a}` est interdit : le programme désigné s'exécuterait en local.")
-        pos = [a for a in args_sc if not a.startswith("-")]
+        pos, i = [], 0  # positionnels (remote, refspecs), sans les valeurs des options qui en prennent une
+        while i < len(args_sc):
+            a = args_sc[i]
+            if a in ("-o", "--push-option", "--repo", "--receive-pack", "--exec") or re.fullmatch(r"-[a-zA-Z]*o", a):
+                i += 2; continue
+            if not a.startswith("-"):
+                pos.append(a)
+            i += 1
         depots = [a.split("=", 1)[1] for a in args_sc if a.startswith("--repo=")]
         if "--repo" in args_sc and args_sc.index("--repo") + 1 < len(args_sc):
             depots.append(args_sc[args_sc.index("--repo") + 1])
@@ -221,7 +228,7 @@ def verifie_git(args_sc, sc, cwd):
                 bloque(f"`git push {a}` est interdit : pousse toutes les branches, main comprise.")
             if o or a in ("-f", "-d") or (re.match(r"^-[a-zA-Z]+$", a) and re.match(r"^[^o]*[fd]", a[1:])):
                 bloque(f"`git push {a}` est interdit (force/suppression/contournement des hooks).")
-        refs = [a for a in args_sc if not a.startswith("-")][1:]  # après le remote
+        refs = pos[1:]  # après le remote
         for r in refs:
             if r.startswith("+"):
                 bloque("push forcé via refspec `+…` interdit.")
@@ -248,25 +255,38 @@ def verifie_git(args_sc, sc, cwd):
         if branche_cible(cwd) in PROTEGEES:
             bloque("commit directement sur main interdit : crée une branche claude/<sujet>.")
 
-def mots_gh(args, valeurs=("-R", "--repo")):
-    """(mots, reste) : les 2 premiers jetons positionnels de `gh` (options sautées, y compris -R/--repo et leur valeur) et tous les autres jetons."""
-    mots, reste, i = [], [], 0
-    while i < len(args):
-        a = args[i]
-        if a.startswith("-"):
-            reste.append(a)
-            if a in valeurs and i + 1 < len(args):
-                reste.append(args[i + 1])
-                i += 1
-        elif len(mots) < 2:
-            mots.append(a)
-        else:
-            reste.append(a)
-        i += 1
-    return mots, reste
+def lectures_gh(args, valeurs=("-R", "--repo")):
+    """Lectures possibles d'une ligne `gh` : liste de (mots, reste, pos0). `mots` = les 2 premiers jetons positionnels,
+    `reste` = les autres jetons, `pos0` = indice du 1er mot dans `args`. Avant le 2e mot, une option sans `=` peut ou non
+    consommer le jeton suivant (gh accepte `--body x`) : on énumère les deux (jusqu'à 6 options, au-delà aucune consommation) ;
+    les options de `valeurs` consomment toujours."""
+    res = []
+    def rec(i, mots, reste, pos0, libres):
+        while i < len(args):
+            a = args[i]
+            if a.startswith("-"):
+                suite = i + 1 < len(args)
+                if suite and a in valeurs:
+                    reste = reste + [a, args[i + 1]]; i += 2; continue
+                if suite and "=" not in a and len(mots) < 2 and libres < 6:
+                    rec(i + 2, mots, reste + [a, args[i + 1]], pos0, libres + 1)  # l'option consomme le jeton suivant
+                    libres += 1
+                reste = reste + [a]
+            elif len(mots) < 2:
+                mots = mots + [a]
+                pos0 = i if pos0 < 0 else pos0
+            else:
+                reste = reste + [a]
+            i += 1
+        res.append((mots, reste, pos0))
+    rec(0, [], [], -1, 0)
+    return res
 
 def verifie_gh(toks):
-    mots, reste = mots_gh(toks[1:])
+    for mots, reste, pos0 in lectures_gh(toks[1:]):
+        verifie_gh_lecture(toks[1:], mots, reste, pos0)
+
+def verifie_gh_lecture(t, mots, reste, pos0):
     j = " ".join(mots + reste)
     regles = [
         (r"^pr merge\b", "fusionner une PR est réservé à l'utilisateur."),
@@ -282,10 +302,8 @@ def verifie_gh(toks):
     for motif, raison in regles:
         if re.search(motif, j, re.IGNORECASE):
             bloque(raison)
-    t = toks[1:]
     if mots and mots[0] in ("api", "issue"):
-        k = t.index(mots[0])  # le jeton lui-même, sans les options qui le précèdent
-        (verifie_api if mots[0] == "api" else verifie_issue)(t[:k] + t[k + 1:])
+        (verifie_api if mots[0] == "api" else verifie_issue)(t[:pos0] + t[pos0 + 1:])  # sans le jeton api/issue
 
 API_VALEURS_LONGUES = {"--header", "--preview", "--jq", "--template", "--cache", "--hostname", "--method",
                        "--field", "--raw-field", "--input"}

@@ -363,22 +363,32 @@ def candidats(texte):
 def chemin_protege(texte):
     return next((c for c in candidats(texte) if classe(developpe(c))), None)
 
-def mots_gh(args):
-    """(mots, reste) : les 2 premiers jetons positionnels de `gh` (options sautées, avec la valeur de -R/--repo/-h/--hostname) et les autres jetons."""
-    mots, reste, i = [], [], 0
-    while i < len(args):
-        a = args[i]
-        if a.startswith("-"):
-            reste.append(a)
-            if a in ("-R", "--repo", "-h", "--hostname") and i + 1 < len(args):
-                reste.append(args[i + 1])
-                i += 1
-        elif len(mots) < 2:
-            mots.append(a)
-        else:
-            reste.append(a)
-        i += 1
-    return mots, reste
+def lectures_gh(args, valeurs=("-R", "--repo", "-h", "--hostname")):
+    """Lectures possibles d'une ligne `gh` : liste de (mots, reste, pos0). `mots` = les 2 premiers jetons positionnels,
+    `reste` = les autres jetons, `pos0` = indice du 1er mot dans `args`. Avant le 2e mot, une option sans `=` peut ou non
+    consommer le jeton suivant (gh accepte `--body x`) : on énumère les deux (jusqu'à 6 options, au-delà aucune consommation) ;
+    les options de `valeurs` consomment toujours."""
+    res = []
+    def rec(i, mots, reste, pos0, libres):
+        while i < len(args):
+            a = args[i]
+            if a.startswith("-"):
+                suite = i + 1 < len(args)
+                if suite and a in valeurs:
+                    reste = reste + [a, args[i + 1]]; i += 2; continue
+                if suite and "=" not in a and len(mots) < 2 and libres < 6:
+                    rec(i + 2, mots, reste + [a, args[i + 1]], pos0, libres + 1)  # l'option consomme le jeton suivant
+                    libres += 1
+                reste = reste + [a]
+            elif len(mots) < 2:
+                mots = mots + [a]
+                pos0 = i if pos0 < 0 else pos0
+            else:
+                reste = reste + [a]
+            i += 1
+        res.append((mots, reste, pos0))
+    rec(0, [], [], -1, 0)
+    return res
 
 def indice_git(gd, args):
     """Indice de la sous-commande git dans `args` (options globales et leurs valeurs sautées)."""
@@ -428,20 +438,21 @@ def bash_chemins(cmd, ctx, prof=0):
             continue
         base, args = toks[0].rsplit("/", 1)[-1], toks[1:]
         sous = gd.sous_commande_git(args) if base == "git" else ""
-        mots, reste_gh = mots_gh(args) if base == "gh" else ([], [])
-        if (base == "gh" and (mots == ["auth", "token"] or (mots == ["auth", "status"] and any(
-                a in ("-t", "--show-token") for a in reste_gh)))) or (
+        lects = [(m, r) for m, r, _ in lectures_gh(args)] if base == "gh" else []
+        if (base == "gh" and any(m == ["auth", "token"] or (m == ["auth", "status"] and any(
+                a in ("-t", "--show-token") for a in r)) for m, r in lects)) or (
                 base == "git" and sous == "credential" and args[indice_git(gd, args) + 1:][:1] == ["fill"]):
             ctx["hits"].append("identifiants git/gh")
-        if (base == "git" and sous in ("commit", "push")) or (base == "gh" and mots == ["pr", "create"]):
+        if (base == "git" and sous in ("commit", "push")) or (base == "gh" and any(m == ["pr", "create"] for m, _ in lects)):
             ctx["scan"] = True
             if sous == "push" or base == "gh":
                 ctx["livre"] = True
-        if base == "gh" and mots in (["gist", "create"], ["gist", "edit"]):  # publie des fichiers
-            for t in reste_gh:
-                c = chemin_protege(t)
-                if c:
-                    ctx["hits"].append(c)
+        for m, r in lects:
+            if m in (["gist", "create"], ["gist", "edit"]):  # publie des fichiers
+                for t in r:
+                    c = chemin_protege(t)
+                    if c:
+                        ctx["hits"].append(c)
         if sous == "push" or base == "gh":
             # commande qui porte les identifiants : un argument qui désigne un fichier (lien compris) vers un chemin protégé
             for t in args:
@@ -468,8 +479,9 @@ def bash_chemins(cmd, ctx, prof=0):
                 i += 2 if args[i] in MOTIF_OPT_VALEUR else 1
             a_tester = args[:i] + args[i + 1:]
         # interpréteur : le code inline (-c, -e, -r, -p…) cite des chemins au milieu d'un texte ; un script avec ses arguments, non
-        interprete = bool(gd.INTERPRETES.fullmatch(base)) and any(
-            re.fullmatch(r"-[a-zA-Z]*[ceEpr]", t) or t in ("--eval", "--print") for t in args)
+        interprete = bool(gd.INTERPRETES.fullmatch(base)) and (
+            (base == "deno" and "eval" in args)
+            or any(re.match(r"-[a-zA-Z]*[ceEpr]", t) or re.match(r"--(eval|print)\b", t) for t in args))  # -eCODE, --eval=CODE inclus
         for t in a_tester:
             if any(c.isspace() for c in t) and not interprete:
                 # jeton à blanc (chemin avec espace, ou texte) : testé entier, s'il ressemble à un chemin

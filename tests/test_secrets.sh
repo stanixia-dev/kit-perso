@@ -240,6 +240,10 @@ done
 for c in 'cat "mon dossier/.env"' 'cat mon\ dossier/.env'; do
   hk Bash "$TMP/w" command "$c"; bloque "$c"
 done
+for c in "node --eval=\"readFileSync('.env','utf8')\"" "node --print=\"readFileSync('.env')\"" "node -e\"readFileSync('.env')\"" \
+         "deno eval \"Deno.readTextFileSync('.env')\""; do
+  hk Bash "$TMP/w" command "$c"; bloque "$c"
+done
 hk Bash "$TMP/w" command "python3 x.py --msg 'voir la doc .env'"; passe "jeton à blanc qui n'est pas un chemin"
 for c in "git commit -m 'protège .env'" "git commit -m \"\$(cat <<'EOF'"$'\nprotège .env et ~/.ssh\nEOF\n)"' 'echo .env >> .gitignore' \
          'grep .env .gitignore' 'ls ~/.ssh' 'git check-ignore .env' "gh pr create --body 'voir ~/.ssh/ et .env'" \
@@ -276,7 +280,7 @@ hk Bash "$TMP/w" command "echo $GH"; bloque "commande Bash contenant un fort"
 # scan avant commit et push
 d=$(depot precommit)
 printf 'T=%s\n' "$GH" > "$d/n.txt"
-for c in 'git add -A && git commit -m x' 'git push origin f' 'gh pr create --fill' 'gh -R o/r pr create --fill' 'gh pr -R o/r create --fill' 'git --namespace x push origin f'; do
+for c in 'git add -A && git commit -m x' 'git push origin f' 'gh pr create --fill' 'gh -R o/r pr create --fill' 'gh pr -R o/r create --fill' 'git --namespace x push origin f' 'gh pr --body x create --fill' 'gh pr -b x create --fill' 'gh -b x pr create --fill'; do
   hk Bash "$d" command "$c"; bloque "$c avec un secret dans le dépôt"
 done
 sans_valeur "scan avant commit"

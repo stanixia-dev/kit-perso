@@ -2,7 +2,7 @@
 
 ## 3.1.2 — 2026-11-03
 
-- garde-git et garde-secret : les options `gh` placées avant ou entre les sous-commandes (`gh -R o/r pr merge`, `gh pr -R o/r merge`) ne contournent plus les règles (`merge`, `approve`, `api`, `issue`, `auth token`, `pr create`).
+- garde-git et garde-secret : les options `gh` placées avant ou entre les sous-commandes (`gh -R o/r pr merge`, `gh pr -R o/r merge`, `gh pr --body x merge`) ne contournent plus les règles (`merge`, `approve`, `api`, `issue`, `auth token`, `pr create`).
 - garde-git : `-c`, `--config-env` et `--exec-path` devant `git push` sont bloqués, ainsi que `-c alias.*` pour toute sous-commande ; options globales à valeur (`--namespace`…) reconnues.
 - garde-git : `git push --all` / `--branches`, refspec `*`, `HEAD`/`@` sur main, abréviations d'options longues (`--del`, `--mirr`, `--ex=`…) et groupes d'options courtes (`-ud`) sont bloqués.
 - garde-secret : un chemin contenant un blanc (`cat "mon dossier/.env"`) est contrôlé ; le CLI (utilisé par le relecteur) est fail-closed : une erreur interne ou un fichier illisible sort en 2, jamais en 0 silencieux.

@@ -177,7 +177,7 @@ Milestones : `gh api repos/{owner}/{repo}/milestones -f title=v1` (créer), `gh 
 
 `garde-git` bloque aussi `gh repo set-default` et `gh alias set|import`, et `create` refuse `--parent`, `--blocking` et `--blocked-by`.
 
-Résiduels : `cd` vers un autre dépôt avant `gh issue create` ; `gh api` : lecture libre, écriture limitée aux milestones de tout dépôt accessible au jeton ; l'auteur du ticket commenté n'est pas vérifié par un hook (règle du skill).
+Résiduels : `git config alias.x …` puis `git x` (l'alias n'est pas résolu) ; `git -C <dépôt>` ou `--git-dir` vers un dépôt dont la configuration exécute du code (hooks, `core.sshCommand`) ; `cd` vers un autre dépôt avant `gh issue create` ; `gh api` : lecture libre, écriture limitée aux milestones de tout dépôt accessible au jeton ; l'auteur du ticket commenté n'est pas vérifié par un hook (règle du skill).
 
 ## Bascule depuis ~/.claude
 
