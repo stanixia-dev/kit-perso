@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.3 — 2026-11-03
+
+- garde-deps : le script de `sed -i` (valeur de `-e`/`--expression` ou de leurs préfixes et formes collées, sinon premier argument non-option) n'est plus pris pour une cible d'écriture ; `-f`/`--file` fournit le script, aucun argument n'est alors retiré. Le script reste une cible s'il contient une commande `w` ou `s///w` vers un chemin protégé, et une commande `e` (`1e cmd`) est analysée comme du shell. `sed -i … <chemin protégé>` reste bloqué. `perl -i` reste traité comme avant (son script peut écrire n'importe où).
+- garde-deps : une apostrophe entre guillemets doubles (`echo "it's $(npm i x)"`) ne masque plus la substitution qui suit ; un `#` dans des backticks ne masque plus la suite ; `find -exec`/`-execdir`/`-ok`/`-okdir` (y compris après un premier `-exec … \;`) font analyser la commande lancée comme une commande complète (paquets, écritures protégées, `sh -c`).
+- garde-deps : un seul analyseur de guillemets et de substitutions (`parcours()`) pour heredocs, substitutions et commentaires ; `saute_options` et `arguments` fusionnées (`sans_options`).
+
 ## 3.1.2 — 2026-11-03
 
 - garde-git et garde-secret : les options `gh` placées avant ou entre les sous-commandes (`gh -R o/r pr merge`, `gh pr -R o/r merge`, `gh pr --body x merge`) ne contournent plus les règles (`merge`, `approve`, `api`, `issue`, `auth token`, `pr create`).
