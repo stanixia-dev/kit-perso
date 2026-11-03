@@ -1,6 +1,6 @@
 # kit-perso
 
-Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, garde-secret, rappel-clear) et les skills (livrer, ticket) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
+Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, garde-secret, rappel-clear) et les skills (livrer, ticket, ci-projet) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
 
 ## Installation
 
@@ -17,7 +17,7 @@ Ou en deux temps dans une session :
 /plugin install kit-perso@kit-perso
 ```
 
-Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 2 skills, 5 hooks (PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; les skills `/kit-perso:livrer` et `/kit-perso:ticket`.
+Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 3 skills, 5 hooks (PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; les skills `/kit-perso:livrer`, `/kit-perso:ticket` et `/kit-perso:ci-projet`.
 
 ## Mise à jour
 
@@ -51,7 +51,7 @@ Trois couches, de la plus rapide à la plus sûre :
 
 1. **Hook Bash `garde-deps` (PreToolUse)** : filtre rapide qui lit la commande (`cargo add`, `npm i`, `pip install`…, y compris dans `bash -c`, heredocs, substitutions). Il se contourne (script écrit puis exécuté, chemin obfusqué) : ce n'est pas la barrière.
 2. **Contrôle par résultat en local (PostToolUse, Stop, SubagentStop)** : `hooks/verifie-manifestes.py` compare les manifestes (`Cargo.toml`, `package.json`, `pyproject.toml`, `requirements*.txt`) et lockfiles (`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `uv.lock`, `poetry.lock`) à `main` et applique les règles aux paquets ajoutés, quelle que soit la façon dont ils sont arrivés. Sans manifeste modifié, il sort aussitôt, sans réseau. Stop bloque une fois puis avertit (`stop_hook_active`).
-3. **CI, job `tests / deps`** : même script en `--ci`, lancé en `pull_request_target` : le workflow est celui de `main`, la PR ne peut donc ni le modifier ni le retirer, et aucun code de la PR n'est exécuté (ses manifestes sont lus comme données par git). Ce job ne tourne qu'une fois la PR qui l'introduit fusionnée dans `main`.
+3. **CI, job `tests / deps`** (dans un projet, seulement si le workflow kit-perso y est installé, voir « CI des projets ») : même script en `--ci`, lancé en `pull_request_target` : le workflow est celui de `main`, la PR ne peut donc ni le modifier ni le retirer, et aucun code de la PR n'est exécuté (ses manifestes sont lus comme données par git). Ce job ne tourne qu'une fois la PR qui l'introduit fusionnée dans `main`.
 
 Les dépendances **transitives** (lockfiles) ne sont examinées que par OSV (une seule requête par lot) et donnent un avertissement, jamais un blocage : licence et âge ne sont pas vérifiés, trop de requêtes.
 Hors réseau, les couches locales sont *fail-open* (avertissement « vérification impossible ») ; la CI est *fail-closed* (registre injoignable, fichier illisible ou erreur imprévue = blocage ; une relance coûte peu).
@@ -62,6 +62,29 @@ Tests : `bash tests/test_hooks.sh` (appelle `tests/test_manifestes.sh`), hors r�
 
 `.garde-deps-exceptions` (racine du dépôt) autorise un paquet refusé : une ligne `<registre> <nom> <version|*> <AAAA-MM-JJ> <raison>` (`crates`, `npm` ou `pypi`), `#` pour un commentaire. En local, le blocage devient un avertissement `(exception du … : …)`. En CI, seules les exceptions déjà sur `main` comptent ; celles qu'ajoute la PR sont listées dans le résumé du job, non appliquées. Ajouter une exception = commit de l'utilisateur sur `main`, puis relancer la CI de la PR.
 
+## CI des projets
+
+Le skill `/kit-perso:ci-projet [--sans-tests]` (invocation par l'utilisateur seul) génère le workflow `kit-perso.yml` d'un projet : un job `deps` fail-closed (mêmes contrôles que ci-dessus, en `pull_request_target`) et un job de tests par manifeste détecté à la racine (`Cargo.toml` : `rust` ; `package.json` : `node` ; `pyproject.toml` ou `requirements*.txt` : `python`). Ce sont des emplacements par défaut : à relire avant de commiter. L'agent n'écrit jamais dans `.github/` : le fichier est généré dans `.git/kit-perso/` (jamais suivi) et c'est l'utilisateur qui lance, dans un terminal, la commande imprimée (copie, commit, `git push origin main`).
+
+**Préalable (utilisateur, une fois) : kit-perso doit être public.** Le job `deps` du projet récupère les scripts du kit par `actions/checkout` sans jeton. L'agent ne change pas la visibilité d'un dépôt. 1. Scanner tout l'historique publié, PR comprises, dans un dossier jetable :
+
+```
+git clone -q https://github.com/stanixia-dev/kit-perso.git kp && cd kp
+git fetch -q origin '+refs/pull/*/head:refs/remotes/origin/pr/*'
+for r in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin); do
+  python3 hooks/garde-secret.py --ci --base 4b825dc642cb6eb9a060e54bf8d69288fbee4904 --cible "$r" || echo "À TRAITER : $r"; done
+```
+
+(`4b825dc…` est l'arbre vide : le scan lit alors tous les commits jusqu'à la cible.) Relire aussi tickets et PR, qui deviennent publics. 2. Rien à traiter : `gh repo edit stanixia-dev/kit-perso --visibility public --accept-visibility-change-consequences`.
+
+**SHA figé.** Le workflow du projet porte le SHA complet du kit (`ref:` du checkout de `stanixia-dev/kit-perso`, ligne d'en-tête `# Généré par kit-perso <version>…`). Il est protégé contre l'agent comme tout `.github/workflows/` : changer de version du kit est un commit de l'utilisateur (relancer le skill, recopier). Si kit-perso redevient privé, le checkout échoue et le job `deps` est rouge : les PR restent bloquées tant que le check est obligatoire.
+
+**Après la fusion du workflow** : `deps` ne tourne qu'une fois le workflow sur `main`. Ensuite, Settings > Rules > Rulesets > New branch ruleset, cible `main`, Require status checks : `deps` et les jobs de tests générés.
+
+**Détection.** `livrer` (avant le push) et l'agent `specs` (au démarrage) signalent, en lecture seule, un dépôt sans workflow, sans le job `deps` du kit ou dont les checks de `main` ne sont pas obligatoires (rulesets et protection classique). Ils distinguent « pas de CI configurée » de « CI configurée mais pas déclenchée ». `livrer` annonce et continue, sans bloquer.
+
+Tests : `bash tests/test_ci_projet.sh` (appelé par `tests/test_hooks.sh`), hors réseau (`--ref <sha>`).
+
 ## Contrôle des secrets
 
 Applique les règles « Secrets » du CLAUDE.md global : l'agent ne lit pas `~/.ssh/`, `~/.config/gh/` ni les `.env`, n'affiche et n'écrit aucun token ou mot de passe, n'en commite aucun. `hooks/garde-secret.py` n'a aucune dépendance. Aucun de ses messages ne contient une valeur : seulement le chemin, le commit, le type de secret et une empreinte (12 premiers hex de `sha256`).
@@ -71,7 +94,7 @@ Le filtre de commandes reste une aide ; les barrières sont le **masquage de la 
 1. **PreToolUse** (`--hook pre`, `onFailure: "block"`) : refuse l'accès à un chemin protégé (Read, Grep, Edit, Write, MultiEdit, NotebookEdit, et chaque chemin cité dans une commande Bash, y compris dans `bash -c`, heredocs et substitutions), un secret dans le contenu écrit ou dans le texte d'une commande, `gh auth token` et `git credential fill`. Avant `git commit`, `git push` et `gh pr create`, il scanne le dépôt.
 2. **PostToolUse** (Bash, Read, Grep, BashOutput, TaskOutput) : remplace chaque secret reconnu par `[masqué:<type>:<empreinte>]` dans la sortie (`updatedToolOutput`), ainsi que les valeurs de `os.environ` et des `.env` du dossier dont le nom évoque un secret. PostToolUseFailure : alerte seule.
 3. **Stop, SubagentStop** : scan du dépôt, bloque une fois puis avertit.
-4. **CI** : `verifie-manifestes.py --ci` (job `tests / deps`) enchaîne `garde-secret.py --ci`, depuis `main` : la PR ne peut ni l'altérer ni le retirer. Le secret s'affiche donc sous le nom de check `deps`.
+4. **CI** (dans un projet, seulement si le workflow kit-perso y est installé) : `verifie-manifestes.py --ci` (job `tests / deps`) enchaîne `garde-secret.py --ci`, depuis `main` : la PR ne peut ni l'altérer ni le retirer. Le secret s'affiche donc sous le nom de check `deps`.
 
 Le scan lit chaque commit un par un (un secret retiré au commit suivant reste dans l'historique), plus la copie de travail et les fichiers non suivis. Il refuse aussi des noms de fichiers (`.env`, `id_rsa`, `.p12`…).
 
@@ -87,7 +110,7 @@ Le scan lit chaque commit un par un (un secret retiré au commit suivant reste d
 
 Signature : formats connus (GitHub, GitLab, Anthropic, OpenAI, AWS, Google, Slack, Stripe, npm, PyPI, clés privées). Générique : JWT, URL à mot de passe, affectation `password = "…"`, écartés dans la doc et les tests.
 
-Résiduels assumés : un script qui lit un fichier protégé et transforme la valeur avant de l'afficher ; un mot de passe sans signature, absent des valeurs connues ; la sortie d'une commande en échec, non réécrivable (alerte seule) ; `cd x && git push` (le scan local vise le dossier courant, CI et Stop rattrapent) ; un chemin contenant un blanc ; un jeton encodé en UTF-16 (les motifs lisent du texte UTF-8) ; `gh gist create` d'un fichier non protégé qui contient un secret hors signature. Purge d'historique et révocation : à la charge de l'utilisateur. Secours : `claude plugin disable kit-perso@kit-perso`.
+Résiduels assumés : un script qui lit un fichier protégé et transforme la valeur avant de l'afficher ; un mot de passe sans signature, absent des valeurs connues ; la sortie d'une commande en échec, non réécrivable (alerte seule) ; `cd x && git push` (le scan local vise le dossier courant ; Stop rattrape, la CI aussi dans un projet, seulement si le workflow kit-perso y est installé) ; un chemin contenant un blanc ; un jeton encodé en UTF-16 (les motifs lisent du texte UTF-8) ; `gh gist create` d'un fichier non protégé qui contient un secret hors signature. Purge d'historique et révocation : à la charge de l'utilisateur. Secours : `claude plugin disable kit-perso@kit-perso`.
 
 Tests : `bash tests/test_secrets.sh` (appelé par `tests/test_hooks.sh`), `HOME` jetable, jetons construits à l'exécution.
 

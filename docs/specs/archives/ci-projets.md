@@ -1,6 +1,6 @@
 # CI des projets : modèle de workflow et détection de l'absence de CI
 
-Statut : en cours
+Statut : livrée
 Tickets : #16, #17
 
 ## Objectif
@@ -90,15 +90,15 @@ Messages (préfixe `CI :`) : `W` vide et aucun check exigé → « ce dépôt n'
 
 ## Critères d'acceptation
 
-- [ ] Dans un dépôt jetable avec `Cargo.toml` + `package.json` + `pyproject.toml` et `--ref <40 hex>`, le générateur produit `kit-perso.yml` avec les jobs `deps`, `rust`, `node`, `python` et ce SHA en `ref:` du checkout `repository: stanixia-dev/kit-perso`.
-- [ ] Sans manifeste ou avec `--sans-tests` : seul le job `deps`.
-- [ ] `kit-perso.yml` : `pull_request_target`, `persist-credentials: false` à chaque checkout, checkout de `actions/checkout` épinglé, chemins `kit` et `pr` distincts, ni `secrets.`, ni `token:`, ni `${{` dans une ligne `run:`.
-- [ ] `--ref` invalide, `--sortie` sous `.github/` ou dans l'arbre de travail : exit 2, rien écrit ; sortie par défaut : `git status --porcelain` reste vide.
-- [ ] La ligne `run` du job `deps`, lancée hors réseau dans un dossier où `kit` pointe sur le dépôt du kit et `pr` sur un dépôt jetable sans manifeste modifié ni secret, sort 0.
-- [ ] La commande imprimée contient `git push origin main`, le rappel Rulesets et la mise à jour du kit.
-- [ ] `garde-git` admet les GET `…/rules/branches/main` et `…/branches/main/protection` avec leurs `--jq`, refuse le PUT ; `hooks/garde-git.py` inchangé.
-- [ ] `livrer` contient la détection avant `git push` (rulesets et protection classique) et les deux messages « pas de CI configurée » / « CI configurée mais pas déclenchée » ; `specs.md` contient la détection et la ligne `CI :`.
-- [ ] README (préalable public compris), CHANGELOG et `plugin.json` en 3.1.0 ; `claude plugin validate --strict .` vert.
+- [x] Dans un dépôt jetable avec `Cargo.toml` + `package.json` + `pyproject.toml` et `--ref <40 hex>`, le générateur produit `kit-perso.yml` avec les jobs `deps`, `rust`, `node`, `python` et ce SHA en `ref:` du checkout `repository: stanixia-dev/kit-perso`.
+- [x] Sans manifeste ou avec `--sans-tests` : seul le job `deps`.
+- [x] `kit-perso.yml` : `pull_request_target`, `persist-credentials: false` à chaque checkout, checkout de `actions/checkout` épinglé, chemins `kit` et `pr` distincts, ni `secrets.`, ni `token:`, ni `${{` dans une ligne `run:`.
+- [x] `--ref` invalide, `--sortie` sous `.github/` ou dans l'arbre de travail : exit 2, rien écrit ; sortie par défaut : `git status --porcelain` reste vide.
+- [x] La ligne `run` du job `deps`, lancée hors réseau dans un dossier où `kit` pointe sur le dépôt du kit et `pr` sur un dépôt jetable sans manifeste modifié ni secret, sort 0.
+- [x] La commande imprimée contient `git push origin main`, le rappel Rulesets et la mise à jour du kit.
+- [x] `garde-git` admet les GET `…/rules/branches/main` et `…/branches/main/protection` avec leurs `--jq`, refuse le PUT ; `hooks/garde-git.py` inchangé.
+- [x] `livrer` contient la détection avant `git push` (rulesets et protection classique) et les deux messages « pas de CI configurée » / « CI configurée mais pas déclenchée » ; `specs.md` contient la détection et la ligne `CI :`.
+- [x] README (préalable public compris), CHANGELOG et `plugin.json` en 3.1.0 ; `claude plugin validate --strict .` vert.
 
 ## Tests
 
@@ -119,6 +119,6 @@ Aucune.
 - [x] L2 — Détection de la CI dans livrer et specs (étapes 5-6)
   Fichiers : `skills/livrer/SKILL.md`, `agents/specs.md`, `tests/test_hooks.sh`, `tests/test_ci_projet.sh`
   Fait quand : GET rulesets/protection admis, PUT refusé, textes vérifiés par grep — `bash tests/test_hooks.sh`
-- [ ] L3 — Documentation et version 3.1.0 (étapes 7-8)
-  Fichiers : `README.md`, `CHANGELOG.md`, `.claude-plugin/plugin.json`
+- [x] L3 — Documentation et version 3.1.0 (étapes 7-8)
+  Fichiers : `README.md`, `CHANGELOG.md`, `.claude-plugin/plugin.json`, `.gitignore`
   Fait quand : README et version à jour, plugin valide — `bash tests/test_hooks.sh && claude plugin validate --strict .`
