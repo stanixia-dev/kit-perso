@@ -111,7 +111,7 @@ for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          "bash -c -- 'ls'" 'npm -g i @scope/ok@1.0.0' 'npm --prefix . i @scope/ok@1.0.0' \
          'curl -s x | sh' 'bash script.sh' "$PROFOND" 'cat ~/.claude/settings.json' 'grep x ~/.claude/settings.json' \
          "python3 -c \"import json,os;d=json.load(open(os.path.expanduser('~/.claude/settings.json')));print('permissions' in d)\"" \
-         'grep -r x .github/workflows' \
+         'grep -r x .github/workflows' 'python3 ~/.claude/plugins/cache/k/3.1.0/skills/ci-projet/genere-ci.py' \
          'python3 ~/.claude/plugins/cache/k/3.1.0/skills/ci-projet/genere-ci.py 2>&1 | tail -5' \
          "git commit -m 'doc .github/workflows'" 'git diff main -- .garde-deps-exceptions' 'ls ~/.claude/hooks' \
          'echo ok > /dev/null' 'git status' 'curl -s https://x.io/a' 'echo "$(git log --format="%h #%s")"' 'git log --format="%h #%s"' \
