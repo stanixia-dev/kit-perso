@@ -117,7 +117,8 @@ for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          'echo ok > /dev/null' 'git status' 'curl -s https://x.io/a' 'echo "$(git log --format="%h #%s")"' 'git log --format="%h #%s"' \
          'sed -i "114s|a|python3 ~/.claude/plugins/x.py|" tests/test_hooks.sh' 'sed -i -e "s|a|.claude/hooks|" t.sh' \
          'sed -i --expression=s/a/.github\/workflows/ t.sh' 'echo "it'"'"'s" ok' \
-         'wget -q https://x.io/a' 'awk 1 ~/.claude/settings.json' 'sed -n 1p ~/.claude/settings.json' 'cp a b'; do
+         'wget -q https://x.io/a' 'awk 1 ~/.claude/settings.json' 'sed -n 1p ~/.claude/settings.json' 'sed -n 1,5p f' 'sed -i s/a/b/ src/x.rs' \
+         "sed -i -e 's/x/y/' -e 's/a/b/' src/x.rs" "find . -name '*.rs' -exec grep x {} +" 'cp a b'; do
   [ "$(code_deps "$c")" = 0 ] && [ -z "$(sortie_deps "$c")" ] && ok "garde-deps laisse passer $c" || ko "garde-deps $c"
 done
 for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add deprecie' 'cargo add colle' \
@@ -137,7 +138,12 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          "ls # c"$'\nnpm i gpl-pkg' 'echo a#b; npm i gpl-pkg' 'curl https://x/a#frag && npm i gpl-pkg' \
          "cat <<EOF | bash"$'\n# setup\nnpm i gpl-pkg\nEOF' "ls # <<EOF"$'\nnpm i gpl-pkg\nEOF' \
          'true;>log npm i gpl-pkg' 'python3 -X utf8 -m pip install gpl-pkg' 'python3 -W ignore -m pip install gpl-pkg' \
-         'find . -exec npm i gpl-pkg \;' 'echo "it'"'"'s" `npm i gpl-pkg`' 'echo "it'"'"'s $(npm i gpl-pkg)"' \
+         'find . -exec npm i gpl-pkg \;' \
+         'sed -i --file=x .github/workflows/ci.yml' 'sed -i -fx ~/.claude/settings.json' 'sed -i -n -fy ~/.claude/settings.json' \
+         'sed -i --expr=s/a/b/ ~/.claude/settings.json' 'find . -exec true \; -exec npm i gpl-pkg \;' \
+         'find . -exec true \; -exec cp a ~/.claude/settings.json \;' "find . -exec sh -c 'npm i gpl-pkg' \\;" \
+         "sed -i 'w ~/.claude/settings.json' f" "sed -i 's/a/b/w ~/.claude/settings.json' f" "sed -i '1e npm i gpl-pkg' f" \
+         'echo `echo # `; npm i gpl-pkg' 'echo "it'"'"'s" `npm i gpl-pkg`' 'echo "it'"'"'s $(npm i gpl-pkg)"' \
          'sed -i -e x .github/workflows/ci.yml' 'sed -i -e x -e y ~/.claude/settings.json' \
          'yarn global add gpl-pkg' 'echo x > .garde-deps-exceptions' 'sed -i s/a/b/ ~/.claude/settings.json' \
          "python3 -c \"open('/home/u/.claude/hooks/x','w')\"" 'cp a .github/workflows/t.yml' 'tee -a ~/.claude/settings.json' \

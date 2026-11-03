@@ -156,7 +156,7 @@ def substitutions(s, apostrophes=True):
 def sans_commentaires(s):
     """Retire les commentaires shell : hors apostrophes/guillemets et non échappé, un `#` en début de mot
     supprime jusqu'au `\\n` exclu. Les $( … ) (même entre guillemets doubles) sont du code : cadres empilés."""
-    return "".join(s[i:j] for genre, i, j in parcours(s) if genre != "com")
+    return "".join(s[i:j] for genre, i, j in parcours(s, backticks=True) if genre != "com")
 
 def jetons(cmd):
     lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|()<>\n")
@@ -265,23 +265,42 @@ def script_du_plugin(t):
     return not t.startswith("-") and os.path.realpath(t).startswith(racine) and \
         not any(m in t for m in MOTIFS if m != ".claude/plugins")
 
-def sans_script(args):
-    """Arguments d'un `sed` sans son script (valeur de -e/--expression, sinon premier argument non-option)."""
-    out, i, e = [], 0, False
+SED_ECRIT = re.compile(r"[wW]\s*[^\s;}]*(?:\.claude|\.github|\.garde-)")
+SED_E_CMD = re.compile(r"(?:^|[;{}\n])\s*(?:\d+|\$|/(?:[^/\\]|\\.)*/|[,~+!\s])*e\s+(\S[^\n]*)")
+SED_S_E = re.compile(r"(?:^|[;{}\n])\s*s(.).*?\1.*?\1[a-zA-Z0-9]*e")
+
+def decoupe_sed(args):
+    """([scripts], [fichiers et autres arguments]) d'un `sed` : scripts = valeurs de -e/--expression (préfixes admis),
+    sinon premier argument non-option ; la valeur de -f/--file reste parmi les fichiers."""
+    scripts, fich, i, opt = [], [], 0, False
     while i < len(args):
         a = args[i]
-        if a == "--expression" or re.fullmatch(r"-[A-Za-z]*e", a):
-            e, i = True, i + 2
-        elif a.startswith("--expression=") or re.match(r"-e", a):
-            e, i = True, i + 1
+        genre, val, suite = None, None, 1
+        if a.startswith("--") and len(a) > 2:
+            nom, eq, val = a[2:].partition("=")
+            genre = "e" if "expression".startswith(nom) else "f" if "file".startswith(nom) else None
+            if genre and not eq:
+                val, suite = (args[i + 1] if i + 1 < len(args) else ""), 2
+        elif m := re.fullmatch(r"-[A-Za-hj-z]*([ef])", a):
+            genre, val, suite = m.group(1), (args[i + 1] if i + 1 < len(args) else ""), 2
+        elif m := re.fullmatch(r"-[A-Za-hj-z]*?([ef])(.+)", a):
+            genre, val = m.group(1), m.group(2)
+        if genre:
+            opt = True
+            (scripts if genre == "e" else fich).append(val)
         else:
-            out.append(a)
-            i += 1
-    if not e:
-        k = next((j for j, a in enumerate(out) if not a.startswith("-")), None)
+            fich.append(a)
+        i += suite
+    if not opt:
+        k = next((j for j, a in enumerate(fich) if not a.startswith("-")), None)
         if k is not None:
-            del out[k]
-    return out
+            scripts.append(fich.pop(k))
+    return scripts, fich
+
+def sans_script(args):
+    """Arguments d'un `sed` sans son script, sauf s'il contient une commande d'écriture (`w`, `s///w`) vers un chemin protégé."""
+    scripts, fich = decoupe_sed(args)
+    return fich + [sc for sc in scripts if SED_ECRIT.search(sc)]
 
 def ecriture_protegee(toks):
     """Le premier argument protégé d'un segment qui écrit (écrivain connu), sinon None."""
@@ -425,6 +444,19 @@ def analyse(cmd, prof=0, ecritures=None):
         if not toks:
             continue
         out += paquets(toks)
+        base = toks[0].rsplit("/", 1)[-1]
+        for i, t in enumerate(toks):  # `find … -exec cmd … ;` (le `;` coupe le segment : `-exec` peut ouvrir un segment)
+            if t in ("-exec", "-execdir", "-ok", "-okdir") and (i == 0 or base == "find"):
+                sub = toks[i + 1:]
+                sub = sub[:sub.index("+")] if "+" in sub else sub
+                if sub:
+                    out += analyse(shlex.join(sub), prof + 1, ecritures)
+        if base == "sed":
+            for sc in decoupe_sed(toks[1:])[0]:
+                for m in SED_E_CMD.finditer(sc):  # commande `e` : exécute une commande shell
+                    out += analyse(m.group(1), prof + 1, ecritures)
+                if SED_S_E.search(sc) and risque(cmd):
+                    raise Illisible("sed s///e exécute du shell non analysable")
         cible = ecriture_protegee(toks)
         if cible:
             ecritures.append(cible)
@@ -459,15 +491,7 @@ def paquets(toks):
         toks = [toks[0]] + sans_options(toks[1:], SAUTE["npm"])
         sc = toks[1] if len(toks) > 1 else ""
     res = []
-    if base == "find":  # `-exec cmd … ;` / `+` : la commande exécutée est analysée comme une commande
-        for i, t in enumerate(toks):
-            if t in ("-exec", "-execdir", "-ok", "-okdir"):
-                sub = toks[i + 1:]
-                fin = next((j for j, a in enumerate(sub) if a in (";", "+")), len(sub))
-                sub = sans_prefixe(sub[:fin])
-                if sub:
-                    res += paquets(sub)
-    elif base == "cargo" and sc == "add":
+    if base == "cargo" and sc == "add":
         if any(a in ("--git", "--path") or a.startswith(("--git=", "--path=")) for a in toks):
             return []
         for t in sans_options(toks[2:], SAUTE["cargo"], True):
