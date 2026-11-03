@@ -54,11 +54,11 @@ Fermer les contournements relevés dans `garde-git` et `garde-secret` (options `
 
 ## Critères d'acceptation
 
-- [ ] Chaque cas « bloqué » ci-dessous sort en 2 et chaque « autorisé » en 0 ; chaque nouveau cas échoue sur `main`.
-- [ ] `verifie-manifestes.py --base inexistant` et `garde-secret.py --base inexistant` (CLI) sortent en 2 ; `garde-secret.py --hook pre --depot x` sur une entrée vide sort en 2.
-- [ ] `npm i depublie` donne « vérification impossible » : avertissement (0) en local, blocage (2) en `--ci`.
+- [x] Chaque cas « bloqué » ci-dessous sort en 2 et chaque « autorisé » en 0 ; chaque nouveau cas échoue sur `main`.
+- [x] `verifie-manifestes.py --base inexistant` et `garde-secret.py --base inexistant` (CLI) sortent en 2 ; `garde-secret.py --hook pre --depot x` sur une entrée vide sort en 2.
+- [x] `npm i depublie` donne « vérification impossible » : avertissement (0) en local, blocage (2) en `--ci`.
 - [ ] `grep -c 'tests / deps' README.md` vaut 0, `grep -c sandbox tests/test_hooks.sh` vaut 0, version 3.1.2 et entrée CHANGELOG présentes.
-- [ ] `bash tests/test_hooks.sh` sort en 0, sans ligne `ECHEC`.
+- [x] `bash tests/test_hooks.sh` sort en 0, sans ligne `ECHEC`.
 
 ## Tests
 

@@ -51,10 +51,10 @@ Trois couches, de la plus rapide à la plus sûre :
 
 1. **Hook Bash `garde-deps` (PreToolUse)** : filtre rapide qui lit la commande (`cargo add`, `npm i`, `pip install`…, y compris dans `bash -c`, heredocs, substitutions). Il se contourne (script écrit puis exécuté, chemin obfusqué) : ce n'est pas la barrière.
 2. **Contrôle par résultat en local (PostToolUse, Stop, SubagentStop)** : `hooks/verifie-manifestes.py` compare les manifestes (`Cargo.toml`, `package.json`, `pyproject.toml`, `requirements*.txt`) et lockfiles (`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `uv.lock`, `poetry.lock`) à `main` et applique les règles aux paquets ajoutés, quelle que soit la façon dont ils sont arrivés. Sans manifeste modifié, il sort aussitôt, sans réseau. Stop bloque une fois puis avertit (`stop_hook_active`).
-3. **CI, job `tests / deps`** (nom dans ce dépôt ; dans un projet, seulement si les workflows kit-perso y sont installés, check `kit-perso-deps / deps`, voir « CI des projets ») : même script en `--ci`, lancé en `pull_request_target` : le workflow est celui de `main`, la PR ne peut donc ni le modifier ni le retirer, et aucun code de la PR n'est exécuté (ses manifestes sont lus comme données par git). Ce job ne tourne qu'une fois la PR qui l'introduit fusionnée dans `main`.
+3. **CI, job `deps / deps`** (nom dans ce dépôt ; dans un projet, seulement si les workflows kit-perso y sont installés, check `kit-perso-deps / deps`, voir « CI des projets ») : même script en `--ci`, lancé en `pull_request_target` : le workflow est celui de `main`, la PR ne peut donc ni le modifier ni le retirer, et aucun code de la PR n'est exécuté (ses manifestes sont lus comme données par git). Ce job ne tourne qu'une fois la PR qui l'introduit fusionnée dans `main`.
 
 Les dépendances **transitives** (lockfiles) ne sont examinées que par OSV (une seule requête par lot) et donnent un avertissement, jamais un blocage : licence et âge ne sont pas vérifiés, trop de requêtes.
-Hors réseau, les couches locales sont *fail-open* (avertissement « vérification impossible ») ; la CI est *fail-closed* (registre injoignable, fichier illisible ou erreur imprévue = blocage ; une relance coûte peu).
+Hors réseau, les couches locales sont *fail-open* (avertissement « vérification impossible ») ; la CI est *fail-closed* (registre injoignable, fichier illisible ou erreur imprévue = blocage ; une relance coûte peu). En CLI (`--base`), une erreur imprévue sort en 2 avec la trace.
 
 Tests : `bash tests/test_hooks.sh` (appelle `tests/test_manifestes.sh`), hors réseau (réponses simulées dans `tests/fixtures/garde-deps.json`, dépôts git jetables) ; la CI GitHub les lance sur chaque PR et push sur `main`.
 
@@ -94,7 +94,7 @@ Le filtre de commandes reste une aide ; les barrières sont le **masquage de la 
 1. **PreToolUse** (`--hook pre`, `onFailure: "block"`) : refuse l'accès à un chemin protégé (Read, Grep, Edit, Write, MultiEdit, NotebookEdit, et chaque chemin cité dans une commande Bash, y compris dans `bash -c`, heredocs et substitutions), un secret dans le contenu écrit ou dans le texte d'une commande, `gh auth token` et `git credential fill`. Avant `git commit`, `git push` et `gh pr create`, il scanne le dépôt.
 2. **PostToolUse** (Bash, Read, Grep, BashOutput, TaskOutput) : remplace chaque secret reconnu par `[masqué:<type>:<empreinte>]` dans la sortie (`updatedToolOutput`), ainsi que les valeurs de `os.environ` et des `.env` du dossier dont le nom évoque un secret. PostToolUseFailure : alerte seule.
 3. **Stop, SubagentStop** : scan du dépôt, bloque une fois puis avertit.
-4. **CI** (dans un projet, seulement si les workflows kit-perso y sont installés) : `verifie-manifestes.py --ci` (job `tests / deps` dans ce dépôt, `kit-perso-deps / deps` dans un projet) enchaîne `garde-secret.py --ci`, depuis `main` : la PR ne peut ni l'altérer ni le retirer. Le secret s'affiche donc sous le nom de check `deps`.
+4. **CI** (dans un projet, seulement si les workflows kit-perso y sont installés) : `verifie-manifestes.py --ci` (job `deps / deps` dans ce dépôt, `kit-perso-deps / deps` dans un projet) enchaîne `garde-secret.py --ci`, depuis `main` : la PR ne peut ni l'altérer ni le retirer. Le secret s'affiche donc sous le nom de check `deps`.
 
 Le scan lit chaque commit un par un (un secret retiré au commit suivant reste dans l'historique), plus la copie de travail et les fichiers non suivis. Il refuse aussi des noms de fichiers (`.env`, `id_rsa`, `.p12`…).
 
@@ -110,7 +110,7 @@ Le scan lit chaque commit un par un (un secret retiré au commit suivant reste d
 
 Signature : formats connus (GitHub, GitLab, Anthropic, OpenAI, AWS, Google, Slack, Stripe, npm, PyPI, clés privées). Générique : JWT, URL à mot de passe, affectation `password = "…"`, écartés dans la doc et les tests.
 
-Résiduels assumés : un script qui lit un fichier protégé et transforme la valeur avant de l'afficher ; un mot de passe sans signature, absent des valeurs connues ; la sortie d'une commande en échec, non réécrivable (alerte seule) ; `cd x && git push` (le scan local vise le dossier courant ; Stop rattrape, la CI aussi dans un projet, seulement si les workflows kit-perso y sont installés) ; un chemin contenant un blanc ; un jeton encodé en UTF-16 (les motifs lisent du texte UTF-8) ; `gh gist create` d'un fichier non protégé qui contient un secret hors signature. Purge d'historique et révocation : à la charge de l'utilisateur. Secours : `claude plugin disable kit-perso@kit-perso`.
+Résiduels assumés : un script qui lit un fichier protégé et transforme la valeur avant de l'afficher ; un mot de passe sans signature, absent des valeurs connues ; la sortie d'une commande en échec, non réécrivable (alerte seule) ; `cd x && git push` (le scan local vise le dossier courant ; Stop rattrape, la CI aussi dans un projet, seulement si les workflows kit-perso y sont installés) ; un jeton encodé en UTF-16 (les motifs lisent du texte UTF-8) ; `gh gist create` d'un fichier non protégé qui contient un secret hors signature. Purge d'historique et révocation : à la charge de l'utilisateur. Secours : `claude plugin disable kit-perso@kit-perso`.
 
 Tests : `bash tests/test_secrets.sh` (appelé par `tests/test_hooks.sh`), `HOME` jetable, jetons construits à l'exécution.
 
@@ -144,7 +144,7 @@ Les hooks protègent déjà les réglages Claude (`~/.claude/settings*.json`, `*
 }
 ```
 
-À faire **après** la fusion de la PR qui introduit le contrôle (sinon elle n'aurait pas pu modifier les workflows). Sur GitHub, rendre le check `tests / deps` obligatoire sur `main` (Settings, Branches ou Rulesets, « Require status checks ») : réglage du dépôt, à faire à la main.
+À faire **après** la fusion de la PR qui introduit le contrôle (sinon elle n'aurait pas pu modifier les workflows). Sur GitHub, rendre les checks `deps / deps` et `tests / hooks` obligatoires sur `main` (Settings, Branches ou Rulesets, « Require status checks ») : réglage du dépôt, à faire à la main.
 
 Pas de `Read(**/.env.*)` : un refus l'emporte sur tout et rendrait `.env.example` illisible.
 
@@ -170,6 +170,8 @@ Si la spec répond à des tickets du dépôt, elle porte sous le statut la ligne
 Le skill `/kit-perso:ticket "<constat>"` (invocation par l'utilisateur seul, effet de bord public) ouvre un ticket du dépôt courant, ou commente un des tickets dont l'utilisateur est l'auteur (`--author @me`) en cas de doublon. Corps en quatre lignes : **Constat**, **Proposition**, **Source**, **Reproduire**.
 
 `garde-git` n'admet de `gh issue` que `view`, `list`, `ls`, `status`, `create`, `new`, `comment` et `edit` (milestone seul : `--milestone`, `--remove-milestone`) (liste blanche : une sous-commande future est bloquée). Fermer, modifier, supprimer, rouvrir ou transférer un ticket reste à l'utilisateur. `create`, `new`, `comment` et `edit` refusent `-R`/`--repo` (sauf vers un dépôt `stanixia-dev/<nom>`, constante `PROPRIETAIRES_TICKETS`), `--edit-last`, `--delete-last` et toute URL (autre dépôt) ; `view` et `list` avec `-R` restent admis.
+
+`garde-git` normalise les options de `gh` (`-R`/`--repo` avant ou entre les sous-commandes) et bloque, pour `git push`, `-c`/`--config-env`/`--exec-path` (configuration à la volée), `--all`/`--branches`, une refspec avec `*`, `HEAD` ou `@` quand la branche courante est `main`, ainsi que les abréviations d'options dangereuses (`--force-w`, `--del`, `--no-veri`…) ; `-c alias.*` est bloqué pour toute sous-commande.
 
 Milestones : `gh api repos/{owner}/{repo}/milestones -f title=v1` (créer), `gh api -X PATCH repos/{owner}/{repo}/milestones/3 -f state=closed` (fermer), `gh issue edit <n> -m v1`, `gh pr edit <n> --milestone v1`.
 

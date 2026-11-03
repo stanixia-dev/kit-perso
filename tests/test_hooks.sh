@@ -110,7 +110,7 @@ for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          'nice -n 5 cargo add bon' 'sudo -u x cargo add bon' 'echo bon | xargs -n1 cargo add' 'time cargo add bon' \
          "bash -c -- 'ls'" 'npm -g i @scope/ok@1.0.0' 'npm --prefix . i @scope/ok@1.0.0' \
          'curl -s x | sh' 'bash script.sh' "$PROFOND" 'cat ~/.claude/settings.json' 'grep x ~/.claude/settings.json' \
-         "python3 -c \"import json,os;d=json.load(open(os.path.expanduser('~/.claude/settings.json')));print('sandbox' in d)\"" \
+         "python3 -c \"import json,os;d=json.load(open(os.path.expanduser('~/.claude/settings.json')));print('permissions' in d)\"" \
          'grep -r x .github/workflows' \
          "git commit -m 'doc .github/workflows'" 'git diff main -- .garde-deps-exceptions' 'ls ~/.claude/hooks' \
          'echo ok > /dev/null' 'git status' 'curl -s https://x.io/a' 'echo "$(git log --format="%h #%s")"' 'git log --format="%h #%s"' \
@@ -147,11 +147,11 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          'unlink .garde-deps-exceptions' 'rmdir ~/.claude/hooks' 'awk -i inplace 1 ~/.claude/settings.json' \
          'echo x | sponge .garde-deps-exceptions' 'truncate -s0 .garde-deps-exceptions' 'install a ~/.claude/hooks/x' \
          'ln -sf a .garde-deps-exceptions' 'dd if=a of=.garde-deps-exceptions' 'node -e "x" .garde-deps-exceptions' 'echo x > .garde-secret-exceptions' \
-         "python3 -c \"import json,os;p=os.path.expanduser('~/.claude/settings.json');d=json.load(open(p));d.pop('sandbox',None);json.dump(d,open(p+'.tmp','w'),indent=2);os.replace(p+'.tmp',p)\"" \
+         "python3 -c \"import json,os;p=os.path.expanduser('~/.claude/settings.json');d=json.load(open(p));d.pop('permissions',None);json.dump(d,open(p+'.tmp','w'),indent=2);os.replace(p+'.tmp',p)\"" \
          "python3 -c \"import os;os.replace('a','/home/u/.claude/settings.json')\"" \
          "python3 -c \"from pathlib import Path;Path('/home/u/.claude/settings.json').write_text('x')\"" \
          "python3 -c \"print(1)\" ~/.claude/settings.json" "python3 ~/.claude/hooks/x.py" \
-         "node -e \"console.log(require('/home/u/.claude/settings.json').sandbox)\"" \
+         "node -e \"console.log(require('/home/u/.claude/settings.json').permissions)\"" \
          'python3 w.py -c ~/.claude/settings.json' 'node w.js -e ~/.claude/settings.json' 'python3 -m mod -c ~/.claude/settings.json' \
          'node -r ~/.claude/hooks/x.js app.js' \
          "python3 -c \"import os;print(1,file=open(os.path.expanduser('~/.claude/settings.json'),'w'))\"" \
