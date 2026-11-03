@@ -126,13 +126,76 @@ def verifie_gh(toks):
         (r"^release delete\b", "supprimer une release est interdit."),
         (r"^secret\b", "gérer les secrets GitHub est interdit."),
         (r"^variable (set|delete)\b", "modifier les variables GitHub est interdit."),
-        (r"^api\b.*(-X|--method)[ =]?(DELETE|PUT|PATCH)\b", "appel gh api en écriture/suppression interdit."),
     ]
     for motif, raison in regles:
         if re.search(motif, j, re.IGNORECASE):
             bloque(raison)
+    if t and t[0] == "api":
+        verifie_api(t[1:])
     if t and t[0] == "issue":
         verifie_issue(t[1:])
+
+API_VALEURS_LONGUES = {"--header", "--preview", "--jq", "--template", "--cache", "--hostname", "--method",
+                       "--field", "--raw-field", "--input"}
+API_VALEURS_COURTES = "HpqtXfF"
+API_ENDPOINT_MILESTONE = r"repos/(\{owner\}|[\w.-]+)/(\{repo\}|[\w.-]+)/milestones(/\d+)?"
+
+def verifie_api(args):
+    """Liste blanche : lecture libre, écriture limitée aux milestones (POST …/milestones, PATCH …/milestones/<n>)."""
+    pos, methode, champ, fichier, hote = [], None, False, False, None
+    i = 0
+    while i < len(args):
+        a = args[i]
+        opts = []  # (option, valeur)
+        if a.startswith("--"):
+            nom, eq, val = a.partition("=")
+            if nom in API_VALEURS_LONGUES:
+                if not eq:
+                    val = args[i + 1] if i + 1 < len(args) else ""
+                    i += 1
+                opts.append((nom, val))
+        elif a.startswith("-") and len(a) > 1:
+            for k in range(1, len(a)):
+                if a[k] in API_VALEURS_COURTES:
+                    val = a[k + 1:]
+                    if not val:
+                        val = args[i + 1] if i + 1 < len(args) else ""
+                        i += 1
+                    opts.append(("-" + a[k], val))
+                    break
+        else:
+            pos.append(a)
+        i += 1
+        for nom, val in opts:
+            if nom in ("-X", "--method"):
+                methode = val.upper()
+            elif nom == "--hostname":
+                hote = val
+            elif nom == "--input":
+                champ = fichier = True
+            elif nom in ("-f", "--raw-field"):
+                champ = True
+            elif nom in ("-F", "--field"):
+                champ = True
+                if val.partition("=")[2].startswith("@"):
+                    fichier = True
+    if fichier:
+        bloque("gh api : lire un fichier local (--input, -F clé=@fichier) est interdit.")
+    if hote is not None and hote.lower() != "github.com":
+        bloque("gh api : --hostname autre que github.com interdit.")
+    if len(pos) != 1 or "://" in pos[0]:
+        bloque("gh api : un seul endpoint relatif est admis (pas d'URL).")
+    endpoint = pos[0].lstrip("/")
+    if endpoint == "graphql":
+        if any(re.search(r"\bmutation\b", a, re.IGNORECASE) for a in args):
+            bloque("gh api graphql : les mutations sont interdites.")
+        return
+    methode = methode or ("POST" if champ else "GET")
+    if methode in ("GET", "HEAD"):
+        return
+    if not re.fullmatch(API_ENDPOINT_MILESTONE, endpoint) or any(sg in (".", "..") for sg in endpoint.split("/")) \
+       or methode not in ("POST", "PATCH") or (methode == "POST") == bool(re.search(r"/\d+$", endpoint)):
+        bloque("gh api en écriture : seuls POST …/milestones et PATCH …/milestones/<n> sont admis.")
 
 def verifie_issue(args):
     """Allowlist : lecture, création et commentaire ; le reste est réservé à l'utilisateur."""

@@ -138,6 +138,27 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          "php -r 'unlink(\"/home/u/.claude/settings.json\");'"; do
   [ "$(code_deps "$c")" = 2 ] && ok "garde-deps bloque $c" || ko "garde-deps $c"
 done
+# gh api : liste blanche (lecture libre, écriture limitée aux milestones)
+for c in 'gh api -X POST repos/o/r/merges -f base=main -f head=x' 'gh api repos/o/r/merges -f base=main' 'gh api repos/o/r/pulls/1/merge -X PUT' \
+         'gh api -XPATCH repos/o/r/issues/1 -f state=closed' 'gh api --method=patch repos/o/r/pulls/1 -f state=closed' \
+         'gh api -iXPATCH repos/o/r/issues/1 -f state=closed' 'gh api -X DELETE repos/o/r/milestones/1' 'gh api -X PUT repos/o/r/milestones/1' \
+         'gh api -X POST repos/o/r/milestones/1 -f state=closed' 'gh api -X PATCH repos/o/r/milestones -f title=x' \
+         "gh api -H 'Accept: x' repos/o/r/labels -f name=x" 'gh api repos/o/../milestones -f title=x' \
+         'gh api https://api.github.com/repos/o/r/milestones -f title=x' "gh api 'repos/o/r/milestones?x=1' -f title=x" \
+         'gh api --input f repos/o/r/milestones' 'gh api repos/o/r/milestones -F title=@f' 'gh api repos/o/r/milestones -Ftitle=@f' \
+         'gh api -X GET search/issues -F q=@f' 'gh api --hostname evil.example repos/o/r/milestones -f title=x' \
+         'gh api repos/o/r/milestones repos/o/r/merges -f title=x' "gh api graphql -f query='mutation { x }'" \
+         'rtk gh api -X POST repos/o/r/merges -f base=main' "bash -c 'gh api repos/o/r/merges -f base=main'"; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'gh api repos/o/r/milestones' 'rtk gh api repos/o/r/milestones' "gh api --paginate 'repos/{owner}/{repo}/milestones?state=all'" \
+         'gh api -X GET search/issues -f q=repo:o/r' "gh api graphql -f query='query { viewer { login } }'" \
+         "gh api 'repos/{owner}/{repo}/milestones' -f title=v1 -f due_on=2026-12-01T00:00:00Z" \
+         'gh api -X POST repos/stanixia-dev/kit-perso/milestones -f title=v1' "gh api -XPATCH 'repos/{owner}/{repo}/milestones/3' -f state=closed" \
+         'gh api --method=patch /repos/o/r/milestones/3 -f state=closed' \
+         "gh api -H 'Accept: application/vnd.github+json' -X PATCH repos/o/r/milestones/3 -f state=closed"; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 for ch in 'Edit|$HOME/.claude/settings.json' 'Write|/x/.github/workflows/a.yml' 'Write|/x/.garde-deps-exceptions' \
           'MultiEdit|/home/u/proj/.claude/settings.local.json' 'NotebookEdit|/x/.garde-deps-exceptions' 'Edit|/x/.garde-secret-exceptions'; do
   [ "$(code_edit "${ch%%|*}" "$(eval echo "${ch#*|}")")" = 2 ] && ok "garde-deps bloque ${ch%%|*} ${ch#*|}" || ko "garde-deps ${ch}"
