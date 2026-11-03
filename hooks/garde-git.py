@@ -142,7 +142,7 @@ def segments(cmd):
             yield toks, affecte
 
 def commande_interne(toks):
-    """eval … ou bash|sh|zsh|dash -c/-lc … : renvoie la chaîne à ré-analyser (ou None)."""
+    """eval … ou bash|sh|zsh|dash|ksh -c/-lc … : renvoie la chaîne à ré-analyser (ou None)."""
     base = toks[0].rsplit("/", 1)[-1]
     if base == "eval":
         return " ".join(toks[1:])
