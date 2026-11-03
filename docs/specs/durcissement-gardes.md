@@ -57,7 +57,7 @@ Fermer les contournements relevés dans `garde-git` et `garde-secret` (options `
 - [x] Chaque cas « bloqué » ci-dessous sort en 2 et chaque « autorisé » en 0 ; chaque nouveau cas échoue sur `main`.
 - [x] `verifie-manifestes.py --base inexistant` et `garde-secret.py --base inexistant` (CLI) sortent en 2 ; `garde-secret.py --hook pre --depot x` sur une entrée vide sort en 2.
 - [x] `npm i depublie` donne « vérification impossible » : avertissement (0) en local, blocage (2) en `--ci`.
-- [ ] `grep -c 'tests / deps' README.md` vaut 0, `grep -c sandbox tests/test_hooks.sh` vaut 0, version 3.1.2 et entrée CHANGELOG présentes.
+- [x] `grep -c 'tests / deps' README.md` vaut 0, `grep -c sandbox tests/test_hooks.sh` vaut 0, version 3.1.2 et entrée CHANGELOG présentes.
 - [x] `bash tests/test_hooks.sh` sort en 0, sans ligne `ECHEC`.
 
 ## Tests
@@ -99,6 +99,6 @@ Fermer les contournements relevés dans `garde-git` et `garde-secret` (options `
 - [x] L4 — `charge()` : réponse de registre mal formée = « vérification impossible » (étape 9)
   Fichiers : `hooks/deps_communs.py`, `tests/fixtures/garde-deps.json`, `tests/test_hooks.sh`, `tests/test_manifestes.sh`
   Fait quand : cas `depublie` verts en local et en `--ci` — `bash tests/test_hooks.sh`
-- [ ] L5 — README, résidus `sandbox`, version 3.1.2 (étapes 10-12)
+- [x] L5 — README, résidus `sandbox`, version 3.1.2 (étapes 10-12)
   Fichiers : `README.md`, `tests/test_hooks.sh`, `CHANGELOG.md`, `.claude-plugin/plugin.json`
   Fait quand : critère README/version rempli, tests verts — `bash tests/test_hooks.sh && ! grep -q 'tests / deps' README.md && ! grep -q sandbox tests/test_hooks.sh`
