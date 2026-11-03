@@ -154,6 +154,9 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          "python3 -c \"print(1)\" ~/.claude/settings.json" "python3 ~/.claude/hooks/x.py" \
          'python3 ~/.claude/plugins/cache/k/3.1.0/skills/ci-projet/genere-ci.py ~/.claude/settings.json' \
          'python3 ~/.claude/plugins/cache/k/x.py > ~/.claude/settings.json' \
+         'python3 ~/.claude/plugins/../hooks/x.py' 'python3 ~/.claude/plugins/x/../../hooks/garde-deps.py' \
+         'python3 ~/.claude/plugins/x/../../settings.local.json' 'python3 ./.claude/plugins/x.py' \
+         'git clone https://x.io/r ~/.claude/plugins/evil' 'git worktree add ~/.claude/hooks/w' 'git init ~/.claude/plugins/evil' \
          "node -e \"console.log(require('/home/u/.claude/settings.json').sandbox)\"" \
          'python3 w.py -c ~/.claude/settings.json' 'node w.js -e ~/.claude/settings.json' 'python3 -m mod -c ~/.claude/settings.json' \
          'node -r ~/.claude/hooks/x.js app.js' \

@@ -239,7 +239,7 @@ MOTIFS = (".claude/settings", ".claude/hooks", ".claude/plugins", ".github/workf
 ECRIVAINS = {"cp", "mv", "rm", "ln", "install", "rsync", "dd", "truncate", "tee", "touch", "chmod", "chown", "patch",
              "tar", "unzip", "unlink", "rmdir", "sponge"}
 INTERPRETES = re.compile(r"(python[\d.]*|node|ruby|perl|php|deno|bun)")
-GIT_ECRIT = {"checkout", "restore", "rm", "mv", "apply", "am", "clean"}
+GIT_ECRIT = {"checkout", "restore", "rm", "mv", "apply", "am", "clean", "clone", "worktree", "init"}
 GIT_OPT_VALEUR = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
 
 def developpe(t):
@@ -291,9 +291,10 @@ def sous_commande_git(args):
     return args[i] if i < len(args) else ""
 
 def script_du_plugin(t):
-    """Vrai pour un script sous `.claude/plugins` (plugin installé) et aucun autre chemin protégé."""
+    """Vrai pour un script réellement situé sous ~/.claude/plugins (`..` et liens résolus) et sans autre chemin protégé."""
     t = developpe(t)
-    return not t.startswith("-") and ".claude/plugins/" in t and \
+    racine = os.path.realpath(os.path.join(os.path.expanduser("~"), ".claude", "plugins")) + os.sep
+    return not t.startswith("-") and os.path.realpath(t).startswith(racine) and \
         not any(m in t for m in MOTIFS if m != ".claude/plugins")
 
 def ecriture_protegee(toks):
