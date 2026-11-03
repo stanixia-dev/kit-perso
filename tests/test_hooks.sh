@@ -76,6 +76,13 @@ done
 for c in 'echo ok | bash' 'gh pr view 1 | cat' 'echo \"\\`gh pr merge\\`\"' 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nx gh pr merge\ngit push origin main\nEOF\n)\"'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
+for c in 'eval \"$(cat <<'"'"'X'"'"'\ngh pr merge 1\nX\n)\"' 'bash -c \"$(cat <<'"'"'X'"'"'\ngh pr merge 1\nX\n)\"' "watch 'gh pr merge 1'" "flock f -c 'gh pr merge 1'" \
+         "find . -exec sh -c 'gh pr merge 1' \\\;" 'echo \"<<'"'"'X'"'"'\"\ngh pr merge 1\nX' "bash -c 'echo gh'" "echo gh | xargs sh -c 'gh pr merge 1'"; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nx gh pr merge\nEOF\n)\"' 'watch -n1 git status' "gh api repos/o/r/rulesets --jq '.[] // empty'"; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 for c in 'gh issue create -t x -F f' 'gh issue comment 9 -F f' 'gh issue view 1 -R stanixia-dev/Hive' 'gh issue list --author @me --state open'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done

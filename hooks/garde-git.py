@@ -70,6 +70,10 @@ def saute_prefixes(toks):
                 toks = toks[2:] if toks[0] in valeurs else toks[1:]
             if nom in PREFIXES_POSITIONNEL and toks:  # durée, priorité, masque, fichier
                 toks = toks[1:]
+            if nom == "flock" and toks and toks[0] in ("-c", "--command"):
+                toks = ["sh"] + toks  # flock f -c 'chaîne' : exécuteur de chaîne
+            elif nom == "watch" and toks:
+                toks = ["sh", "-c", " ".join(toks)]  # watch passe par sh -c
         elif nom == "rtk" or (t in ("bypass", "proxy") and len(toks) > 1):
             toks = toks[1:]
         else:
@@ -79,12 +83,12 @@ def saute_prefixes(toks):
 def aplatit(cmd):
     """Transforme $( ), backticks et parenthèses (hors guillemets) en séparateurs `;`.
     `\\x` hors guillemets simples est littéral ; le corps d'un heredoc à délimiteur entre guillemets est ignoré."""
-    out, q, i, delim = [], None, 0, None
+    out, q, i, delim, subst = [], None, 0, None, False
     while i < len(cmd):
         c = cmd[i]
         if q != "'" and c == "\\":
             out.append(cmd[i:i + 2]); i += 2; continue
-        if q != "'":
+        if q is None or (q == '"' and subst):
             m = re.match(r"<<-?\s*(['\"])(\w+)\1", cmd[i:])
             if m:
                 delim = (m.group(2), cmd[i:].startswith("<<-"))
@@ -99,7 +103,7 @@ def aplatit(cmd):
             delim = None
             continue
         if q != "'" and cmd.startswith("$(", i):
-            out.append("$;"); i += 2; continue  # garde le `$` (vu par gh api graphql)
+            out.append("$;"); i += 2; subst = True; continue  # garde le `$` (vu par gh api graphql)
         if q != "'" and c == "`":
             out.append("`;")
         elif q is None and c in "()":
@@ -116,6 +120,9 @@ def aplatit(cmd):
 def segments(cmd):
     # Découpe sur ; && || | & et retours ligne (approximatif mais suffisant)
     for seg in re.split(r"\|\||&&|[;|&\n]", aplatit(cmd)):
+        seg = seg.rstrip()
+        if seg.endswith("\\"):
+            seg = seg[:-1]  # `\;` de find -exec (le `;` a servi de séparateur)
         try:
             toks = shlex.split(seg)
         except ValueError:
@@ -346,8 +353,25 @@ def verifie_issue(args):
 
 MOT_LIVRE = re.compile(r"\bgh\b|\bgit\s+push\b")
 
+CMD_BRUT = ""
+
+def est_executeur(toks):
+    """eval, ou shell lancé avec -c/-lc, -s, une redirection << ou sans script (donc alimenté par stdin)."""
+    base = toks[0].rsplit("/", 1)[-1]
+    if base == "eval":
+        return True
+    if base in ("bash", "sh", "zsh", "dash"):
+        pos = [t for t in toks[1:] if not t.startswith("-")]
+        return commande_interne(toks) is not None or "-s" in toks or any(t.startswith("<<") for t in toks) or not pos \
+            or any(re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", t) for t in toks[1:])
+    return False
+
 def verifie_segment(toks, affecte, cwd, profondeur):
     base = toks[0].rsplit("/", 1)[-1]
+    if est_executeur(toks) and MOT_LIVRE.search(CMD_BRUT):
+        # règle simple : le texte brut est contrôlé (heredocs compris), faux positifs admis (ex. bash -c 'echo gh')
+        bloque("exécuteur de chaîne (eval, bash -c, shell sur stdin, watch, flock -c…) dans une commande contenant `gh` ou `git push` : "
+               "lance la commande directement.")
     if base == "git":
         sc, args_sc = sous_commande(toks)
         refuse_affectation("git", sc, affecte)
@@ -380,10 +404,6 @@ def analyse(cmd, cwd, profondeur, affecte_parent=False):
             # suit les `cd <dossier> && …` (worktrees)
             cwd = resout(cwd, toks[1] if len(toks) > 1 else os.path.expanduser("~"))
             continue
-        if base in ("bash", "sh", "zsh", "dash") and commande_interne(toks) is None and MOT_LIVRE.search(cmd):
-            pos = [t for t in toks[1:] if not t.startswith("-")]
-            if any(t.startswith("<<") for t in toks) or not pos or "-s" in toks:
-                bloque("shell alimenté par l'entrée standard (pipe, heredoc, <<<) avec `gh` ou `git push` : interdit, lance la commande directement.")
         verifie_segment(toks, affecte or affecte_parent, cwd, profondeur)
 
 CWD_SESSION = None
@@ -393,6 +413,8 @@ def main():
     data = json.load(sys.stdin)
     cmd = (data.get("tool_input") or {}).get("command", "")
     cwd = CWD_SESSION = data.get("cwd") or None
+    global CMD_BRUT
+    CMD_BRUT = cmd
     segs = list(segments(cmd))
     livre = any((t[0].rsplit("/", 1)[-1] == "gh") or (t[0].rsplit("/", 1)[-1] == "git" and sous_commande(t)[0] == "push") for t, _ in segs)
     if livre and any(t[0] in ("export", "declare", "typeset") for t, _ in segs):

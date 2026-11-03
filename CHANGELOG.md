@@ -2,7 +2,7 @@
 
 ## 3.0.1 — 2026-11-03
 
-- garde-git détecte `gh` et `git push` derrière `timeout`, `nice`, `xargs`, `sudo`, `stdbuf`, `env`, `command`, `eval`, `bash -c`, un sous-shell `( )`, `$( )` ou des backticks, ainsi que derrière `exec -a`, `setsid`, `ionice`, `doas`, `chrt`, `taskset`, `flock`, `unbuffer`, `watch` et `find -exec` ; une affectation devant `eval`/`bash -c` reste refusée ; un shell alimenté par l'entrée standard (pipe, heredoc, `<<<`) avec `gh` ou `git push` est bloqué ; les heredocs à délimiteur entre guillemets et `\x` sont ignorés.
+- garde-git détecte `gh` et `git push` derrière `timeout`, `nice`, `xargs`, `sudo`, `stdbuf`, `env`, `command`, `eval`, `bash -c`, un sous-shell `( )`, `$( )` ou des backticks, ainsi que derrière `exec -a`, `setsid`, `ionice`, `doas`, `chrt`, `taskset`, `flock`, `unbuffer`, `watch` et `find -exec` ; une affectation devant `eval`/`bash -c` reste refusée ; un shell alimenté par l'entrée standard (pipe, heredoc, `<<<`) avec `gh` ou `git push` est bloqué ; les heredocs à délimiteur entre guillemets et `\x` sont ignorés. Règle simple pour les exécuteurs de chaîne (`eval`, `bash|sh|zsh|dash -c`/`-s`/stdin, `watch`, `flock -c`, `find -exec sh -c`, `xargs sh`) : le texte brut de la commande entière est bloqué s'il contient le mot `gh` ou `git push` ; faux positifs admis (ex. `bash -c 'echo gh'` est bloqué).
 
 ## 3.0.0 — 2026-11-03
 
