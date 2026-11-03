@@ -159,6 +159,18 @@ for c in 'gh api repos/o/r/milestones' 'rtk gh api repos/o/r/milestones' "gh api
          "gh api -H 'Accept: application/vnd.github+json' -X PATCH repos/o/r/milestones/3 -f state=closed"; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
+for c in 'gh issue edit 9 --milestone v1 -t x' 'gh issue edit 9 --add-label x' 'gh issue edit 9' 'gh issue edit 9 -m v1 -R o/r' \
+         'gh issue edit https://github.com/o/r/issues/9 -m v1' 'gh issue create -R autre/r -t x' 'gh issue -R o/r create -t x' \
+         'gh issue create -wRstanixia-dev/kit-perso -t x' 'gh issue create -R stanixia-dev/.. -t x' 'gh issue create -R stanixia-dev/a/b -t x' \
+         'gh issue create -R stanixia-dev -t x' 'gh issue create -R github.com/stanixia-dev/kit-perso -t x'; do
+  [ "$(code_garde "$c")" = 2 ] && ok "garde-git bloque $c" || ko "garde-git $c"
+done
+for c in 'gh issue edit 9 --milestone v1' 'gh issue edit 9 10 -m v1' 'gh issue edit 9 --milestone=v1' 'gh issue edit 9 --remove-milestone' \
+         'gh issue edit 9 -m v1 -R stanixia-dev/kit-perso' 'gh issue create -R stanixia-dev/kit-perso -t x -b y' \
+         'gh issue create --repo=STANIXIA-DEV/kit-perso -t x' 'gh issue comment 5 -Rstanixia-dev/kit-perso -b x' \
+         'gh issue -R stanixia-dev/kit-perso create -t x' 'gh issue create -R stanixia-dev/Hive -t x' 'gh pr edit 3 --milestone v1'; do
+  [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
 for ch in 'Edit|$HOME/.claude/settings.json' 'Write|/x/.github/workflows/a.yml' 'Write|/x/.garde-deps-exceptions' \
           'MultiEdit|/home/u/proj/.claude/settings.local.json' 'NotebookEdit|/x/.garde-deps-exceptions' 'Edit|/x/.garde-secret-exceptions'; do
   [ "$(code_edit "${ch%%|*}" "$(eval echo "${ch#*|}")")" = 2 ] && ok "garde-deps bloque ${ch%%|*} ${ch#*|}" || ko "garde-deps ${ch}"

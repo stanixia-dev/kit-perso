@@ -160,11 +160,13 @@ Si la spec répond à des tickets du dépôt, elle porte sous le statut la ligne
 
 Le skill `/kit-perso:ticket "<constat>"` (invocation par l'utilisateur seul, effet de bord public) ouvre un ticket du dépôt courant, ou commente un des tickets dont l'utilisateur est l'auteur (`--author @me`) en cas de doublon. Corps en quatre lignes : **Constat**, **Proposition**, **Source**, **Reproduire**.
 
-`garde-git` n'admet de `gh issue` que `view`, `list`, `ls`, `status`, `create`, `new` et `comment` (liste blanche : une sous-commande future est bloquée). Fermer, modifier, supprimer, rouvrir ou transférer un ticket reste à l'utilisateur. `create`, `new` et `comment` refusent `-R`/`--repo`, `--edit-last`, `--delete-last` et toute URL (autre dépôt) ; `view` et `list` avec `-R` restent admis.
+`garde-git` n'admet de `gh issue` que `view`, `list`, `ls`, `status`, `create`, `new`, `comment` et `edit` (milestone seul : `--milestone`, `--remove-milestone`) (liste blanche : une sous-commande future est bloquée). Fermer, modifier, supprimer, rouvrir ou transférer un ticket reste à l'utilisateur. `create`, `new`, `comment` et `edit` refusent `-R`/`--repo` (sauf vers un dépôt `stanixia-dev/<nom>`, constante `PROPRIETAIRES_TICKETS`), `--edit-last`, `--delete-last` et toute URL (autre dépôt) ; `view` et `list` avec `-R` restent admis.
+
+Milestones : `gh api repos/{owner}/{repo}/milestones -f title=v1` (créer), `gh api -X PATCH repos/{owner}/{repo}/milestones/3 -f state=closed` (fermer), `gh issue edit <n> -m v1`, `gh pr edit <n> --milestone v1`.
 
 `garde-git` bloque aussi `gh repo set-default` et `gh alias set|import`, et `create` refuse `--parent`, `--blocking` et `--blocked-by`.
 
-Résiduels : `cd` vers un autre dépôt avant `gh issue create` ; `gh api` en POST (échoue faute de jeton dans le bac à sable, mais pas sans lui) ; l'auteur du ticket commenté n'est pas vérifié par un hook (règle du skill).
+Résiduels : `cd` vers un autre dépôt avant `gh issue create` ; `gh api` : lecture libre, écriture limitée aux milestones de tout dépôt accessible au jeton ; l'auteur du ticket commenté n'est pas vérifié par un hook (règle du skill).
 
 ## Bascule depuis ~/.claude
 

@@ -4,6 +4,7 @@ Sortie 2 + message sur stderr = commande refusée, raison renvoyée à Claude.""
 import json, os, re, shlex, subprocess, sys
 
 PROTEGEES = {"main", "master"}
+PROPRIETAIRES_TICKETS = {"stanixia-dev"}  # comptes dont les dépôts sont admis pour -R (create/comment/edit)
 
 def bloque(raison):
     print(f"⛔ Bloqué par garde-git : {raison}", file=sys.stderr)
@@ -197,29 +198,70 @@ def verifie_api(args):
        or methode not in ("POST", "PATCH") or (methode == "POST") == bool(re.search(r"/\d+$", endpoint)):
         bloque("gh api en écriture : seuls POST …/milestones et PATCH …/milestones/<n> sont admis.")
 
+def depot_admis(depot):
+    """`<proprio>/<nom>` exact, proprio dans PROPRIETAIRES_TICKETS (casse ignorée)."""
+    parts = depot.split("/")
+    return len(parts) == 2 and parts[0].lower() in PROPRIETAIRES_TICKETS \
+        and re.fullmatch(r"[\w.-]+", parts[1]) is not None and parts[1] not in (".", "..")
+
 def verifie_issue(args):
-    """Allowlist : lecture, création et commentaire ; le reste est réservé à l'utilisateur."""
-    sc, i = "", 0
+    """Allowlist : lecture, création, commentaire et milestone ; le reste est réservé à l'utilisateur."""
+    sc, idx, i = "", -1, 0
     while i < len(args):
         a = args[i]
         if a in ("-R", "--repo"):
             i += 2; continue
         if not a.startswith("-"):
-            sc = a; break
+            sc, idx = a, i; break
         i += 1
-    if sc not in ("view", "list", "ls", "status", "create", "new", "comment"):
+    if sc not in ("view", "list", "ls", "status", "create", "new", "comment", "edit"):
         bloque("fermer, modifier ou supprimer un ticket est réservé à l'utilisateur.")
-    if sc in ("create", "new", "comment"):
-        for a in args:
+    if sc in ("create", "new", "comment", "edit"):
+        i = 0
+        while i < len(args):
+            a = args[i]
             nom = a.split("=", 1)[0]
-            if nom == "--repo" or re.match(r"^-[A-Za-z]*R", a):
+            depot = None
+            if a == "-R" or nom == "--repo":
+                if nom == "--repo" and "=" in a:
+                    depot = a.split("=", 1)[1]
+                else:
+                    depot = args[i + 1] if i + 1 < len(args) else ""
+                    i += 1
+            elif a.startswith("-R"):
+                depot = a[2:]
+            elif re.match(r"^-[A-Za-z]+R", a):
                 bloque("ticket hors du dépôt courant interdit (-R/--repo).")
+            if depot is not None:
+                if not depot_admis(depot):
+                    bloque("ticket hors du dépôt courant interdit (-R/--repo), sauf <" + "|".join(sorted(PROPRIETAIRES_TICKETS)) + ">/<dépôt>.")
+                i += 1; continue
             if nom in ("--edit-last", "--delete-last"):
                 bloque(f"`gh issue {sc} {a}` interdit : modifier ou supprimer un commentaire est réservé à l'utilisateur.")
             if sc in ("create", "new") and nom in ("--parent", "--blocking", "--blocked-by"):
                 bloque(f"`gh issue {sc} {nom}` interdit : lier un ticket d'un autre dépôt est réservé à l'utilisateur.")
             if "://" in a or a.lower().startswith("github.com/"):
                 bloque("ticket hors du dépôt courant interdit (une URL vise un autre dépôt).")
+            i += 1
+    if sc == "edit":
+        rest, milestone, i = args[idx + 1:], False, 0
+        while i < len(rest):
+            a = rest[i]
+            if re.fullmatch(r"\d+", a):
+                pass
+            elif a in ("-m", "--milestone"):
+                milestone = True; i += 1
+            elif a == "--remove-milestone" or a.startswith(("--milestone=", "-m")):
+                milestone = True
+            elif a in ("-R", "--repo"):
+                i += 1
+            elif a.startswith(("-R", "--repo=")):
+                pass
+            else:
+                bloque("gh issue edit : seul le milestone est modifiable.")
+            i += 1
+        if not milestone:
+            bloque("gh issue edit : seul le milestone est modifiable (--milestone ou --remove-milestone requis).")
 
 CWD_SESSION = None
 

