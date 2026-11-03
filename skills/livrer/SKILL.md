@@ -16,6 +16,8 @@ Livre la branche courante : $ARGUMENTS (chemin de la spec, facultatif).
    - Comment tester
    - Spec (lien vers le chemin donné en argument ; s'il n'existe plus, vers `docs/specs/archives/<même nom>`)
 
+   - Tickets, seulement si la spec porte une ligne `Tickets : #a, #b` : une ligne `Closes #a` par ticket si la spec est archivée (PR qui la termine), sinon `Refs #a`
+
    Termine le corps par la ligne d'attribution demandée par le contexte, si elle existe.
 5. Suis la CI : `gh pr checks --watch --interval 20` (délai Bash de 10 min). Si gh ne signale aucun check, relance une fois après quelques secondes ; sinon, dis que la CI ne s'est pas déclenchée. Si elle est rouge, donne le check en échec et les 30 dernières lignes de `gh run view <id> --log-failed` (id via `gh run list --branch <branche> -L 1`), sans corriger : l'utilisateur décide.
 6. Termine par l'état de la CI, le lien de la PR, un résumé en 3 lignes et le rappel de faire `/clear`. Ne commence pas d'autre tâche.

@@ -1,6 +1,6 @@
 # kit-perso
 
-Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, garde-secret, rappel-clear) et les skills (livrer) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
+Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, garde-secret, rappel-clear) et les skills (livrer, ticket) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
 
 ## Installation
 
@@ -17,7 +17,7 @@ Ou en deux temps dans une session :
 /plugin install kit-perso@kit-perso
 ```
 
-Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 1 skill, 5 hooks (PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; le skill `/kit-perso:livrer`.
+Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 2 skills, 5 hooks (PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; les skills `/kit-perso:livrer` et `/kit-perso:ticket`.
 
 ## Mise à jour
 
@@ -133,7 +133,7 @@ Chaque commande Bash de l'agent tourne dans le bac à sable système de Claude C
 
 - **Prérequis** : `bubblewrap` (présent) et `socat` (`apt install socat`). Sans `socat`, `failIfUnavailable: true` empêche Claude Code de démarrer : installer `socat` avant de fusionner.
 - **Fusion** : copier la clé `sandbox` de `config/bac-a-sable.json` dans `~/.claude/settings.json` (ou l'essayer avec `claude --settings config/bac-a-sable.json`). Mode strict : `dangerouslyDisableSandbox` est ignoré ; pas d'approbation automatique (`autoAllowBashIfSandboxed: false`).
-- **Exclusions** (hors bac à sable, car elles ont besoin des identifiants) : `git push`, `gh pr create|view|list|checks|diff`, `gh run view|list`, `gh issue view|list`, avec ou sans préfixe `rtk`. `gh api`, `gh gist` et `gh repo` échouent faute de jeton : élargir la liste dans `~/.claude/settings.json` au besoin. Les hooks durcissent ces commandes : `garde-git` refuse `git push --receive-pack|--exec` et toute affectation de variable devant `git push` ou `gh` (`GIT_SSH_COMMAND=…`) ; `garde-secret` résout les arguments qui désignent un fichier (liens compris) et refuse ceux qui mènent à un chemin protégé.
+- **Exclusions** (hors bac à sable, car elles ont besoin des identifiants) : `git push`, `gh pr create|view|list|checks|diff`, `gh run view|list`, `gh issue view|list|create|comment`, avec ou sans préfixe `rtk`. `gh api`, `gh gist` et `gh repo` échouent faute de jeton : élargir la liste dans `~/.claude/settings.json` au besoin. Les hooks durcissent ces commandes : `garde-git` refuse `git push --receive-pack|--exec` et toute affectation de variable devant `git push` ou `gh` (`GIT_SSH_COMMAND=…`) ; `garde-secret` résout les arguments qui désignent un fichier (liens compris) et refuse ceux qui mènent à un chemin protégé.
 - **Hooks du dépôt** : au `git push`, les hooks du dépôt courant (`.git/hooks/pre-push`, `core.hooksPath`) s'exécutent hors bac à sable. Leur protection d'office n'est pas vérifiée ; la sonde le dira. `garde-git` refuse en outre un dépôt cible local (chemin, `file://`, `ext::`) et les abréviations de `--receive-pack|--exec`.
 - **Réseau** : liste blanche GitHub, crates.io, npm, PyPI et OSV (pour `verifie-manifestes.py`). Les jetons `GH_TOKEN` et `GITHUB_TOKEN` sont masqués. Podman n'est pas exclu : le lancer avec le préfixe `!`.
 - **Sonde** : demander à l'agent de lancer `bash tests/sonde-bac-a-sable.sh` (`--liste` affiche les contrôles) ; attendu : `SONDE : 0 trou(s)`.
@@ -142,14 +142,29 @@ Chaque commande Bash de l'agent tourne dans le bac à sable système de Claude C
 
 ## Flux avec lots
 
-À utiliser quand la spec se découpe en lots testables séparément ; sinon, le flux reste inchangé. Le format est l'item 8 de `agents/specs.md`.
+À utiliser quand la spec se découpe en lots testables séparément ; sinon, le flux reste inchangé. Le format est l'item Lots de `agents/specs.md`.
 
-- Un lot = un commit vert sur `claude/<sujet>`, coché dans la spec ; une seule PR ; un seul relecteur, à la fin.
+- Un lot = un ou plusieurs commits verts suffixés `(L<n>)` sur `claude/<sujet>`, case cochée dans le dernier ; une seule PR ; un seul relecteur, à la fin. Un fichier imprévu mais nécessaire est ajouté à la ligne `Fichiers :` du lot (mineur pour le relecteur) ; les lockfiles et la config d'outil touchés sont listés d'avance.
+- `> Coupure PR` se place là où une PR doit s'arrêter (obligatoire au-delà de 5 lots) ; si le brief arrête le codeur avant la prochaine coupure, il l'ajoute après le dernier lot traité. Le relecteur ignore le brief : le périmètre de la PR vient des cases et des coupures de la spec à HEAD.
 - Avec `> Coupure PR` : livrer la première PR, attendre que l'utilisateur la fusionne, faire `/clear`, puis créer `claude/<sujet>-2` depuis `main` à jour ; le codeur reprend aux lots non cochés (les cases cochées sont arrivées dans `main` avec la fusion).
 
 ## Clôture et archivage
 
 Toute spec porte sous son titre `Statut : en cours`. Dans le commit de son dernier lot (ou son dernier commit, sans lots), le codeur coche les critères d'acceptation remplis, passe la ligne à `Statut : livrée` et déplace la spec dans `docs/specs/archives/`. Avec `> Coupure PR`, seule la dernière PR archive. Le relecteur vérifie statut, cases et emplacement ; `livrer` lie la spec archivée.
+
+Le statut n'a que deux valeurs, `en cours` et `livrée`. La validation de la spec est le feu vert de l'utilisateur à l'orchestrateur, pas un état : on n'écrit ni `validée` ni date. Le relecteur bloque toute autre valeur.
+
+## Tickets
+
+Si la spec répond à des tickets du dépôt, elle porte sous le statut la ligne `Tickets : #9, #10`. `livrer` ajoute alors au corps de la PR une section « Tickets » : `Closes #n` pour la PR qui termine la spec (archivée), `Refs #n` pour les autres ; GitHub ferme les tickets à la fusion.
+
+Le skill `/kit-perso:ticket "<constat>"` (invocation par l'utilisateur seul, effet de bord public) ouvre un ticket du dépôt courant, ou commente un des tickets dont l'utilisateur est l'auteur (`--author @me`) en cas de doublon. Corps en quatre lignes : **Constat**, **Proposition**, **Source**, **Reproduire**.
+
+`garde-git` n'admet de `gh issue` que `view`, `list`, `ls`, `status`, `create`, `new` et `comment` (liste blanche : une sous-commande future est bloquée). Fermer, modifier, supprimer, rouvrir ou transférer un ticket reste à l'utilisateur. `create`, `new` et `comment` refusent `-R`/`--repo`, `--edit-last`, `--delete-last` et toute URL (autre dépôt) ; `view` et `list` avec `-R` restent admis.
+
+`garde-git` bloque aussi `gh repo set-default` et `gh alias set|import`, et `create` refuse `--parent`, `--blocking` et `--blocked-by`.
+
+Résiduels : `cd` vers un autre dépôt avant `gh issue create` ; `gh api` en POST (échoue faute de jeton dans le bac à sable, mais pas sans lui) ; l'auteur du ticket commenté n'est pas vérifié par un hook (règle du skill).
 
 ## Bascule depuis ~/.claude
 

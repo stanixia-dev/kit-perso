@@ -121,6 +121,8 @@ def verifie_gh(toks):
         (r"^pr review\b.*(--approve|-a\b)", "approuver une PR est interdit."),
         (r"^pr close\b", "fermer une PR est réservé à l'utilisateur."),
         (r"^repo (delete|edit|archive|rename)\b", "modifier/supprimer un dépôt est interdit."),
+        (r"^repo set-default\b", "changer le dépôt par défaut de gh est interdit (les tickets viseraient un autre dépôt)."),
+        (r"^alias (set|import)\b", "définir un alias gh est interdit (contourne les contrôles)."),
         (r"^release delete\b", "supprimer une release est interdit."),
         (r"^secret\b", "gérer les secrets GitHub est interdit."),
         (r"^variable (set|delete)\b", "modifier les variables GitHub est interdit."),
@@ -129,6 +131,32 @@ def verifie_gh(toks):
     for motif, raison in regles:
         if re.search(motif, j, re.IGNORECASE):
             bloque(raison)
+    if t and t[0] == "issue":
+        verifie_issue(t[1:])
+
+def verifie_issue(args):
+    """Allowlist : lecture, création et commentaire ; le reste est réservé à l'utilisateur."""
+    sc, i = "", 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-R", "--repo"):
+            i += 2; continue
+        if not a.startswith("-"):
+            sc = a; break
+        i += 1
+    if sc not in ("view", "list", "ls", "status", "create", "new", "comment"):
+        bloque("fermer, modifier ou supprimer un ticket est réservé à l'utilisateur.")
+    if sc in ("create", "new", "comment"):
+        for a in args:
+            nom = a.split("=", 1)[0]
+            if nom == "--repo" or re.match(r"^-[A-Za-z]*R", a):
+                bloque("ticket hors du dépôt courant interdit (-R/--repo).")
+            if nom in ("--edit-last", "--delete-last"):
+                bloque(f"`gh issue {sc} {a}` interdit : modifier ou supprimer un commentaire est réservé à l'utilisateur.")
+            if sc in ("create", "new") and nom in ("--parent", "--blocking", "--blocked-by"):
+                bloque(f"`gh issue {sc} {nom}` interdit : lier un ticket d'un autre dépôt est réservé à l'utilisateur.")
+            if "://" in a or a.lower().startswith("github.com/"):
+                bloque("ticket hors du dépôt courant interdit (une URL vise un autre dépôt).")
 
 CWD_SESSION = None
 
