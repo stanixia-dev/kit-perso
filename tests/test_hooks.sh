@@ -112,6 +112,7 @@ for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          'curl -s x | sh' 'bash script.sh' "$PROFOND" 'cat ~/.claude/settings.json' 'grep x ~/.claude/settings.json' \
          "python3 -c \"import json,os;d=json.load(open(os.path.expanduser('~/.claude/settings.json')));print('permissions' in d)\"" \
          'grep -r x .github/workflows' \
+         'python3 ~/.claude/plugins/cache/k/3.1.0/skills/ci-projet/genere-ci.py 2>&1 | tail -5' \
          "git commit -m 'doc .github/workflows'" 'git diff main -- .garde-deps-exceptions' 'ls ~/.claude/hooks' \
          'echo ok > /dev/null' 'git status' 'curl -s https://x.io/a' 'echo "$(git log --format="%h #%s")"' 'git log --format="%h #%s"' \
          'wget -q https://x.io/a' 'awk 1 ~/.claude/settings.json' 'sed -n 1p ~/.claude/settings.json' 'cp a b'; do
@@ -151,6 +152,11 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          "python3 -c \"import os;os.replace('a','/home/u/.claude/settings.json')\"" \
          "python3 -c \"from pathlib import Path;Path('/home/u/.claude/settings.json').write_text('x')\"" \
          "python3 -c \"print(1)\" ~/.claude/settings.json" "python3 ~/.claude/hooks/x.py" \
+         'python3 ~/.claude/plugins/cache/k/3.1.0/skills/ci-projet/genere-ci.py ~/.claude/settings.json' \
+         'python3 ~/.claude/plugins/cache/k/x.py > ~/.claude/settings.json' \
+         'python3 ~/.claude/plugins/../hooks/x.py' 'python3 ~/.claude/plugins/x/../../hooks/garde-deps.py' \
+         'python3 ~/.claude/plugins/x/../../settings.local.json' 'python3 ./.claude/plugins/x.py' \
+         'git clone https://x.io/r ~/.claude/plugins/evil' 'git worktree add ~/.claude/hooks/w' 'git init ~/.claude/plugins/evil' \
          "node -e \"console.log(require('/home/u/.claude/settings.json').permissions)\"" \
          'python3 w.py -c ~/.claude/settings.json' 'node w.js -e ~/.claude/settings.json' 'python3 -m mod -c ~/.claude/settings.json' \
          'node -r ~/.claude/hooks/x.js app.js' \
