@@ -116,14 +116,16 @@ def retire_heredocs(s):
 
 def substitutions(s, apostrophes=True):
     """Corps des $( … ), <( … ), >( … ) et `…` hors apostrophes (ils s'exécutent aussi entre guillemets doubles)."""
-    out, i, n, sq = [], 0, len(s), False
+    out, i, n, sq, dq = [], 0, len(s), False, False
     while i < n:
         c = s[i]
         if sq:
             sq = c != "'"
         elif c == "\\":
             i += 1
-        elif c == "'" and apostrophes:
+        elif c == '"':
+            dq = not dq
+        elif c == "'" and apostrophes and not dq:
             sq = True
         elif c == "`":
             j = i + 1
@@ -297,6 +299,24 @@ def script_du_plugin(t):
     return not t.startswith("-") and os.path.realpath(t).startswith(racine) and \
         not any(m in t for m in MOTIFS if m != ".claude/plugins")
 
+def sans_script(args):
+    """Arguments d'un `sed` sans son script (valeur de -e/--expression, sinon premier argument non-option)."""
+    out, i, e = [], 0, False
+    while i < len(args):
+        a = args[i]
+        if a == "--expression" or re.fullmatch(r"-[A-Za-z]*e", a):
+            e, i = True, i + 2
+        elif a.startswith("--expression=") or re.match(r"-e", a):
+            e, i = True, i + 1
+        else:
+            out.append(a)
+            i += 1
+    if not e:
+        k = next((j for j, a in enumerate(out) if not a.startswith("-")), None)
+        if k is not None:
+            del out[k]
+    return out
+
 def ecriture_protegee(toks):
     """Le premier argument protégé d'un segment qui écrit (écrivain connu), sinon None."""
     base, args = toks[0].rsplit("/", 1)[-1], toks[1:]
@@ -307,6 +327,8 @@ def ecriture_protegee(toks):
         ecrit = sous_commande_git(args) in GIT_ECRIT
     elif base == "sed":
         ecrit = any(a.startswith("--in-place") or re.match(r"^-[A-Za-z]*i", a) for a in args)
+        if ecrit:
+            args = sans_script(args)  # le script n'est pas une cible d'écriture, seuls les fichiers le sont
     elif base == "curl":
         ecrit = any(a.startswith("--output") or re.match(r"^-[A-Za-z]*o", a) for a in args)
     elif base == "wget":
@@ -475,7 +497,15 @@ def paquets(toks):
         toks = [toks[0]] + saute_options(toks, SAUTE["npm"])
         sc = toks[1] if len(toks) > 1 else ""
     res = []
-    if base == "cargo" and sc == "add":
+    if base == "find":  # `-exec cmd … ;` / `+` : la commande exécutée est analysée comme une commande
+        for i, t in enumerate(toks):
+            if t in ("-exec", "-execdir", "-ok", "-okdir"):
+                sub = toks[i + 1:]
+                fin = next((j for j, a in enumerate(sub) if a in (";", "+")), len(sub))
+                sub = sans_prefixe(sub[:fin])
+                if sub:
+                    res += paquets(sub)
+    elif base == "cargo" and sc == "add":
         if any(a in ("--git", "--path") or a.startswith(("--git=", "--path=")) for a in toks):
             return []
         for t in arguments(toks[2:], SAUTE["cargo"]):
