@@ -239,7 +239,7 @@ MOTIFS = (".claude/settings", ".claude/hooks", ".claude/plugins", ".github/workf
 ECRIVAINS = {"cp", "mv", "rm", "ln", "install", "rsync", "dd", "truncate", "tee", "touch", "chmod", "chown", "patch",
              "tar", "unzip", "unlink", "rmdir", "sponge"}
 INTERPRETES = re.compile(r"(python[\d.]*|node|ruby|perl|php|deno|bun)")
-GIT_ECRIT = {"checkout", "restore", "rm", "mv", "apply", "am", "clean"}
+GIT_ECRIT = {"checkout", "restore", "rm", "mv", "apply", "am", "clean", "clone", "worktree", "init"}
 GIT_OPT_VALEUR = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
 
 def developpe(t):
@@ -290,6 +290,13 @@ def sous_commande_git(args):
         i += 2 if args[i] in GIT_OPT_VALEUR else 1
     return args[i] if i < len(args) else ""
 
+def script_du_plugin(t):
+    """Vrai pour un script réellement situé sous ~/.claude/plugins (`..` et liens résolus) et sans autre chemin protégé."""
+    t = developpe(t)
+    racine = os.path.realpath(os.path.join(os.path.expanduser("~"), ".claude", "plugins")) + os.sep
+    return not t.startswith("-") and os.path.realpath(t).startswith(racine) and \
+        not any(m in t for m in MOTIFS if m != ".claude/plugins")
+
 def ecriture_protegee(toks):
     """Le premier argument protégé d'un segment qui écrit (écrivain connu), sinon None."""
     base, args = toks[0].rsplit("/", 1)[-1], toks[1:]
@@ -312,6 +319,8 @@ def ecriture_protegee(toks):
         ecrit = base in ECRIVAINS or bool(INTERPRETES.fullmatch(base))
         if ecrit and base not in ECRIVAINS and lecture_inline(base, args):
             ecrit = False
+        elif ecrit and base not in ECRIVAINS and args and script_du_plugin(args[0]):
+            args = args[1:]  # script du plugin installé : exécuté, pas écrit ; ses arguments restent contrôlés
     return next((a for a in args if motif(a)), None) if ecrit else None
 
 def saute_options(toks, valeur):

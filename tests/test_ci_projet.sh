@@ -26,6 +26,8 @@ python3 "$G" --depot "$TMP/tout" --ref $SHA --sortie "$O" >"$TMP/stdout" 2>/dev/
 [ -f "$D" ] && grep -q "^  deps:" "$D" || ko "job deps manquant"
 [ -f "$T" ] && for j in rust node python; do grep -q "^  $j:" "$T" || ko "job $j manquant"; done
 grep -q "ref: $SHA" "$D" && grep -q 'repository: stanixia-dev/kit-perso' "$D" && ! grep -q '^  \(rust\|node\|python\):' "$D" && ok "deps seul dans kit-perso-deps.yml, SHA" || ko "SHA ou repository"
+python3 "$G" --depot "$TMP/tout" --ref $SHA --sortie "$O" 2>/dev/null | grep -q 'Require status checks : `deps`, `rust`, `node`, `python` (' \
+  && ok "checks : deps et jobs de tests seulement" || ko "checks listent autre chose que les jobs"
 grep -q -- '--locked' "$T" && grep -q 'npm install' "$T" && ok "variantes lockfile" || ko "variantes lockfile"
 head -1 "$D" | grep -q "^# Généré par kit-perso 3\..* kit figé à $SHA\$" && head -1 "$T" | grep -q '^# Généré par' && ok "1re ligne" || ko "1re ligne"
 
