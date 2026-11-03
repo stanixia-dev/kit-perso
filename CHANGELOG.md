@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.1 — 2026-11-03
+
+- `ci-projet` : la consigne « Require status checks » ne liste plus `pull_request`, `push` ni `contents`, seulement `deps` et les jobs de tests réels (#22).
+- garde-deps : `python3 <script du plugin installé>` n'est plus bloqué comme une écriture ; les arguments suivants (et les redirections) vers un chemin protégé le restent (#21).
+- La CI du kit est séparée en deux workflows, `deps` et `tests`, un événement chacun (#20).
+
 ## 3.1.0 — 2026-11-03
 
 - Skill `ci-projet` : génère hors de `.github/` le workflow CI kit-perso d'un projet (job `deps` fail-closed avec kit public à SHA figé, jobs de tests rust/node/python selon les manifestes) ; l'utilisateur le copie et le commite (#16).
