@@ -3,7 +3,8 @@
 ## 3.1.1 — 2026-11-03
 
 - `ci-projet` : la consigne « Require status checks » ne liste plus `pull_request`, `push` ni `contents`, seulement `deps` et les jobs de tests réels (#22).
-- garde-deps : `python3 <script du plugin installé>` n'est plus bloqué comme une écriture ; les arguments suivants (et les redirections) vers un chemin protégé le restent (#21).
+- garde-deps : `python3 <script du plugin installé>` n'est plus bloqué comme une écriture ; les arguments suivants (et les redirections) vers un chemin protégé le restent ; le script doit résoudre (`realpath`) sous `~/.claude/plugins/` (#21).
+- garde-deps bloque `git clone`, `git worktree add` et `git init` vers un chemin protégé.
 - La CI du kit est séparée en deux workflows, `deps` et `tests`, un événement chacun (#20).
 
 ## 3.1.0 — 2026-11-03
