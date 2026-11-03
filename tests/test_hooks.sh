@@ -195,6 +195,13 @@ for c in 'gh api repos/o/r/milestones' 'rtk gh api repos/o/r/milestones' "gh api
          "gh api -H 'Accept: application/vnd.github+json' -X PATCH repos/o/r/milestones/3 -f state=closed"; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
+# détection de la CI (livrer, specs) : deux GET admis, écriture sur la protection refusée
+code_garde_j() { json_cmd "$1" | python3 hooks/garde-git.py >/dev/null 2>&1; echo $?; }
+for c in "gh api repos/{owner}/{repo}/rules/branches/main --jq '[.[] | select(.type == \"required_status_checks\")] | length'" \
+         "gh api repos/{owner}/{repo}/branches/main/protection --jq '.required_status_checks.checks | length'"; do
+  [ "$(code_garde_j "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
+done
+[ "$(code_garde_j 'gh api -X PUT repos/o/r/branches/main/protection')" = 2 ] && ok "garde-git bloque le PUT sur la protection" || ko "garde-git PUT protection"
 for c in 'gh issue edit 9 --milestone v1 -t x' 'gh issue edit 9 --add-label x' 'gh issue edit 9' 'gh issue edit 9 -m v1 -R o/r' \
          'gh issue edit https://github.com/o/r/issues/9 -m v1' 'gh issue create -R autre/r -t x' 'gh issue -R o/r create -t x' \
          'gh issue create -wRstanixia-dev/kit-perso -t x' 'gh issue create -R stanixia-dev/.. -t x' 'gh issue create -R stanixia-dev/a/b -t x' \

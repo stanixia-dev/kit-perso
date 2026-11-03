@@ -116,7 +116,7 @@ Aucune.
 - [x] L1 — Modèle, générateur et skill ci-projet (étapes 1-4)
   Fichiers : `skills/ci-projet/SKILL.md`, `skills/ci-projet/genere-ci.py`, `skills/ci-projet/modele-ci.yml`, `tests/test_ci_projet.sh`, `tests/test_hooks.sh`
   Fait quand : génération, SHA, refus et ligne `run` du job deps testés hors réseau — `bash tests/test_hooks.sh`
-- [ ] L2 — Détection de la CI dans livrer et specs (étapes 5-6)
+- [x] L2 — Détection de la CI dans livrer et specs (étapes 5-6)
   Fichiers : `skills/livrer/SKILL.md`, `agents/specs.md`, `tests/test_hooks.sh`, `tests/test_ci_projet.sh`
   Fait quand : GET rulesets/protection admis, PUT refusé, textes vérifiés par grep — `bash tests/test_hooks.sh`
 - [ ] L3 — Documentation et version 3.1.0 (étapes 7-8)

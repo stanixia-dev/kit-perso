@@ -76,4 +76,16 @@ CMD=$(grep -m1 'run: python3 kit/hooks/verifie-manifestes.py' "$OUT" | sed 's/.*
 ( cd "$TMP/ci" && BASE=$(git -C pr rev-parse HEAD) && eval "$CMD" ) >/dev/null 2>&1 \
   && ok "ligne run du job deps sort 0" || ko "ligne run du job deps"
 
+# textes de détection de la CI (livrer, specs)
+L="$RACINE/skills/livrer/SKILL.md"; S="$RACINE/agents/specs.md"
+for f in "$L" "$S"; do
+  n=${f#"$RACINE"/}
+  grep -q 'rules/branches/main' "$f" && grep -q 'branches/main/protection' "$f" && grep -q 'HTTP 404' "$f" && grep -q 'aucune CI' "$f" \
+    && grep -q 'job deps du kit' "$f" && grep -q 'checks non obligatoires' "$f" && grep -q 'illisibles' "$f" \
+    && ok "détection de la CI dans $n" || ko "détection de la CI dans $n"
+done
+grep -q 'CI :' "$S" && ok "specs : ligne CI :" || ko "specs : ligne CI :"
+grep -q 'pas de CI configurée' "$L" && grep -q 'CI configurée mais pas déclenchée' "$L" && ok "livrer : deux messages de suivi" || ko "livrer : messages de suivi"
+[ "$(grep -n 'Contrôle de la CI' "$L" | cut -d: -f1)" -lt "$(grep -n 'git push -u' "$L" | cut -d: -f1)" ] && ok "livrer : détection avant le push" || ko "livrer : ordre"
+
 exit $((ECHECS > 0))
