@@ -20,34 +20,42 @@ mkdepot() { # $1 = dossier ; manifestes suivants
 }
 
 mkdepot "$TMP/tout" Cargo.toml Cargo.lock package.json pyproject.toml
-OUT="$TMP/o/kit-perso.yml"
-python3 "$G" --depot "$TMP/tout" --ref $SHA --sortie "$OUT" >"$TMP/stdout" 2>/dev/null
-[ -f "$OUT" ] && for j in deps rust node python; do grep -q "^  $j:" "$OUT" || { ko "job $j manquant"; }; done
-grep -q "ref: $SHA" "$OUT" && grep -q 'repository: stanixia-dev/kit-perso' "$OUT" && ok "jobs deps/rust/node/python et SHA" || ko "SHA ou repository"
-grep -q -- '--locked' "$OUT" && grep -q 'npm install' "$OUT" && ok "variantes lockfile" || ko "variantes lockfile"
-head -1 "$OUT" | grep -q "^# Généré par kit-perso 3\..* kit figé à $SHA\$" && ok "1re ligne" || ko "1re ligne"
+O="$TMP/o"
+D="$O/kit-perso-deps.yml"; T="$O/kit-perso-tests.yml"
+python3 "$G" --depot "$TMP/tout" --ref $SHA --sortie "$O" >"$TMP/stdout" 2>/dev/null
+[ -f "$D" ] && grep -q "^  deps:" "$D" || ko "job deps manquant"
+[ -f "$T" ] && for j in rust node python; do grep -q "^  $j:" "$T" || ko "job $j manquant"; done
+grep -q "ref: $SHA" "$D" && grep -q 'repository: stanixia-dev/kit-perso' "$D" && ! grep -q '^  \(rust\|node\|python\):' "$D" && ok "deps seul dans kit-perso-deps.yml, SHA" || ko "SHA ou repository"
+grep -q -- '--locked' "$T" && grep -q 'npm install' "$T" && ok "variantes lockfile" || ko "variantes lockfile"
+head -1 "$D" | grep -q "^# Généré par kit-perso 3\..* kit figé à $SHA\$" && head -1 "$T" | grep -q '^# Généré par' && ok "1re ligne" || ko "1re ligne"
 
-# propriétés de sécurité
-n_co=$(grep -c 'uses: actions/' "$OUT"); n_pc=$(grep -c 'persist-credentials: false' "$OUT")
-n_pin=$(grep -c 'uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1' "$OUT")
-[ "$n_co" = "$n_pc" ] && [ "$n_co" = "$n_pin" ] && grep -q 'pull_request_target' "$OUT" && grep -q 'path: kit' "$OUT" && grep -q 'path: pr' "$OUT" \
-  && ! grep -q 'secrets\.' "$OUT" && ! grep -q 'token:' "$OUT" && ! grep -E '^\s*-?\s*run:.*\$\{\{' "$OUT" >/dev/null \
-  && ok "propriétés de sécurité du workflow" || ko "propriétés de sécurité du workflow"
-python3 - "$OUT" <<'PY' && ok "YAML plausible (pas de tabulation)" || ko "tabulation"
-import sys; sys.exit(1 if "\t" in open(sys.argv[1]).read() else 0)
-PY
+# propriétés de sécurité : un événement par workflow, pas de if sur l'événement
+grep -q '^  pull_request_target:' "$D" && ! grep -q '^  pull_request:' "$D" && ! grep -q '^  push:' "$D" \
+  && grep -q '^  pull_request:' "$T" && ! grep -q 'pull_request_target' "$T" && ! grep -q 'github.event_name' "$D" "$T" \
+  && ok "un événement par workflow, sans if" || ko "événements des workflows"
+for f in "$D" "$T"; do
+  n_co=$(grep -c 'uses: actions/' "$f"); n_pc=$(grep -c 'persist-credentials: false' "$f")
+  n_pin=$(grep -c 'uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1' "$f")
+  [ "$n_co" = "$n_pc" ] && [ "$n_co" = "$n_pin" ] && ! grep -q 'secrets\.' "$f" && ! grep -q 'token:' "$f" && ! grep -E '^\s*-?\s*run:.*\$\{\{' "$f" >/dev/null \
+    && ok "propriétés de sécurité de ${f##*/}" || ko "propriétés de sécurité de ${f##*/}"
+  python3 -c 'import sys; sys.exit(1 if "\t" in open(sys.argv[1]).read() else 0)' "$f" && ok "pas de tabulation ${f##*/}" || ko "tabulation ${f##*/}"
+done
+grep -q 'path: kit' "$D" && grep -q 'path: pr' "$D" && ok "chemins kit et pr distincts" || ko "chemins kit et pr"
 
 grep -q 'git push origin main' "$TMP/stdout" && grep -q 'Rulesets' "$TMP/stdout" && grep -q 'relancer /kit-perso:ci-projet' "$TMP/stdout" \
-  && grep -q "cp \"$OUT\"" "$TMP/stdout" && ok "commande imprimée" || ko "commande imprimée"
+  && grep -q "cp \"$D\"" "$TMP/stdout" && grep -q "cp \"$T\"" "$TMP/stdout" && grep -q 'git add .github/workflows/kit-perso-deps.yml .github/workflows/kit-perso-tests.yml' "$TMP/stdout" \
+  && grep -q 'kit-perso-tests / ' "$TMP/stdout" && ok "commande imprimée" || ko "commande imprimée"
 
-# sans tests
-python3 "$G" --depot "$TMP/tout" --ref $SHA --sans-tests --sortie "$TMP/o/a.yml" >/dev/null 2>&1
+# sans tests (y compris reste d'une génération précédente) et sans manifeste
+cp "$T" "$TMP/o/ancien-tests.yml"; rm -f "$T"; cp "$TMP/o/ancien-tests.yml" "$T"
+python3 "$G" --depot "$TMP/tout" --ref $SHA --sans-tests --sortie "$TMP/a" >/dev/null 2>&1
 mkdepot "$TMP/vide"
-python3 "$G" --depot "$TMP/vide" --ref $SHA --sortie "$TMP/o/b.yml" >/dev/null 2>&1
-for f in a b; do
-  grep -q '^  deps:' "$TMP/o/$f.yml" && ! grep -qE '^  (rust|node|python):' "$TMP/o/$f.yml" || { ko "seul deps ($f)"; continue; }
+python3 "$G" --depot "$TMP/vide" --ref $SHA --sortie "$TMP/b" >/dev/null 2>&1
+python3 "$G" --depot "$TMP/tout" --ref $SHA --sans-tests --sortie "$O" >/dev/null 2>&1
+for d in "$TMP/a" "$TMP/b" "$O"; do
+  grep -q '^  deps:' "$d/kit-perso-deps.yml" && [ ! -e "$d/kit-perso-tests.yml" ] || { ko "seul deps ($d)"; continue; }
 done
-grep -qE '^  (rust|node|python):' "$TMP/o/a.yml" "$TMP/o/b.yml" || ok "--sans-tests et sans manifeste : seul deps"
+ok "--sans-tests et sans manifeste : seul deps (reste ancien supprimé)"
 
 # refus
 refuse() { # $1 = libellé, reste = arguments ; vérifie exit 2 et rien d'écrit
@@ -55,24 +63,24 @@ refuse() { # $1 = libellé, reste = arguments ; vérifie exit 2 et rien d'écrit
   python3 "$G" "$@" >/dev/null 2>&1; local c=$?
   [ "$c" = 2 ] && ok "refus : $l" || ko "refus : $l (exit $c)"
 }
-refuse "ref invalide" --depot "$TMP/tout" --ref abc --sortie "$TMP/r1.yml"
-[ ! -e "$TMP/r1.yml" ] && ok "rien écrit (ref invalide)" || ko "écrit malgré ref invalide"
-refuse "ref majuscules" --depot "$TMP/tout" --ref "${SHA^^}" --sortie "$TMP/r1.yml"
-refuse "sortie sous .github" --depot "$TMP/tout" --ref $SHA --sortie "$TMP/x/.github/workflows/k.yml"
+refuse "ref invalide" --depot "$TMP/tout" --ref abc --sortie "$TMP/r1"
+[ ! -e "$TMP/r1" ] && ok "rien écrit (ref invalide)" || ko "écrit malgré ref invalide"
+refuse "ref majuscules" --depot "$TMP/tout" --ref "${SHA^^}" --sortie "$TMP/r1"
+refuse "sortie sous .github" --depot "$TMP/tout" --ref $SHA --sortie "$TMP/x/.github/workflows"
 [ ! -e "$TMP/x" ] && ok "rien écrit (.github)" || ko "écrit sous .github"
-refuse "sortie dans l'arbre" --depot "$TMP/tout" --ref $SHA --sortie "$TMP/tout/k.yml"
-[ ! -e "$TMP/tout/k.yml" ] && ok "rien écrit (arbre)" || ko "écrit dans l'arbre"
+refuse "sortie dans l'arbre" --depot "$TMP/tout" --ref $SHA --sortie "$TMP/tout/kp"
+[ ! -e "$TMP/tout/kp" ] && ok "rien écrit (arbre)" || ko "écrit dans l'arbre"
 mkdir -p "$TMP/horsgit"
-refuse "hors dépôt git" --depot "$TMP/horsgit" --ref $SHA --sortie "$TMP/r2.yml"
+refuse "hors dépôt git" --depot "$TMP/horsgit" --ref $SHA --sortie "$TMP/r2"
 
 # sortie par défaut : status propre
 python3 "$G" --depot "$TMP/tout" --ref $SHA >/dev/null 2>&1
-[ -f "$TMP/tout/.git/kit-perso/kit-perso.yml" ] && [ -z "$(g -C "$TMP/tout" status --porcelain)" ] && ok "sortie par défaut dans .git, status propre" || ko "sortie par défaut"
+[ -f "$TMP/tout/.git/kit-perso/kit-perso-deps.yml" ] && [ -z "$(g -C "$TMP/tout" status --porcelain)" ] && ok "sortie par défaut dans .git, status propre" || ko "sortie par défaut"
 
 # ligne run du job deps, hors réseau : kit = dépôt du kit, pr = dépôt jetable
 mkdir -p "$TMP/ci"; ln -s "$RACINE" "$TMP/ci/kit"
 mkdepot "$TMP/ci/pr" README2
-CMD=$(grep -m1 'run: python3 kit/hooks/verifie-manifestes.py' "$OUT" | sed 's/.*run: //')
+CMD=$(grep -m1 'run: python3 kit/hooks/verifie-manifestes.py' "$D" | sed 's/.*run: //')
 ( cd "$TMP/ci" && BASE=$(git -C pr rev-parse HEAD) && eval "$CMD" ) >/dev/null 2>&1 \
   && ok "ligne run du job deps sort 0" || ko "ligne run du job deps"
 

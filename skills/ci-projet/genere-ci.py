@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Génère le workflow CI kit-perso d'un projet (job deps + jobs de tests par manifeste) hors de .github/.
-Usage : genere-ci.py [--depot DIR] [--sans-tests] [--ref SHA] [--sortie FICHIER]
+"""Génère les workflows CI kit-perso d'un projet hors de .github/ : kit-perso-deps.yml (job deps, pull_request_target)
+et kit-perso-tests.yml (jobs de tests par manifeste, pull_request), deux événements séparés pour qu'aucun check obligatoire
+ne soit satisfait par un job sauté.
+Usage : genere-ci.py [--depot DIR] [--sans-tests] [--ref SHA] [--sortie DOSSIER]
 Sortie 2 + message sur stderr = refus (rien d'écrit). Stdlib uniquement."""
 import argparse, json, os, re, subprocess, sys
 
 DEPOT_KIT = "https://github.com/stanixia-dev/kit-perso.git"
 ICI = os.path.dirname(os.path.abspath(__file__))
 MARQUEUR = "# JOBS-TESTS"
+DEPS, TESTS = "kit-perso-deps.yml", "kit-perso-tests.yml"
 
 def refus(msg):
     print(f"genere-ci : {msg}", file=sys.stderr)
@@ -31,7 +34,6 @@ def sha_kit(ref):
 
 def job(nom, etapes):
     lignes = [f"  {nom}:",
-              "    if: github.event_name != 'pull_request_target'",
               "    runs-on: ubuntu-24.04",
               "    timeout-minutes: 15",
               "    permissions:",
@@ -77,14 +79,14 @@ def main():
     ap.add_argument("--depot", default=".")
     ap.add_argument("--sans-tests", action="store_true")
     ap.add_argument("--ref")
-    ap.add_argument("--sortie")
+    ap.add_argument("--sortie", help="dossier de sortie (défaut : <git-common-dir>/kit-perso)")
     a = ap.parse_args()
     depot = os.path.abspath(a.depot)
     commun = git(depot, "rev-parse", "--path-format=absolute", "--git-common-dir") if os.path.isdir(depot) else None
     if commun is None:
         refus(f"{depot} n'est pas dans un dépôt git")
     sha = sha_kit(a.ref)
-    sortie = os.path.abspath(a.sortie) if a.sortie else os.path.join(commun, "kit-perso", "kit-perso.yml")
+    sortie = os.path.abspath(a.sortie) if a.sortie else os.path.join(commun, "kit-perso")
     if ".github" in sortie.split(os.sep):
         refus("--sortie ne doit pas être sous un dossier .github")
     racine = git(depot, "rev-parse", "--show-toplevel")
@@ -93,23 +95,36 @@ def main():
         reel = os.path.realpath(sortie)
         if (reel == racine or reel.startswith(racine + os.sep)) and not (reel + os.sep).startswith(os.path.realpath(commun) + os.sep):
             refus("--sortie ne doit pas être dans l'arbre de travail (hors .git)")
-    with open(os.path.join(ICI, "modele-ci.yml"), encoding="utf-8") as f:
-        modele = f.read()
     with open(os.path.join(ICI, "..", "..", ".claude-plugin", "plugin.json"), encoding="utf-8") as f:
         version = json.load(f)["version"]
+    entete = f"# Généré par kit-perso {version} (/kit-perso:ci-projet), kit figé à {sha}\n"
+    def modele(nom):
+        with open(os.path.join(ICI, nom), encoding="utf-8") as f:
+            return f.read()
     jobs = [] if a.sans_tests else jobs_tests(depot)
-    if not jobs:
+    os.makedirs(sortie, exist_ok=True)
+    fichiers = [DEPS]
+    ecrits = {DEPS: entete + modele("modele-deps.yml").replace("__SHA_KIT__", sha)}
+    if jobs:
+        fichiers.append(TESTS)
+        ecrits[TESTS] = entete + modele("modele-tests.yml").replace(MARQUEUR + "\n", "".join(j + "\n" for j in jobs))
+    else:
         print("Aucun job de tests ajouté (--sans-tests ou aucun manifeste à la racine) : seul le job deps.", file=sys.stderr)
-    texte = modele.replace("__SHA_KIT__", sha).replace(MARQUEUR + "\n", "".join(j + "\n" for j in jobs))
-    texte = f"# Généré par kit-perso {version} (/kit-perso:ci-projet), kit figé à {sha}\n" + texte
-    os.makedirs(os.path.dirname(sortie), exist_ok=True)
-    with open(sortie, "w", encoding="utf-8") as f:
-        f.write(texte)
-    print(f'git switch main && git pull --ff-only && mkdir -p .github/workflows && cp "{sortie}" .github/workflows/kit-perso.yml '
-          f'&& git add .github/workflows/kit-perso.yml && git commit -m "Ajoute la CI kit-perso {version} ({sha[:12]})" && git push origin main')
-    print("`deps` ne tourne qu'une fois ce workflow sur main. Ensuite : Settings > Rules > Rulesets > New branch ruleset, "
-          "cible `main`, Require status checks : `deps` + jobs de tests générés. "
-          "Mise à jour du kit : relancer /kit-perso:ci-projet et recopier.")
+        try:
+            os.remove(os.path.join(sortie, TESTS))  # reste d'une génération précédente
+        except FileNotFoundError:
+            pass
+    for nom, texte in ecrits.items():
+        with open(os.path.join(sortie, nom), "w", encoding="utf-8") as f:
+            f.write(texte)
+    cibles = " ".join(f".github/workflows/{n}" for n in fichiers)
+    copies = " && ".join(f'cp "{os.path.join(sortie, n)}" .github/workflows/{n}' for n in fichiers)
+    print(f'git switch main && git pull --ff-only && mkdir -p .github/workflows && {copies} '
+          f'&& git add {cibles} && git commit -m "Ajoute la CI kit-perso {version} ({sha[:12]})" && git push origin main')
+    noms = "`deps`" + "".join(f", `{n}`" for n in (re.findall(r"^  (\w+):", ecrits.get(TESTS, ""), re.M)))
+    print("`deps` ne tourne qu'une fois ces workflows sur main. Ensuite : Settings > Rules > Rulesets > New branch ruleset, "
+          f"cible `main`, Require status checks : {noms} (noms de jobs ; GitHub les affiche `kit-perso-deps / deps`, "
+          "`kit-perso-tests / <job>`). Mise à jour du kit : relancer /kit-perso:ci-projet et recopier.")
 
 if __name__ == "__main__":
     main()
