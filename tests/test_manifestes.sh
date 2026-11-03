@@ -207,7 +207,8 @@ lance "$d" --ci --base inexistant --cible HEAD
 [ "$CODE" = 2 ] && grep -q 'Traceback' <<<"$ERREUR" && ok "verifie-manifestes --ci bloque sur erreur imprévue" || ko "verifie-manifestes ci imprévue"
 lance "$TMP/horsgit" --ci
 [ "$CODE" = 2 ] && ok "verifie-manifestes --ci bloque hors dépôt git" || ko "verifie-manifestes ci hors git"
-grep -q 'pull_request_target' "$RACINE/.github/workflows/tests.yml" && ok "tests.yml déclenche deps en pull_request_target" || ko "tests.yml pull_request_target"
+grep -q 'pull_request_target' "$RACINE/.github/workflows/deps.yml" && ok "deps.yml déclenche deps en pull_request_target" || ko "deps.yml pull_request_target"
+! grep -qE 'pull_request_target|^ *if:' "$RACINE/.github/workflows/tests.yml" && ok "tests.yml : un seul type d'événement PR, sans if:" || ko "tests.yml mélange les événements"
 
 # --- --base / --cible
 d=$(depot refs)

@@ -1,14 +1,12 @@
 name: tests
 on:
   pull_request:
-  pull_request_target:
   push:
     branches: [main]
 permissions:
   contents: read
 jobs:
   hooks:
-    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -16,24 +14,3 @@ jobs:
         with:
           persist-credentials: false
       - run: bash tests/test_hooks.sh
-  # pull_request_target exécute le workflow de main : la PR ne peut ni modifier ni retirer ce contrôle.
-  # Aucun code de la PR n'est exécuté : ses manifestes sont lus comme données par git.
-  deps:
-    if: github.event_name == 'pull_request_target'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          path: pr
-          fetch-depth: 0
-          persist-credentials: false
-      - run: python3 hooks/verifie-manifestes.py --ci --depot pr --base "$BASE" --cible HEAD
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
