@@ -93,7 +93,7 @@ Fermer les contournements relevés dans `garde-git` et `garde-secret` (options `
 - [x] L2 — `git push`/`commit` : options globales, abréviations, `--all`, `HEAD`, refspec `*` (étapes 3-5)
   Fichiers : `hooks/garde-git.py`, `hooks/garde-deps.py`, `tests/test_hooks.sh`, `tests/test_secrets.sh`
   Fait quand : cas git bloqués/autorisés et scan `git --namespace x push` verts — `bash tests/test_hooks.sh`
-- [ ] L3 — Fail-closed en CLI (garde-secret, verifie-manifestes) et jetons à blanc (étapes 6-8)
+- [x] L3 — Fail-closed en CLI (garde-secret, verifie-manifestes) et jetons à blanc (étapes 6-8)
   Fichiers : `hooks/garde-secret.py`, `hooks/verifie-manifestes.py`, `tests/test_secrets.sh`, `tests/test_manifestes.sh`
   Fait quand : `--base inexistant` sort en 2 pour les deux scripts, `cat "mon dossier/.env"` bloqué — `bash tests/test_hooks.sh`
 - [ ] L4 — `charge()` : réponse de registre mal formée = « vérification impossible » (étape 9)

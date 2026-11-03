@@ -286,7 +286,7 @@ def commande(args):
     trouv = sans_exceptions(trouv, exceptions)
     bloquants = [t for t in trouv if t[2] == "fort" or args.ci]
     faibles = [t for t in trouv if t not in bloquants]
-    blocs = [ligne_trouvaille(t)[2:] for t in bloquants] + (illis if args.ci else [])
+    blocs = [ligne_trouvaille(t)[2:] for t in bloquants] + illis
     warns = avert + [ligne_trouvaille(t)[2:] for t in faibles]
     if args.ci:
         resume_ci(blocs, warns + [f"exception non appliquée tant qu'elle n'est pas sur main : {l}" for l in ajoutees],
@@ -467,9 +467,15 @@ def bash_chemins(cmd, ctx, prof=0):
             while i < len(args) and args[i].startswith("-") and args[i] != "--":
                 i += 2 if args[i] in MOTIF_OPT_VALEUR else 1
             a_tester = args[:i] + args[i + 1:]
-        interprete = bool(gd.INTERPRETES.fullmatch(base))
+        # interpréteur : le code inline (-c, -e, -r, -p…) cite des chemins au milieu d'un texte ; un script avec ses arguments, non
+        interprete = bool(gd.INTERPRETES.fullmatch(base)) and any(
+            re.fullmatch(r"-[a-zA-Z]*[ceEpr]", t) or t in ("--eval", "--print") for t in args)
         for t in a_tester:
             if any(c.isspace() for c in t) and not interprete:
+                # jeton à blanc (chemin avec espace, ou texte) : testé entier, s'il ressemble à un chemin
+                if ("/" in t or os.path.lexists(os.path.join(ctx.get("cwd") or os.getcwd(), os.path.expanduser(t)))) \
+                        and classe(developpe(t)):
+                    ctx["hits"].append(t)
                 continue
             c = chemin_protege(t)
             if c:
@@ -623,6 +629,8 @@ def stop(data):
            + "\nRetire-le (commits non poussés : `git reset --soft <base>` puis recommite) ; déjà poussé : "
            "préviens l'utilisateur, il est à révoquer.")
 
+MODE = "cli"  # posé par main() : "ci", "pre", "post", "stop" ou "cli"
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--depot")
@@ -631,6 +639,8 @@ def main():
     ap.add_argument("--hook", choices=("pre", "post", "stop"))
     ap.add_argument("--ci", action="store_true")
     args = ap.parse_args()
+    global MODE
+    MODE = "ci" if args.ci else (args.hook or "cli")
     if not args.hook:
         sys.exit(commande(args))
     data = json.load(sys.stdin)
@@ -643,12 +653,9 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception:
-        if sys.argv[1:][-2:] == ["--hook", "pre"] or "--hook=pre" in sys.argv:  # PreToolUse : un échec est un bug ou une entrée anormale, on bloque
-            import traceback
+        # pre (un échec est un bug ou une entrée anormale), ci et CLI : on bloque ; post et stop restent fail-open
+        import traceback
+        if MODE in ("pre", "ci", "cli"):
             print("⛔ garde-secret : erreur interne.\n" + traceback.format_exc(), file=sys.stderr)
-            sys.exit(2)
-        if "--ci" in sys.argv:
-            import traceback
-            traceback.print_exc()
             sys.exit(2)
         sys.exit(0)
