@@ -288,5 +288,19 @@
     "id": "PYSEC-2099-0002"
    }
   ]
- }
+ },
+ "npm-depublie": {
+  "name": "depublie",
+  "time": {
+   "created": "2020-01-01T00:00:00Z",
+   "modified": "2020-01-02T00:00:00Z",
+   "unpublished": {
+    "time": "2020-01-02T00:00:00Z",
+    "versions": [
+     "1.0.0"
+    ]
+   }
+  }
+ },
+ "osv-npm-depublie": {}
 }

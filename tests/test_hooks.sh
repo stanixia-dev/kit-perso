@@ -262,6 +262,8 @@ done
   && ok "garde-deps avertit sur MPL-2.0" || ko "garde-deps MPL"
 [ "$(code_deps 'pip3 install inconnu')" = 0 ] && sortie_deps 'pip3 install inconnu' | grep -q 'vérification impossible' \
   && ok "garde-deps avertit si injoignable" || ko "garde-deps injoignable"
+[ "$(code_deps 'npm i depublie')" = 0 ] && sortie_deps 'npm i depublie' | grep -q 'vérification impossible' \
+  && ok "garde-deps avertit sur une réponse de registre mal formée" || ko "garde-deps réponse mal formée"
 
 bash tests/test_manifestes.sh | grep -v '^OK' | sed 's/^/manifestes: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_manifestes.sh"

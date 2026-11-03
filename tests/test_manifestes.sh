@@ -207,6 +207,12 @@ lance "$d" --ci --base inexistant --cible HEAD
 [ "$CODE" = 2 ] && grep -q 'Traceback' <<<"$ERREUR" && ok "verifie-manifestes --ci bloque sur erreur imprévue" || ko "verifie-manifestes ci imprévue"
 lance "$d" --base inexistant --cible HEAD
 [ "$CODE" = 2 ] && grep -q 'Traceback' <<<"$ERREUR" && ok "verifie-manifestes CLI bloque sur erreur imprévue" || ko "verifie-manifestes CLI imprévue"
+d=$(depot depublie); git -C "$d" checkout -q -b claude/depublie
+printf '{"dependencies":{"depublie":"1.0.0"}}' > "$d/package.json"; valide "$d" ajout
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 2 ] && grep -q 'vérification impossible' <<<"$ERREUR" && ok "verifie-manifestes --ci bloque sur une réponse de registre mal formée" || ko "verifie-manifestes ci mal formée"
+lance "$d" --base main --cible HEAD
+[ "$CODE" = 0 ] && grep -q 'vérification impossible' <<<"$SORTIE" && ok "verifie-manifestes avertit sur une réponse de registre mal formée" || ko "verifie-manifestes mal formée"
 lance "$TMP/horsgit" --ci
 [ "$CODE" = 2 ] && ok "verifie-manifestes --ci bloque hors dépôt git" || ko "verifie-manifestes ci hors git"
 grep -q 'pull_request_target' "$RACINE/.github/workflows/deps.yml" && ok "deps.yml déclenche deps en pull_request_target" || ko "deps.yml pull_request_target"

@@ -90,6 +90,12 @@ def charge(registre, nom):
     }[registre])
     if not isinstance(d, dict):
         return None
+    try:
+        return normalise(registre, d)
+    except (KeyError, TypeError, AttributeError, ValueError):  # réponse mal formée (ex. paquet npm dépublié) : vérification impossible
+        return None
+
+def normalise(registre, d):
     if registre == "crates":
         c = d["crate"]
         vs = {v["num"]: {"licence": v.get("license"), "deprecie": False, "yanked": bool(v.get("yanked"))}

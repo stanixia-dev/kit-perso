@@ -96,7 +96,7 @@ Fermer les contournements relevés dans `garde-git` et `garde-secret` (options `
 - [x] L3 — Fail-closed en CLI (garde-secret, verifie-manifestes) et jetons à blanc (étapes 6-8)
   Fichiers : `hooks/garde-secret.py`, `hooks/verifie-manifestes.py`, `tests/test_secrets.sh`, `tests/test_manifestes.sh`
   Fait quand : `--base inexistant` sort en 2 pour les deux scripts, `cat "mon dossier/.env"` bloqué — `bash tests/test_hooks.sh`
-- [ ] L4 — `charge()` : réponse de registre mal formée = « vérification impossible » (étape 9)
+- [x] L4 — `charge()` : réponse de registre mal formée = « vérification impossible » (étape 9)
   Fichiers : `hooks/deps_communs.py`, `tests/fixtures/garde-deps.json`, `tests/test_hooks.sh`, `tests/test_manifestes.sh`
   Fait quand : cas `depublie` verts en local et en `--ci` — `bash tests/test_hooks.sh`
 - [ ] L5 — README, résidus `sandbox`, version 3.1.2 (étapes 10-12)
