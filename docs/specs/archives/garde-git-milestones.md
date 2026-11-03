@@ -1,6 +1,6 @@
 # garde-git : milestones GitHub, tickets vers kit-perso, retrait du bac à sable
 
-Statut : en cours
+Statut : livrée
 
 ## Objectif
 
@@ -59,10 +59,10 @@ L'utilisateur a retiré le bac à sable : toute commande a réseau et jeton. Le 
 
 ## Critères d'acceptation
 
-- [ ] Toutes les commandes « bloquées » ci-dessous sortent en 2, toutes les « autorisées » en 0 (via `code_garde`).
-- [ ] `gh issue edit 9 -t x` (l.48) reste bloqué ; les tests garde-deps l.78-119 passent inchangés.
-- [ ] `config/` et `tests/sonde-bac-a-sable.sh` n'existent plus ; `grep -rn "bac à sable" hooks tests README.md` ne renvoie rien.
-- [ ] `plugin.json` en `3.0.0`, entrée CHANGELOG présente, `tests/test_manifestes.sh` et `tests/test_secrets.sh` passent.
+- [x] Toutes les commandes « bloquées » ci-dessous sortent en 2, toutes les « autorisées » en 0 (via `code_garde`).
+- [x] `gh issue edit 9 -t x` (l.48) reste bloqué ; les tests garde-deps l.78-119 passent inchangés.
+- [x] `config/` et `tests/sonde-bac-a-sable.sh` n'existent plus ; `grep -rn "bac à sable" hooks tests README.md` ne renvoie rien.
+- [x] `plugin.json` en `3.0.0`, entrée CHANGELOG présente, `tests/test_manifestes.sh` et `tests/test_secrets.sh` passent.
 
 ## Tests
 
@@ -105,6 +105,6 @@ Note : `code_garde` injecte la commande dans du JSON par `printf`. Les cas ne do
 - [x] L2 — `gh issue edit --milestone` et `-R` vers les dépôts de `PROPRIETAIRES_TICKETS` (étapes 3-5)
   Fichiers : `hooks/garde-git.py`, `tests/test_hooks.sh`, `README.md`
   Fait quand : cas `gh issue` bloqués/autorisés ci-dessus verts — `bash tests/test_hooks.sh`
-- [ ] L3 — Retrait du bac à sable, garde-secret étendu à tout `gh`, version 3.0.0 (étapes 6-9)
+- [x] L3 — Retrait du bac à sable, garde-secret étendu à tout `gh`, version 3.0.0 (étapes 6-9)
   Fichiers : `config/bac-a-sable.json`, `tests/sonde-bac-a-sable.sh`, `tests/test_hooks.sh`, `tests/test_secrets.sh`, `hooks/garde-git.py`, `hooks/garde-secret.py`, `README.md`, `CHANGELOG.md`, `.claude-plugin/plugin.json`
   Fait quand : `config/` absent, plus de « bac à sable » dans hooks/tests/README, tests verts — `bash tests/test_hooks.sh && ! grep -rn "bac à sable" hooks tests README.md`

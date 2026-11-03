@@ -242,9 +242,9 @@ for c in "git commit -m 'protège .env'" "git commit -m \"\$(cat <<'EOF'"$'\npro
          'cat .env.example' 'ls -la' 'echo "ok" | wc -l' 'git status' 'grep -rn "\.env" src' 'cat README.md'; do
   hk Bash "$TMP/w" command "$c"; passe "$c"
 done
-# commandes exclues du bac à sable : un argument qui est un lien vers un chemin protégé est refusé
+# commandes qui portent les identifiants : un argument qui est un lien vers un chemin protégé est refusé
 echo "contenu" > "$HOME/.ssh/id_x"; ln -sfn "$HOME/.ssh/id_x" "$TMP/w/l"; echo "notes" > "$TMP/w/notes.md"
-for c in 'gh pr create --body-file l' 'gh pr create --body-file=l' 'gh issue view --body-file l' 'git push origin l'; do
+for c in 'gh pr create --body-file l' 'gh pr create --body-file=l' 'gh issue view --body-file l' 'gh release upload v1 l' 'git push origin l'; do
   hk Bash "$TMP/w" command "$c"; bloque "exclue : $c"
 done
 for c in 'git push -Fl origin b' 'git push -F=l origin b'; do hk Bash "$TMP/w" command "$c"; bloque "exclue : $c"; done

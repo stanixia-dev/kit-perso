@@ -64,10 +64,10 @@ def sous_commande(toks):
     return toks[i] if i < len(toks) else "", toks[i + 1:]
 
 def refuse_affectation(base, sc, affecte):
-    """git push et gh tournent hors du bac à sable : une affectation (GIT_SSH_COMMAND…) ferait exécuter du code non confiné."""
+    """git push et gh portent les identifiants de l'utilisateur : une affectation (GIT_SSH_COMMAND…) ferait exécuter du code avec eux."""
     if affecte and (base == "gh" or (base == "git" and sc == "push")):
         bloque(f"`{base}{' push' if base == 'git' else ''}` précédé d'une affectation de variable (VAR=… ou env VAR=…) est interdit : "
-               "cette commande tourne hors du bac à sable et la variable (ex. GIT_SSH_COMMAND) pourrait exécuter du code.")
+               "cette commande porte les identifiants de l'utilisateur et la variable (ex. GIT_SSH_COMMAND) pourrait exécuter du code.")
 
 def verifie_git(args_sc, sc, cwd):
     if sc == "push":
@@ -75,7 +75,7 @@ def verifie_git(args_sc, sc, cwd):
             nom = a.split("=", 1)[0]
             # git accepte les abréviations d'options longues (--rec, --exe…) : préfixe d'au moins 3 caractères
             if len(nom) >= 5 and nom.startswith("--") and ("--receive-pack".startswith(nom) or "--exec".startswith(nom)):
-                bloque(f"`git push {a}` est interdit : le programme désigné s'exécuterait en local, hors du bac à sable.")
+                bloque(f"`git push {a}` est interdit : le programme désigné s'exécuterait en local.")
         pos = [a for a in args_sc if not a.startswith("-")]
         depots = [a.split("=", 1)[1] for a in args_sc if a.startswith("--repo=")]
         if "--repo" in args_sc and args_sc.index("--repo") + 1 < len(args_sc):
@@ -86,7 +86,7 @@ def verifie_git(args_sc, sc, cwd):
                 continue
             if d.startswith(("file://", "ext::", "~", ".")) or "/" in d or ":" in d or os.path.exists(os.path.join(cwd or "", d)):
                 bloque(f"`git push {d}` est interdit : seuls un nom de remote ou une URL https/ssh sont admis "
-                       "(les hooks d'un dépôt cible local s'exécuteraient hors du bac à sable).")
+                       "(les hooks d'un dépôt cible local s'exécuteraient en local).")
         for a in args_sc:
             if a in ("--force", "-f", "--force-with-lease", "--force-if-includes", "--mirror", "--delete", "-d", "--no-verify", "--prune") \
                or a.startswith("--force-with-lease=") or (re.match(r"^-[a-zA-Z]+$", a) and "f" in a):
@@ -274,7 +274,7 @@ def main():
     livre = any((t[0].rsplit("/", 1)[-1] == "gh") or (t[0].rsplit("/", 1)[-1] == "git" and sous_commande(t)[0] == "push") for t, _ in segs)
     if livre and any(t[0] in ("export", "declare", "typeset") for t, _ in segs):
         bloque("`export`/`declare`/`typeset` dans la même commande qu'un `git push` ou un `gh` est interdit : "
-               "la variable (ex. GIT_SSH_COMMAND) ferait exécuter du code hors du bac à sable.")
+               "la variable (ex. GIT_SSH_COMMAND) ferait exécuter du code avec les identifiants de l'utilisateur.")
     for toks, affecte in segs:
         base = toks[0].rsplit("/", 1)[-1]
         if base in ("cd", "pushd"):
