@@ -250,4 +250,79 @@ hook post "$d" "$J"
 hook post "$d" "{\"cwd\":\"$d\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\"}}"
 [ "$CODE" = 0 ] && [ -z "$SORTIE$ERREUR" ] && ok "verifie-manifestes --hook post muet après Bash sans changement" || ko "verifie-manifestes post bash"
 
+# --- workspaces npm : leurs paquets ne sont jamais cherchés sur le registre
+d=$(depot workspaces); git -C "$d" checkout -q -b claude/ws
+mkdir -p "$d/packages/client" "$d/packages/sans-nom" "$d/packages/vide"
+printf '{"name":"@hive/client","version":"1.0.0"}' > "$d/packages/client/package.json"
+printf '{"version":"1.0.0"}' > "$d/packages/sans-nom/package.json"
+printf '{"workspaces":["packages/*"],"dependencies":{"@hive/client":"*"}}' > "$d/package.json"
+printf '{"lockfileVersion":3,"packages":{"":{"name":"r"},"node_modules/@hive/client":{"resolved":"packages/client","link":true},"packages/client":{"name":"@hive/client","version":"1.0.0"}}}' > "$d/package-lock.json"
+valide "$d" "monorepo"
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 0 ] && [ -z "$SORTIE$ERREUR" ] && ok "verifie-manifestes ignore un workspace npm (tableau, manifeste et lockfile)" || ko "verifie-manifestes workspace tableau: $CODE $ERREUR"
+printf '{"workspaces":{"packages":["packages/*"]},"dependencies":{"@hive/client":"*"}}' > "$d/package.json"; valide "$d" "forme objet"
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 0 ] && [ -z "$SORTIE$ERREUR" ] && ok "verifie-manifestes ignore un workspace npm (forme objet)" || ko "verifie-manifestes workspace objet: $CODE $ERREUR"
+printf '{"workspaces":["packages/*"],"dependencies":{"@hive/client":"*","@hive/autre":"*"}}' > "$d/package.json"; valide "$d" "hors workspace"
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 2 ] && grep -q '@hive/autre' <<<"$ERREUR" && ! grep -q '@hive/client' <<<"$ERREUR" \
+  && ok "verifie-manifestes vérifie toujours un paquet hors workspace" || ko "verifie-manifestes hors workspace: $CODE $ERREUR"
+
+# négatifs : chaque cas doit rester bloqué en --ci
+LOCK_LIEN='{"lockfileVersion":3,"packages":{"":{"name":"r"},"node_modules/evil-pkg":{"resolved":"packages/evil","link":true},"packages/evil":{"name":"evil-pkg","version":"1.0.0"}}}'
+ws_negatif() { # $1 = description ; $2 = motif attendu dans l'erreur
+  valide "$d" "cas"
+  lance "$d" --ci --base main --cible HEAD
+  [ "$CODE" = 2 ] && grep -q "$2" <<<"$ERREUR" && ok "verifie-manifestes workspace : $1" || ko "verifie-manifestes workspace $1 : $CODE $ERREUR"
+}
+nouveau_ws() { # $1 = nom du dépôt ; crée un monorepo avec le membre evil-pkg
+  d=$(depot "$1"); git -C "$d" checkout -q -b claude/neg
+  mkdir -p "$d/packages/evil"
+  printf '{"name":"evil-pkg","version":"1.0.0"}' > "$d/packages/evil/package.json"
+}
+nouveau_ws ws-alias
+printf '{"workspaces":["packages/*"],"dependencies":{"x":"npm:evil-pkg@2.0.0"}}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
+ws_negatif "un alias npm: reste vérifié" evil-pkg
+nouveau_ws ws-version
+printf '{"workspaces":["packages/*"],"dependencies":{"evil-pkg":"^9.0.0"}}' > "$d/package.json"
+ws_negatif "sans preuve link dans le lockfile" evil-pkg
+nouveau_ws ws-version-lien
+printf '{"workspaces":["packages/*"],"dependencies":{"evil-pkg":"^9.0.0"}}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
+ws_negatif "lien prouvé mais spec différent de la version du membre" evil-pkg
+nouveau_ws ws-spec-egal
+printf '{"workspaces":["packages/*"],"dependencies":{"evil-pkg":"^1.0.0"}}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
+valide "$d" "spec égal"
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 0 ] && ok "verifie-manifestes workspace : spec égal à la version du membre exempté" || ko "verifie-manifestes workspace spec égal : $CODE $ERREUR"
+nouveau_ws ws-racine-membre
+mkdir -p "$d/packages/a/x"
+printf '{"workspaces":["packages/*"]}' > "$d/package.json"
+printf '{"name":"a","workspaces":["x"],"dependencies":{"evil-pkg":"*"}}' > "$d/packages/a/package.json"
+printf '{"name":"evil-pkg","version":"1.0.0"}' > "$d/packages/a/x/package.json"
+printf '{"lockfileVersion":3,"packages":{"":{"name":"a"},"node_modules/evil-pkg":{"resolved":"x","link":true}}}' > "$d/packages/a/package-lock.json"
+ws_negatif "une racine membre d'une autre racine est écartée" evil-pkg
+nouveau_ws ws-copie
+mkdir -p "$d/packages/a"
+printf '{"workspaces":["packages/*"]}' > "$d/package.json"
+printf '{"name":"a","version":"1.0.0","dependencies":{"evil-pkg":"*"}}' > "$d/packages/a/package.json"
+printf '{"lockfileVersion":3,"packages":{"":{"name":"r"},"node_modules/evil-pkg":{"resolved":"packages/evil","link":true},"packages/evil":{"name":"evil-pkg","version":"1.0.0"},"packages/a/node_modules/evil-pkg":{"version":"9.0.0"}}}' > "$d/package-lock.json"
+ws_negatif "une copie non-link imbriquée annule la preuve" evil-pkg
+nouveau_ws ws-autre
+mkdir -p "$d/autre"
+printf '{"workspaces":["packages/*"]}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
+printf '{"dependencies":{"evil-pkg":"*"}}' > "$d/autre/package.json"
+ws_negatif "un manifeste hors de la racine n'est pas exempté" evil-pkg
+nouveau_ws ws-fausse
+mkdir -p "$d/z/q"
+printf '{"workspaces":["*"]}' > "$d/z/package.json"; printf '{"name":"evil-pkg"}' > "$d/z/q/package.json"
+rm -r "$d/packages"
+printf '{"workspaces":["packages/*"],"dependencies":{"evil-pkg":"*"}}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
+ws_negatif "une fausse racine imbriquée n'exempte pas la vraie" evil-pkg
+nouveau_ws ws-transitif
+printf '{"workspaces":["packages/*"]}' > "$d/package.json"
+printf '{"lockfileVersion":3,"packages":{"":{"name":"r"},"node_modules/evil-pkg":{"resolved":"packages/evil","link":true},"packages/evil":{"name":"evil-pkg","version":"1.0.0"},"node_modules/a":{"version":"1.0.0"},"node_modules/a/node_modules/trou":{"version":"1.0.0"}}}' > "$d/package-lock.json"
+valide "$d" "cas"
+lance "$d" --ci --base main --cible HEAD
+grep -q 'GHSA-trou-npm' <<<"$SORTIE$ERREUR" && ok "verifie-manifestes workspace : un transitif imbriqué reste vérifié par OSV" || ko "verifie-manifestes workspace transitif imbriqué : $CODE $ERREUR"
+
 exit $((ECHECS > 0))
