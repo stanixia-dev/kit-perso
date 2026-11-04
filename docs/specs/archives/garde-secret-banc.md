@@ -1,5 +1,5 @@
 # Spec — garde-secret : scripts de banc épinglés
-Statut : en cours
+Statut : livrée
 Tickets : #31
 
 ## 1. Objectif
@@ -70,14 +70,14 @@ Les refus existants restent : `cat`/`grep`/`source`/`.`/`echo >` sur `.banc/*.en
 7. CHANGELOG `## 3.2.0 — <date de livraison>` (une entrée qui cite #31), `plugin.json` en `3.2.0`. Clôture et archivage selon `agents/codeur.md`.
 
 ## 6. Critères d'acceptation
-- [ ] Dépôt jetable avec `scripts/banc.sh` exécutable (il source `.banc/identifiants.env` et cite `https://127.0.0.1:8443`) et des directives `script` et `masque` valides : `scripts/banc.sh` et `./scripts/banc.sh` → 0 sans sortie.
-- [ ] Toutes les commandes Bash « refusées » de la section 7 → 2, et aucun message ne contient une valeur du banc.
-- [ ] Script modifié d'un octet → 2 (empreinte) ; empreinte mal formée → 2 ; script qui cite `https://exemple.org` → 2.
-- [ ] Edit et Write de `scripts/banc.sh` → 2 ; Edit d'un autre fichier → 0.
-- [ ] Sortie qui contient la valeur de `BANC_ADMIN_PASSWORD`, depuis la racine ou un sous-dossier → masquée (`valeur-connue`) ; `BANC_ADMIN_USER` intact ; sans directive `masque` → non masquée.
-- [ ] Directives absentes des avertissements « ligne invalide » ; une directive ne couvre aucun chemin (`couvre` faux).
-- [ ] Sans `.garde-secret-exceptions`, `bash tests/test_hooks.sh` est inchangé (pas de régression).
-- [ ] README, CHANGELOG et 3.2.0 à jour ; `git diff --stat main...HEAD -- .github/workflows` vide.
+- [x] Dépôt jetable avec `scripts/banc.sh` exécutable (il source `.banc/identifiants.env` et cite `https://127.0.0.1:8443`) et des directives `script` et `masque` valides : `scripts/banc.sh` et `./scripts/banc.sh` → 0 sans sortie.
+- [x] Toutes les commandes Bash « refusées » de la section 7 → 2, et aucun message ne contient une valeur du banc.
+- [x] Script modifié d'un octet → 2 (empreinte) ; empreinte mal formée → 2 ; script qui cite `https://exemple.org` → 2.
+- [x] Edit et Write de `scripts/banc.sh` → 2 ; Edit d'un autre fichier → 0.
+- [x] Sortie qui contient la valeur de `BANC_ADMIN_PASSWORD`, depuis la racine ou un sous-dossier → masquée (`valeur-connue`) ; `BANC_ADMIN_USER` intact ; sans directive `masque` → non masquée.
+- [x] Directives absentes des avertissements « ligne invalide » ; une directive ne couvre aucun chemin (`couvre` faux).
+- [x] Sans `.garde-secret-exceptions`, `bash tests/test_hooks.sh` est inchangé (pas de régression).
+- [x] README, CHANGELOG et 3.2.0 à jour ; `git diff --stat main...HEAD -- .github/workflows` vide.
 
 ## 7. Tests
 Commande du projet :
@@ -103,6 +103,6 @@ Cas à ajouter dans `test_secrets.sh` (helpers `hk`, `po`, `bloque`, `passe`). L
 - [x] L1 — directives et contrôle PreToolUse (étapes 1-4)
   Fichiers : hooks/garde-secret.py, tests/test_secrets.sh
   Fait quand : cas autorisés, refusés, écriture, non-régression et directives verts — `bash tests/test_hooks.sh`
-- [ ] L2 — masquage, doc, version 3.2.0, clôture (étapes 5-7)
+- [x] L2 — masquage, doc, version 3.2.0, clôture (étapes 5-7)
   Fichiers : hooks/garde-secret.py, tests/test_secrets.sh, README.md, CHANGELOG.md, .claude-plugin/plugin.json
   Fait quand : cas de masquage verts, suite complète verte — `bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py && claude plugin validate --strict .`

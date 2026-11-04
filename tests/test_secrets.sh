@@ -563,6 +563,19 @@ hk Bash "$d" command 'scripts/banc.sh'; bloque "banc : URL non locale"
 grep -q 'non locale' <<<"$ERREUR" && ok "banc : message de cible" || ko "banc : message de cible"
 d=$(depot banc6)
 hk Bash "$d" command 'scripts/banc.sh'; passe "banc : sans directive, comportement inchangé"
+d=$(banc banc8)
+po PostToolUse Bash "$d" stdout "mdp $BV fin"
+[ "$(champ hookSpecificOutput.updatedToolOutput.stdout | grep -c 'masqué:valeur-connue')" = 1 ] && ok "banc : mot de passe masqué" || ko "banc : mot de passe masqué"
+sans_secret "banc : masquage" "$BV"
+d=$(banc banc7); mkdir "$d/sous"
+po PostToolUse Bash "$d/sous" stdout "mdp $BV fin"
+grep -q 'masqué:valeur-connue' <<<"$SORTIE" && ok "banc : masqué depuis un sous-dossier" || ko "banc : masqué depuis un sous-dossier"
+sans_secret "banc : masquage sous-dossier" "$BV"
+po PostToolUse Bash "$d" stdout "u administrateur"
+[ -z "$SORTIE" ] && ok "banc : BANC_ADMIN_USER intact" || ko "banc : BANC_ADMIN_USER intact"
+rm "$d/.garde-secret-exceptions"
+po PostToolUse Bash "$d" stdout "mdp $BV fin"
+[ -z "$SORTIE" ] && ok "banc : sans directive masque, non masqué" || ko "banc : sans directive masque"
 python3 - "$S" <<'PY' && ok "directives : exceptions, directives et avertissements" || ko "directives"
 import importlib.util, sys
 s = importlib.util.spec_from_file_location("gs", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)

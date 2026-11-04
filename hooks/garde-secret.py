@@ -3,7 +3,7 @@
 Modes : CLI (défaut), --hook pre (PreToolUse), --hook post (PostToolUse / PostToolUseFailure), --hook stop (Stop), --ci (strict).
 Le filtre de commandes est une aide ; les barrières sont le masquage de la sortie et le scan du résultat git.
 Sortie 2 + message sur stderr = refus. Aucun message ne contient une valeur de secret."""
-import argparse, fnmatch, hashlib, importlib.util, json, math, os, re, sys, time
+import argparse, fnmatch, glob, hashlib, importlib.util, json, math, os, re, sys, time
 from collections import Counter
 from datetime import date
 
@@ -677,6 +677,24 @@ def pre(data):
 
 NOM_SECRET = re.compile(r"(?i)TOKEN|SECRET|PASSW|PASSPHRASE|API_?KEY|PRIVATE_?KEY|CREDENTIAL")
 
+def valeurs_env(fichier, ajoute):
+    """Passe à `ajoute(clé, valeur)` chaque affectation `CLE=valeur` du fichier (guillemets et commentaire de fin gérés)."""
+    try:
+        with open(fichier, encoding="utf-8", errors="replace") as f:
+            lignes = f.read().splitlines()
+    except OSError:
+        return
+    for l in lignes:
+        m = re.match(r"\s*(?:export\s+)?([A-Za-z_]\w*)\s*=\s*(.*)$", l)
+        if m:
+            val = m.group(2).strip()
+            if val[:1] in ("'", '"'):  # valeur citée : jusqu'à la guillemet fermante
+                fin = val.find(val[0], 1)
+                val = val[1:fin] if fin > 0 else val[1:]
+            else:  # sinon, sans commentaire de fin de ligne
+                val = re.split(r"\s+#", val, maxsplit=1)[0].strip()
+            ajoute(m.group(1), val)
+
 def valeurs_connues(cwd):
     vals = set()
     def ajoute(k, v):
@@ -685,21 +703,13 @@ def valeurs_connues(cwd):
     for k, v in os.environ.items():
         ajoute(k, v)
     for nom in (".env", ".env.local"):
-        try:
-            with open(os.path.join(cwd, nom), encoding="utf-8", errors="replace") as f:
-                lignes = f.read().splitlines()
-        except OSError:
-            continue
-        for l in lignes:
-            m = re.match(r"\s*(?:export\s+)?([A-Za-z_]\w*)\s*=\s*(.*)$", l)
-            if m:
-                val = m.group(2).strip()
-                if val[:1] in ("'", '"'):  # valeur citée : jusqu'à la guillemet fermante
-                    fin = val.find(val[0], 1)
-                    val = val[1:fin] if fin > 0 else val[1:]
-                else:  # sinon, sans commentaire de fin de ligne
-                    val = re.split(r"\s+#", val, maxsplit=1)[0].strip()
-                ajoute(m.group(1), val)
+        valeurs_env(os.path.join(cwd, nom), ajoute)
+    racine, _, masques = directives_du_depot(cwd)
+    for g in masques:
+        for rel in glob.glob(g, root_dir=racine):
+            f = os.path.join(racine, rel)
+            if os.path.isfile(f):
+                valeurs_env(f, ajoute)
     return sorted(vals, key=len, reverse=True)
 
 def masque_texte(s, connus, trouves):
