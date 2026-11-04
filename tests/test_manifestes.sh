@@ -250,4 +250,22 @@ hook post "$d" "$J"
 hook post "$d" "{\"cwd\":\"$d\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\"}}"
 [ "$CODE" = 0 ] && [ -z "$SORTIE$ERREUR" ] && ok "verifie-manifestes --hook post muet après Bash sans changement" || ko "verifie-manifestes post bash"
 
+# --- workspaces npm : leurs paquets ne sont jamais cherchés sur le registre
+d=$(depot workspaces); git -C "$d" checkout -q -b claude/ws
+mkdir -p "$d/packages/client" "$d/packages/sans-nom" "$d/packages/vide"
+printf '{"name":"@hive/client","version":"1.0.0"}' > "$d/packages/client/package.json"
+printf '{"version":"1.0.0"}' > "$d/packages/sans-nom/package.json"
+printf '{"workspaces":["packages/*"],"dependencies":{"@hive/client":"*"}}' > "$d/package.json"
+printf '{"lockfileVersion":3,"packages":{"":{"name":"r"},"node_modules/@hive/client":{"resolved":"packages/client","link":true},"packages/client":{"name":"@hive/client","version":"1.0.0"}}}' > "$d/package-lock.json"
+valide "$d" "monorepo"
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 0 ] && [ -z "$SORTIE$ERREUR" ] && ok "verifie-manifestes ignore un workspace npm (tableau, manifeste et lockfile)" || ko "verifie-manifestes workspace tableau: $CODE $ERREUR"
+printf '{"workspaces":{"packages":["packages/*"]},"dependencies":{"@hive/client":"*"}}' > "$d/package.json"; valide "$d" "forme objet"
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 0 ] && [ -z "$SORTIE$ERREUR" ] && ok "verifie-manifestes ignore un workspace npm (forme objet)" || ko "verifie-manifestes workspace objet: $CODE $ERREUR"
+printf '{"workspaces":["packages/*"],"dependencies":{"@hive/client":"*","@hive/autre":"*"}}' > "$d/package.json"; valide "$d" "hors workspace"
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 2 ] && grep -q '@hive/autre' <<<"$ERREUR" && ! grep -q '@hive/client' <<<"$ERREUR" \
+  && ok "verifie-manifestes vérifie toujours un paquet hors workspace" || ko "verifie-manifestes hors workspace: $CODE $ERREUR"
+
 exit $((ECHECS > 0))
