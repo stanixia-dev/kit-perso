@@ -100,7 +100,7 @@ Cas à ajouter dans `test_secrets.sh` (helpers `hk`, `po`, `bloque`, `passe`). L
 - **Q3 (tranchée : défaut retenu) — Filtre du masquage.** Le défaut retenu applique le même filtre de nom que `.env` (`PASSW`, `TOKEN`…) : les identifiants et les URL restent lisibles. On pourrait masquer toutes les valeurs ≥ 8 caractères des fichiers `masque`, ce qui couvre une clé mal nommée mais masque aussi les URL du banc. Recommandation : garder le défaut.
 
 ## Lots
-- [ ] L1 — directives et contrôle PreToolUse (étapes 1-4)
+- [x] L1 — directives et contrôle PreToolUse (étapes 1-4)
   Fichiers : hooks/garde-secret.py, tests/test_secrets.sh
   Fait quand : cas autorisés, refusés, écriture, non-régression et directives verts — `bash tests/test_hooks.sh`
 - [ ] L2 — masquage, doc, version 3.2.0, clôture (étapes 5-7)

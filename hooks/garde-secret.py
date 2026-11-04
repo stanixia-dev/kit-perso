@@ -123,6 +123,70 @@ def racine_de(dossier):
 
 # ---------- exceptions ----------
 
+DIRECTIVES = ("script", "masque")
+
+def chemin_relatif_sur(c, glob=False):
+    """Chemin relatif sans `..`, `.`, composant vide ni `/` initial ; caractères sûrs (glob : `*?[]` en plus)."""
+    if not re.fullmatch(r"[A-Za-z0-9._/*?\[\]-]+" if glob else r"[A-Za-z0-9._/-]+", c):
+        return False
+    return all(x not in ("", ".", "..") for x in c.split("/"))
+
+def directives(texte):
+    """([(chemin, sha256|None)], [glob], avertissements) : directives `script` et `masque`."""
+    scripts, masques, avert = [], [], []
+    for n, l in enumerate(texte.splitlines(), 1):
+        p = l.split(None, 4)
+        if not p or p[0] not in DIRECTIVES:
+            continue
+        if p[0] == "script":
+            if len(p) < 2 or not chemin_relatif_sur(p[1]):
+                avert.append(f"{EXCEPTIONS} ligne {n} ignorée (script : chemin relatif invalide)")
+                continue
+            ok = len(p) >= 5 and re.fullmatch(r"[0-9a-f]{64}", p[2]) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[3])
+            if ok:
+                try:
+                    date.fromisoformat(p[3])
+                except ValueError:
+                    ok = False
+            if not ok:
+                avert.append(f"{EXCEPTIONS} ligne {n} : empreinte ou date invalide, exécution de {p[1]} refusée")
+            scripts.append((p[1], p[2] if ok else None))
+        else:
+            ok = len(p) >= 4 and chemin_relatif_sur(p[1], True) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[2])
+            if ok:
+                try:
+                    date.fromisoformat(p[2])
+                except ValueError:
+                    ok = False
+            if ok:
+                masques.append(p[1])
+            else:
+                avert.append(f"{EXCEPTIONS} ligne {n} ignorée (masque : attendu glob AAAA-MM-JJ raison)")
+    return scripts, masques, avert
+
+def racine_locale(cwd):
+    """Premier dossier ancêtre de realpath(cwd) qui contient `.git` ; sans appeler git."""
+    d = os.path.realpath(cwd or os.getcwd())
+    while True:
+        if os.path.exists(os.path.join(d, ".git")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+def directives_du_depot(cwd):
+    """(racine, scripts, masques) du dépôt de cwd ; rien sans racine ni fichier."""
+    racine = racine_locale(cwd)
+    if not racine:
+        return None, [], []
+    try:
+        with open(os.path.join(racine, EXCEPTIONS), encoding="utf-8") as f:
+            scripts, masques, _ = directives(f.read())
+    except OSError:
+        return racine, [], []
+    return racine, scripts, masques
+
 def lit_exceptions(texte):
     """([(glob, empreinte|*, date, raison)], avertissements)."""
     res, avert = [], []
@@ -131,6 +195,8 @@ def lit_exceptions(texte):
         if not l or l.startswith("#"):
             continue
         p = l.split(None, 3)
+        if p[0] in DIRECTIVES:
+            continue
         try:
             if len(p) < 4 or not (p[1] == "*" or re.fullmatch(r"[0-9a-f]{12}", p[1])) \
                     or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[2]):
@@ -503,6 +569,55 @@ def scan_depot(cwd, budget=None):
         trouv = sans_exceptions(trouv, exceptions_du_depot(racine)[0])
     return [t for t in trouv if t[2] == "fort"], [t for t in trouv if t[2] != "fort"], illis
 
+HOTES_LOCAUX = {"127.0.0.1", "localhost", "[::1]"}
+
+def hote_non_local(texte):
+    for m in re.finditer(r"[a-z][a-z0-9+.-]*://([^/\s'\"]*)", texte, re.I):
+        auto = m.group(1)
+        hote = auto[:auto.find("]") + 1] if auto.startswith("[") and "]" in auto else auto.split(":")[0]
+        if "@" in auto or hote.lower() not in HOTES_LOCAUX:
+            return hote or auto
+    return None
+
+def controle_banc(cmd, cwd):
+    """Vrai si la commande est l'invocation exacte d'un script de banc déclaré et intact ; refuse (exit 2) une commande
+    qui le cite autrement ou dont une condition échoue ; None si aucun script déclaré n'est en cause."""
+    racine, scripts, _ = directives_du_depot(cwd)
+    if not scripts:
+        return None
+    r = os.path.realpath(racine)
+    s = cmd.strip()
+    for chemin, sha in scripts:
+        abs_ = os.path.join(r, chemin)
+        if s not in (chemin, "./" + chemin):
+            continue
+        if os.path.realpath(cwd or os.getcwd()) != r:
+            refuse(f"⛔ Bloqué par garde-secret : lance-le depuis la racine du dépôt ({chemin}).")
+        if os.path.realpath(abs_) != abs_:
+            refuse(f"⛔ Bloqué par garde-secret : script de banc ({chemin}) derrière un lien symbolique.")
+        try:
+            if not os.path.isfile(abs_):
+                raise OSError
+            with open(abs_, "rb") as f:
+                contenu = f.read()
+        except OSError:
+            refuse(f"⛔ Bloqué par garde-secret : script de banc ({chemin}) illisible ou absent.")
+        if sha is None or hashlib.sha256(contenu).hexdigest() != sha:
+            refuse(f"⛔ Bloqué par garde-secret : script modifié depuis sa déclaration ({chemin}) : demande à "
+                   "l'utilisateur de le relire et de mettre à jour l'empreinte.")
+        hote = hote_non_local(contenu.decode("utf-8", "replace"))
+        if hote:
+            refuse(f"⛔ Bloqué par garde-secret : cible non locale ({hote}) dans {chemin}.")
+        return True
+    cands = [os.path.realpath(os.path.join(cwd or os.getcwd(), developpe(c))) for c in candidats(cmd)]
+    for chemin, _ in scripts:
+        abs_ = os.path.join(r, chemin)
+        nom = re.escape(chemin.rsplit("/", 1)[-1])
+        if re.search(rf"(?<![\w.-]){nom}(?![\w.-])", cmd) or abs_ in cands:
+            refuse(f"⛔ Bloqué par garde-secret : script de banc déclaré : lance-le seul, tel quel, depuis la racine "
+                   f"({chemin}) ; pour le lire, utilise l'outil Read.")
+    return None
+
 def pre(data):
     outil = data.get("tool_name") or "Bash"
     ti = data.get("tool_input") or {}
@@ -522,6 +637,10 @@ def pre(data):
     elif outil in ECRITURE:
         chemin = ti.get("file_path") or ti.get("notebook_path") or ""
         if chemin:
+            racine, scripts, _ = directives_du_depot(cwd)
+            cible = os.path.realpath(chemin if os.path.isabs(chemin) else os.path.join(cwd, chemin))
+            if racine and any(cible == os.path.join(os.path.realpath(racine), c) for c, _ in scripts):
+                refuse("⛔ Bloqué par garde-secret : script de banc épinglé : modification réservée à l'utilisateur.")
             controle_chemin(chemin, cwd)
         textes = [ti[k] for k in ("new_string", "content", "new_source") if isinstance(ti.get(k), str)]
         textes += [e["new_string"] for e in ti.get("edits") or [] if isinstance(e, dict) and isinstance(e.get("new_string"), str)]
@@ -532,6 +651,8 @@ def pre(data):
         if forts:
             refuse("⛔ Bloqué par garde-secret : secret dans le texte de la commande ("
                    + ", ".join(f"{n} {empreinte(v)}" for _, n, v in forts) + f"). {ACCES}")
+        if controle_banc(cmd, cwd):
+            return
         ctx = {"hits": [], "scan": False, "livre": False, "cwd": cwd}
         bash_chemins(cmd, ctx)
         if ctx["hits"]:

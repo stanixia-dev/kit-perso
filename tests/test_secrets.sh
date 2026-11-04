@@ -516,5 +516,65 @@ ln -s LISEZMOI "$d/l"; valide "$d" lien
 rm "$d/l"; printf 'T=%s\n' "$GH" > "$d/l"; git -C "$d" add l
 lance "$d"; vaut "lien devenu fichier (type change) : fort trouvé" 2
 
+# ---------- scripts de banc épinglés ----------
+BV="banc""-valeur-${A36:0:10}"
+banc() { # $1 = nom ; dépôt avec script de banc déclaré (empreinte, directives script et masque)
+  local d; d=$(depot "$1")
+  mkdir -p "$d/scripts" "$d/.banc"
+  printf '#!/bin/sh\n. .banc/identifiants.env\ncurl https://127.0.0.1:8443/x\n' > "$d/scripts/banc.sh"
+  chmod +x "$d/scripts/banc.sh"
+  printf 'BANC_ADMIN_USER=administrateur\nBANC_ADMIN_PASSWORD=%s\n' "$BV" > "$d/.banc/identifiants.env"
+  printf 'script scripts/banc.sh %s 2026-11-04 captures\nmasque .banc/*.env 2026-11-04 banc\n' \
+    "$(sha256sum "$d/scripts/banc.sh" | cut -d' ' -f1)" > "$d/.garde-secret-exceptions"
+  echo "$d"
+}
+d=$(banc banc1)
+for c in 'scripts/banc.sh' './scripts/banc.sh' ' scripts/banc.sh '; do hk Bash "$d" command "$c"; passe "script de banc : '$c'"; done
+for c in 'bash scripts/banc.sh' 'sh -x scripts/banc.sh' 'source scripts/banc.sh' '. scripts/banc.sh' 'scripts/banc.sh --x' \
+         'scripts/banc.sh | tee o' 'scripts/banc.sh > o' 'scripts/banc.sh; env' 'scripts/banc.sh && env' 'scripts/banc.sh &' \
+         'X=1 scripts/banc.sh' 'env scripts/banc.sh' 'scripts/../scripts/banc.sh' '"$PWD"/scripts/banc.sh' \
+         "bash -c 'scripts/banc.sh'" 'cd scripts && ./banc.sh' 'cat scripts/banc.sh' 'sed -i s/a/b/ scripts/banc.sh'; do
+  hk Bash "$d" command "$c"; bloque "banc : $c"; sans_secret "banc : $c" "$BV"
+done
+mkdir -p "$d/sous"
+hk Bash "$d/sous" command '../scripts/banc.sh'; bloque "banc : depuis un sous-dossier"
+hk Bash "$d/sous" command 'scripts/banc.sh'; bloque "banc : racine non courante"
+ln -s scripts/banc.sh "$d/l"
+hk Bash "$d" command './l'; bloque "banc : lien l vers le script"
+rm "$d/l"
+hk Edit "$d" file_path "$d/scripts/banc.sh" old_string a new_string b; bloque "Edit du script de banc"
+hk Write "$d" file_path "$d/scripts/banc.sh" content x; bloque "Write du script de banc"
+hk Write "$d" file_path "$d/scripts/autre.sh" content x; passe "Write de scripts/autre.sh"
+hk Edit "$d" file_path "$d/LISEZMOI" old_string a new_string b; passe "Edit d'un autre fichier"
+for c in 'cat .banc/identifiants.env' 'source .banc/identifiants.env' 'grep P .banc/identifiants.env' 'echo x > .banc/identifiants.env'; do
+  hk Bash "$d" command "$c"; bloque "banc : $c"
+done
+hk Read "$d" file_path "$d/.banc/identifiants.env"; bloque "banc : Read de identifiants.env"
+d=$(banc banc2); mv "$d/scripts" "$d/copie"; mkdir "$d/vrai"; ln -s vrai "$d/scripts"; cp "$d/copie/banc.sh" "$d/vrai/banc.sh"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "banc : scripts remplacé par un lien"
+d=$(banc banc3); printf '# x\n' >> "$d/scripts/banc.sh"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "banc : script modifié"
+grep -q 'modifié' <<<"$ERREUR" && ok "banc : message d'empreinte" || ko "banc : message d'empreinte"
+d=$(banc banc4); sed -i 's/ [0-9a-f]\{52\}\([0-9a-f]\{12\}\) / \1 /' "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "banc : empreinte de 12 hex"
+d=$(banc banc5); printf 'curl https://exemple.org/x\n' >> "$d/scripts/banc.sh"
+printf 'script scripts/banc.sh %s 2026-11-04 r\n' "$(sha256sum "$d/scripts/banc.sh" | cut -d' ' -f1)" > "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "banc : URL non locale"
+grep -q 'non locale' <<<"$ERREUR" && ok "banc : message de cible" || ko "banc : message de cible"
+d=$(depot banc6)
+hk Bash "$d" command 'scripts/banc.sh'; passe "banc : sans directive, comportement inchangé"
+python3 - "$S" <<'PY' && ok "directives : exceptions, directives et avertissements" || ko "directives"
+import importlib.util, sys
+s = importlib.util.spec_from_file_location("gs", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+h = "a" * 64
+t = f"x.txt {'0'*12} 2026-11-04 r\nscript a.sh {h} 2026-11-04 r\nmasque .banc/*.env 2026-11-04 r\nscript ../x.sh {h} 2026-11-04 r\n"
+exc, av = m.lit_exceptions(t)
+assert exc == [("x.txt", "0"*12, "2026-11-04", "r")] and av == [], (exc, av)
+sc, ma, av = m.directives(t)
+assert sc == [("a.sh", h)] and ma == [".banc/*.env"] and len(av) == 1 and "ligne 4" in av[0], (sc, ma, av)
+assert m.couvre(exc, "a.sh") is False
+assert m.directives(f"script a.sh {h[:12]} 2026-11-04 r")[0] == [("a.sh", None)]
+PY
+
 # ---------- FIN ----------
 exit $((ECHECS > 0))
