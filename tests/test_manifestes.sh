@@ -268,4 +268,45 @@ lance "$d" --ci --base main --cible HEAD
 [ "$CODE" = 2 ] && grep -q '@hive/autre' <<<"$ERREUR" && ! grep -q '@hive/client' <<<"$ERREUR" \
   && ok "verifie-manifestes vérifie toujours un paquet hors workspace" || ko "verifie-manifestes hors workspace: $CODE $ERREUR"
 
+# négatifs : chaque cas doit rester bloqué en --ci
+LOCK_LIEN='{"lockfileVersion":3,"packages":{"":{"name":"r"},"node_modules/evil-pkg":{"resolved":"packages/evil","link":true},"packages/evil":{"name":"evil-pkg","version":"1.0.0"}}}'
+ws_negatif() { # $1 = description ; $2 = motif attendu dans l'erreur
+  valide "$d" "cas"
+  lance "$d" --ci --base main --cible HEAD
+  [ "$CODE" = 2 ] && grep -q "$2" <<<"$ERREUR" && ok "verifie-manifestes workspace : $1" || ko "verifie-manifestes workspace $1 : $CODE $ERREUR"
+}
+nouveau_ws() { # $1 = nom du dépôt ; crée un monorepo avec le membre evil-pkg
+  d=$(depot "$1"); git -C "$d" checkout -q -b claude/neg
+  mkdir -p "$d/packages/evil"
+  printf '{"name":"evil-pkg","version":"1.0.0"}' > "$d/packages/evil/package.json"
+}
+nouveau_ws ws-alias
+printf '{"workspaces":["packages/*"],"dependencies":{"x":"npm:evil-pkg@2.0.0"}}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
+ws_negatif "un alias npm: reste vérifié" evil-pkg
+nouveau_ws ws-version
+printf '{"workspaces":["packages/*"],"dependencies":{"evil-pkg":"^9.0.0"}}' > "$d/package.json"
+ws_negatif "sans preuve link dans le lockfile" evil-pkg
+nouveau_ws ws-version-lien
+printf '{"workspaces":["packages/*"],"dependencies":{"evil-pkg":"^9.0.0"}}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
+valide "$d" "lien"
+lance "$d" --ci --base main --cible HEAD
+[ "$CODE" = 0 ] && ok "verifie-manifestes workspace : lien prouvé, version quelconque exemptée" || ko "verifie-manifestes workspace lien prouvé : $CODE $ERREUR"
+nouveau_ws ws-autre
+mkdir -p "$d/autre"
+printf '{"workspaces":["packages/*"]}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
+printf '{"dependencies":{"evil-pkg":"*"}}' > "$d/autre/package.json"
+ws_negatif "un manifeste hors de la racine n'est pas exempté" evil-pkg
+nouveau_ws ws-fausse
+mkdir -p "$d/z/q"
+printf '{"workspaces":["*"]}' > "$d/z/package.json"; printf '{"name":"evil-pkg"}' > "$d/z/q/package.json"
+rm -r "$d/packages"
+printf '{"workspaces":["packages/*"],"dependencies":{"evil-pkg":"*"}}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
+ws_negatif "une fausse racine imbriquée n'exempte pas la vraie" evil-pkg
+nouveau_ws ws-transitif
+printf '{"workspaces":["packages/*"]}' > "$d/package.json"
+printf '{"lockfileVersion":3,"packages":{"":{"name":"r"},"node_modules/evil-pkg":{"resolved":"packages/evil","link":true},"packages/evil":{"name":"evil-pkg","version":"1.0.0"},"node_modules/a":{"version":"1.0.0"},"node_modules/a/node_modules/trou":{"version":"1.0.0"}}}' > "$d/package-lock.json"
+valide "$d" "cas"
+lance "$d" --ci --base main --cible HEAD
+grep -q 'GHSA-trou-npm' <<<"$SORTIE$ERREUR" && ok "verifie-manifestes workspace : un transitif imbriqué reste vérifié par OSV" || ko "verifie-manifestes workspace transitif imbriqué : $CODE $ERREUR"
+
 exit $((ECHECS > 0))

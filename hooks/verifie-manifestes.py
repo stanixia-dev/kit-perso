@@ -108,11 +108,13 @@ def cargo_manifeste(texte, dossier="", hors=None):
 
 NPM_URL = ("github:", "gitlab:", "bitbucket:", "gist:", "git+", "git:", "git@", "http:", "https:", "ssh:")
 
-def npm_manifeste(texte, dossier="", hors=None):
+def npm_manifeste(texte, dossier="", hors=None, exempts=()):
     d, out = json.loads(texte), defaultdict(set)
     for k in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
         for nom, v in (d.get(k) if isinstance(d.get(k), dict) else {}).items():
             if not isinstance(v, str):
+                continue
+            if nom in exempts and not v.startswith("npm:"):  # membre de workspace prouvé par le lockfile
                 continue
             if v.startswith("npm:"):
                 reel, i = v[4:], v.rfind("@")
@@ -217,7 +219,7 @@ def requirements(texte, dossier="", hors=None, lecteur=None, chemin="", vus=None
         ligne_pep508(l, out, hors, dossier)
     return finalise(out) if racine else out
 
-def manifeste(chemin, texte, hors=None, lecteur=None):
+def manifeste(chemin, texte, hors=None, lecteur=None, exempts=()):
     """{(registre, nom): (spec, …)} des dépendances d'un manifeste ; ValueError si illisible.
     `hors` (dict) reçoit les dépendances hors registre ; `lecteur(chemin)` lit les fichiers inclus par -r / -c."""
     nom, dossier = chemin.rsplit("/", 1)[-1], posixpath.dirname(chemin)
@@ -225,7 +227,7 @@ def manifeste(chemin, texte, hors=None, lecteur=None):
         if nom == "Cargo.toml":
             return cargo_manifeste(texte, dossier, hors)
         if nom == "package.json":
-            return npm_manifeste(texte, dossier, hors)
+            return npm_manifeste(texte, dossier, hors, exempts)
         if nom == "pyproject.toml":
             return pyproject_manifeste(texte, dossier, hors)
         return requirements(texte, dossier, hors, lecteur, chemin)
@@ -260,7 +262,7 @@ def lock_toml(nom_fichier, texte):
 def lock_package_lock(texte):
     out = set()
     for cle, p in (json.loads(texte).get("packages") or {}).items():
-        if not cle or not isinstance(p, dict) or p.get("link") or not p.get("version"):
+        if "node_modules/" not in cle or not isinstance(p, dict) or p.get("link") or not p.get("version"):
             continue
         nom = p.get("name") or cle.rsplit("node_modules/", 1)[-1]
         out.add(("npm", nom, p["version"]))
@@ -313,36 +315,37 @@ def lock(chemin, texte):
 def motif_workspace(motif):
     """Regex d'un motif glob de workspace npm (`*` = un segment, `**` = plusieurs)."""
     parts = re.split(r"(\*\*/?|\*)", posixpath.normpath(motif))
-    return re.compile("".join(".*" if x.startswith("**") else "[^/]*" if x == "*" else re.escape(x) for x in parts))
+    return re.compile("".join("(?:.*/)?" if x == "**/" else ".*" if x == "**" else "[^/]*" if x == "*" else re.escape(x)
+                              for x in parts))
 
-def noms_workspaces(chemins, lecteur):
-    """{nom} des paquets des workspaces npm ; dossier sans package.json lisible ou sans name : ignoré."""
+def membres_workspaces(chemins, json_de):
+    """{dossier de la racine: {nom: dossier du membre}} des workspaces npm ; un dossier sans
+    package.json lisible ou sans name est ignoré. `json_de(chemin)` renvoie le JSON (en cache) ou None."""
     paquets = {p for p in chemins if p.rsplit("/", 1)[-1] == "package.json"}
-    noms = set()
+    res = {}
     for racine in sorted(paquets):
-        try:
-            ws = json.loads(lecteur(racine)).get("workspaces")
-        except (ValueError, AttributeError):
-            continue
+        d = json_de(racine)
+        ws = d.get("workspaces") if isinstance(d, dict) else None
         ws = ws.get("packages") if isinstance(ws, dict) else ws
         base = posixpath.dirname(racine)
         motifs = [m for m in ws if isinstance(m, str) and m] if isinstance(ws, list) else []
         pos = [motif_workspace(m) for m in motifs if not m.startswith("!")]
         neg = [motif_workspace(m[1:]) for m in motifs if m.startswith("!") and m[1:]]
+        membres = {}
         for p in sorted(paquets - {racine}):
-            d = posixpath.dirname(p)
-            if not d:
+            dm = posixpath.dirname(p)
+            if not dm:
                 continue
-            rel = posixpath.relpath(d, base) if base else d
+            rel = posixpath.relpath(dm, base) if base else dm
             if rel.startswith("..") or not any(r.fullmatch(rel) for r in pos) or any(r.fullmatch(rel) for r in neg):
                 continue
-            try:
-                nom = json.loads(lecteur(p)).get("name")
-            except (ValueError, AttributeError):
-                continue
+            m = json_de(p)
+            nom = m.get("name") if isinstance(m, dict) else None
             if isinstance(nom, str) and nom:
-                noms.add(nom)
-    return noms
+                membres[nom] = dm
+        if membres:
+            res[base] = membres
+    return res
 
 # ---------- états (base / cible) ----------
 
@@ -354,15 +357,40 @@ class Etat:
         self.locks = [p for p in self.fichiers if est_lock(p)]
         self._lock = {}  # chemin -> (paquets, erreur ou None)
         self._workspaces = None
+        self._json = {}  # chemin -> JSON lu une seule fois (ou None)
 
     def texte(self, chemin):
         return lire(self.racine, self.ref, chemin)
 
+    def json_de(self, chemin):
+        if chemin not in self._json:
+            try:
+                self._json[chemin] = json.loads(self.texte(chemin))
+            except ValueError:
+                self._json[chemin] = None
+        return self._json[chemin]
+
     def workspaces(self):
-        """Noms des paquets des workspaces npm déclarés par les package.json de cet état."""
+        """{racine: {nom: dossier}} des workspaces npm déclarés par les package.json de cet état."""
         if self._workspaces is None:
-            self._workspaces = noms_workspaces(self.fichiers, self.texte)
+            self._workspaces = membres_workspaces(self.fichiers, self.json_de)
         return self._workspaces
+
+    def exemptes(self, chemin):
+        """Noms de dépendances du package.json `chemin` qui sont des membres de workspace prouvés par le
+        package-lock.json de leur racine (`node_modules/<nom>` : link et resolved = dossier du membre)."""
+        d, res = posixpath.dirname(chemin), set()
+        for racine, membres in self.workspaces().items():
+            if d != racine and d not in membres.values():
+                continue
+            lock = self.json_de(posixpath.join(racine, "package-lock.json"))
+            paquets = lock.get("packages") if isinstance(lock, dict) else None
+            for nom, dm in membres.items():
+                e = paquets.get("node_modules/" + nom) if isinstance(paquets, dict) else None
+                rel = posixpath.relpath(dm, racine) if racine else dm
+                if isinstance(e, dict) and e.get("link") is True and e.get("resolved") == rel:
+                    res.add(nom)
+        return res
 
     def lock(self, chemin, illisibles=None):
         if chemin not in self._lock:
@@ -442,25 +470,23 @@ def directs(base, cible, touche, illisibles):
     """({(registre, nom, version|None): {chemins}} des paquets de manifestes dont spec ou version résolue a changé,
     {(registre, nom, description): {chemins}} des dépendances hors registre ajoutées ou modifiées)."""
     res, hors_res = {}, {}
-    ws_cible = cible.workspaces()
     for chemin in cible.manifestes:
         hc, hb = {}, {}
         try:
-            c = manifeste(chemin, cible.texte(chemin), hc, cible.texte)
+            ex = cible.exemptes(chemin) if chemin.endswith("package.json") else ()
+            c = manifeste(chemin, cible.texte(chemin), hc, cible.texte, ex)
         except ValueError:
             if chemin in touche:
                 illisibles.append(chemin)
             continue
         try:
-            b = manifeste(chemin, base.texte(chemin), hb, base.texte) if chemin in base.manifestes else {}
+            b = manifeste(chemin, base.texte(chemin), hb, base.texte, ex) if chemin in base.manifestes else {}
         except ValueError:
             b = {}
         for k in hc:
             if k not in hb:
                 hors_res.setdefault(k, set()).add(chemin)
         for (registre, nom), specs in c.items():
-            if registre == "npm" and nom in ws_cible:  # paquet du monorepo : jamais sur le registre
-                continue
             rc, rb = cible.resolu(chemin, registre, nom), base.resolu(chemin, registre, nom)
             if b.get((registre, nom)) == specs and rc == rb:
                 continue
@@ -495,8 +521,6 @@ def controle(racine, base_ref, cible_ref, touche, strict, exceptions=None):
     for p in cible.locks:
         if p in touche:
             nouveaux |= cible.lock(p, illisibles)
-    ws = cible.workspaces()
-    nouveaux = {t for t in nouveaux if not (t[0] == "npm" and t[1] in ws)}
     nouveaux = sorted(nouveaux - connus - {(r, n, v) for r, n, v in dir_})
     if len(nouveaux) > MAX_TRANSITIFS:
         avert.append(f"{len(nouveaux) - MAX_TRANSITIFS} paquets transitifs non examinés (plus de {MAX_TRANSITIFS})")
