@@ -158,6 +158,7 @@ for c in 'npm install gpl-pkg' 'npm i sanslicence' 'yarn add prive' 'npm add dep
          'unlink .garde-deps-exceptions' 'rmdir ~/.claude/hooks' 'awk -i inplace 1 ~/.claude/settings.json' \
          'echo x | sponge .garde-deps-exceptions' 'truncate -s0 .garde-deps-exceptions' 'install a ~/.claude/hooks/x' \
          'ln -sf a .garde-deps-exceptions' 'dd if=a of=.garde-deps-exceptions' 'node -e "x" .garde-deps-exceptions' 'echo x > .garde-secret-exceptions' \
+         "echo 'script x.sh $(printf 'a%.0s' {1..64}) 2026-11-04 r' >> .garde-secret-exceptions" \
          "python3 -c \"import json,os;p=os.path.expanduser('~/.claude/settings.json');d=json.load(open(p));d.pop('permissions',None);json.dump(d,open(p+'.tmp','w'),indent=2);os.replace(p+'.tmp',p)\"" \
          "python3 -c \"import os;os.replace('a','/home/u/.claude/settings.json')\"" \
          "python3 -c \"from pathlib import Path;Path('/home/u/.claude/settings.json').write_text('x')\"" \

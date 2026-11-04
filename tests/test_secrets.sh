@@ -545,6 +545,10 @@ rm "$d/l"
 hk Edit "$d" file_path "$d/scripts/banc.sh" old_string a new_string b; bloque "Edit du script de banc"
 hk Write "$d" file_path "$d/scripts/banc.sh" content x; bloque "Write du script de banc"
 hk Write "$d" file_path "$d/scripts/autre.sh" content x; passe "Write de scripts/autre.sh"
+hk Write "$TMP" file_path "$d/scripts/banc.sh" content x; bloque "Write en chemin absolu depuis un cwd hors du dépôt"
+for c in 'bash -x scripts/"banc".sh' 'bash -x scripts/b*' 'cp scripts/b* z' "cat scripts/'banc.sh'" 'cat scripts/ban?.sh'; do
+  hk Bash "$d" command "$c"; bloque "banc : $c"
+done
 hk Edit "$d" file_path "$d/LISEZMOI" old_string a new_string b; passe "Edit d'un autre fichier"
 for c in 'cat .banc/identifiants.env' 'source .banc/identifiants.env' 'grep P .banc/identifiants.env' 'echo x > .banc/identifiants.env'; do
   hk Bash "$d" command "$c"; bloque "banc : $c"
@@ -561,6 +565,14 @@ d=$(banc banc5); printf 'curl https://exemple.org/x\n' >> "$d/scripts/banc.sh"
 printf 'script scripts/banc.sh %s 2026-11-04 r\n' "$(sha256sum "$d/scripts/banc.sh" | cut -d' ' -f1)" > "$d/.garde-secret-exceptions"
 hk Bash "$d" command 'scripts/banc.sh'; bloque "banc : URL non locale"
 grep -q 'non locale' <<<"$ERREUR" && ok "banc : message de cible" || ko "banc : message de cible"
+for u in 'https:///exemple.org' 'http://[::1].exemple.org' 'http://[::1]x/' 'http://user@127.0.0.1/' 'http://127.0.0.1.exemple.org/'; do
+  d=$(banc banc9); printf 'curl %s\n' "$u" >> "$d/scripts/banc.sh"
+  printf 'script scripts/banc.sh %s 2026-11-04 r\n' "$(sha256sum "$d/scripts/banc.sh" | cut -d' ' -f1)" > "$d/.garde-secret-exceptions"
+  hk Bash "$d" command 'scripts/banc.sh'; bloque "banc : cible $u"
+done
+d=$(banc banc9); printf 'curl http://[::1]:8080/x\ncurl file:///tmp/x\n' >> "$d/scripts/banc.sh"
+printf 'script scripts/banc.sh %s 2026-11-04 r\n' "$(sha256sum "$d/scripts/banc.sh" | cut -d' ' -f1)" > "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'scripts/banc.sh'; passe "banc : [::1]:port et file:///"
 d=$(depot banc6)
 hk Bash "$d" command 'scripts/banc.sh'; passe "banc : sans directive, comportement inchangé"
 d=$(banc banc8)

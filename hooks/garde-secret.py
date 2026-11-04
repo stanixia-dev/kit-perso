@@ -572,10 +572,23 @@ def scan_depot(cwd, budget=None):
 HOTES_LOCAUX = {"127.0.0.1", "localhost", "[::1]"}
 
 def hote_non_local(texte):
-    for m in re.finditer(r"[a-z][a-z0-9+.-]*://([^/\s'\"]*)", texte, re.I):
-        auto = m.group(1)
-        hote = auto[:auto.find("]") + 1] if auto.startswith("[") and "]" in auto else auto.split(":")[0]
-        if "@" in auto or hote.lower() not in HOTES_LOCAUX:
+    """Libellé (jamais vide) de la première cible non locale d'une URL du texte, sinon None."""
+    for m in re.finditer(r"([a-z][a-z0-9+.-]*)://([^/\s'\"]*)", texte, re.I):
+        schema, auto = m.group(1).lower(), m.group(2)
+        if not auto:
+            if schema == "file":
+                continue
+            return "(hôte vide)"
+        if "@" in auto:
+            return auto
+        if auto.startswith("["):
+            fin = auto.find("]")
+            hote, reste = (auto[:fin + 1], auto[fin + 1:]) if fin > 0 else (auto, "x")
+            if reste and not re.fullmatch(r":\d*", reste):
+                return auto
+        else:
+            hote = auto.split(":")[0]
+        if hote.lower() not in HOTES_LOCAUX:
             return hote or auto
     return None
 
@@ -609,11 +622,18 @@ def controle_banc(cmd, cwd):
         if hote:
             refuse(f"⛔ Bloqué par garde-secret : cible non locale ({hote}) dans {chemin}.")
         return True
-    cands = [os.path.realpath(os.path.join(cwd or os.getcwd(), developpe(c))) for c in candidats(cmd)]
+    base = cwd or os.getcwd()
+    sans_guil = cmd.replace("'", "").replace('"', "")
+    cands = set()
+    for c in candidats(cmd) + candidats(sans_guil):
+        c = developpe(c)
+        cibles = glob.glob(c, root_dir=base) if re.search(r"[*?\[]", c) else []
+        for x in cibles + [c]:
+            cands.add(os.path.realpath(os.path.join(base, x)))
     for chemin, _ in scripts:
         abs_ = os.path.join(r, chemin)
         nom = re.escape(chemin.rsplit("/", 1)[-1])
-        if re.search(rf"(?<![\w.-]){nom}(?![\w.-])", cmd) or abs_ in cands:
+        if re.search(rf"(?<![\w.-]){nom}(?![\w.-])", cmd + "\n" + sans_guil) or abs_ in cands:
             refuse(f"⛔ Bloqué par garde-secret : script de banc déclaré : lance-le seul, tel quel, depuis la racine "
                    f"({chemin}) ; pour le lire, utilise l'outil Read.")
     return None
@@ -637,10 +657,11 @@ def pre(data):
     elif outil in ECRITURE:
         chemin = ti.get("file_path") or ti.get("notebook_path") or ""
         if chemin:
-            racine, scripts, _ = directives_du_depot(cwd)
             cible = os.path.realpath(chemin if os.path.isabs(chemin) else os.path.join(cwd, chemin))
-            if racine and any(cible == os.path.join(os.path.realpath(racine), c) for c, _ in scripts):
-                refuse("⛔ Bloqué par garde-secret : script de banc épinglé : modification réservée à l'utilisateur.")
+            for dossier in {cwd, os.path.dirname(cible)}:
+                racine, scripts, _ = directives_du_depot(dossier) if os.path.isdir(dossier) else (None, [], [])
+                if racine and any(cible == os.path.join(os.path.realpath(racine), c) for c, _ in scripts):
+                    refuse("⛔ Bloqué par garde-secret : script de banc épinglé : modification réservée à l'utilisateur.")
             controle_chemin(chemin, cwd)
         textes = [ti[k] for k in ("new_string", "content", "new_source") if isinstance(ti.get(k), str)]
         textes += [e["new_string"] for e in ti.get("edits") or [] if isinstance(e, dict) and isinstance(e.get("new_string"), str)]
