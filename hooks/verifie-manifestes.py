@@ -114,8 +114,8 @@ def npm_manifeste(texte, dossier="", hors=None, exempts=()):
         for nom, v in (d.get(k) if isinstance(d.get(k), dict) else {}).items():
             if not isinstance(v, str):
                 continue
-            if nom in exempts and not v.startswith("npm:"):  # membre de workspace prouvé par le lockfile
-                continue
+            if nom in exempts and (v.strip() in ("", "*", "x") or v.lstrip("^~=v") == exempts[nom]):
+                continue  # membre de workspace prouvé par le lockfile, spec compatible avec sa version
             if v.startswith("npm:"):
                 reel, i = v[4:], v.rfind("@")
                 nom, v = (v[4:i], v[i + 1:]) if i > 4 else (reel, "*")
@@ -319,10 +319,10 @@ def motif_workspace(motif):
                               for x in parts))
 
 def membres_workspaces(chemins, json_de):
-    """{dossier de la racine: {nom: dossier du membre}} des workspaces npm ; un dossier sans
+    """{dossier de la racine: {nom: (dossier du membre, version)}} des workspaces npm ; un dossier sans
     package.json lisible ou sans name est ignoré. `json_de(chemin)` renvoie le JSON (en cache) ou None."""
     paquets = {p for p in chemins if p.rsplit("/", 1)[-1] == "package.json"}
-    res = {}
+    res, dirs = {}, {}
     for racine in sorted(paquets):
         d = json_de(racine)
         ws = d.get("workspaces") if isinstance(d, dict) else None
@@ -331,7 +331,7 @@ def membres_workspaces(chemins, json_de):
         motifs = [m for m in ws if isinstance(m, str) and m] if isinstance(ws, list) else []
         pos = [motif_workspace(m) for m in motifs if not m.startswith("!")]
         neg = [motif_workspace(m[1:]) for m in motifs if m.startswith("!") and m[1:]]
-        membres = {}
+        membres, dirs[base] = {}, set()
         for p in sorted(paquets - {racine}):
             dm = posixpath.dirname(p)
             if not dm:
@@ -339,13 +339,15 @@ def membres_workspaces(chemins, json_de):
             rel = posixpath.relpath(dm, base) if base else dm
             if rel.startswith("..") or not any(r.fullmatch(rel) for r in pos) or any(r.fullmatch(rel) for r in neg):
                 continue
+            dirs[base].add(dm)
             m = json_de(p)
             nom = m.get("name") if isinstance(m, dict) else None
             if isinstance(nom, str) and nom:
-                membres[nom] = dm
+                membres[nom] = (dm, m.get("version") if isinstance(m.get("version"), str) else None)
         if membres:
             res[base] = membres
-    return res
+    # npm ignore les workspaces et le lockfile d'un membre : une racine membre d'une autre racine est écartée
+    return {r: m for r, m in res.items() if not any(r in ds for b, ds in dirs.items() if b != r)}
 
 # ---------- états (base / cible) ----------
 
@@ -377,19 +379,25 @@ class Etat:
         return self._workspaces
 
     def exemptes(self, chemin):
-        """Noms de dépendances du package.json `chemin` qui sont des membres de workspace prouvés par le
-        package-lock.json de leur racine (`node_modules/<nom>` : link et resolved = dossier du membre)."""
-        d, res = posixpath.dirname(chemin), set()
+        """{nom: version} des dépendances du package.json `chemin` qui sont des membres de workspace prouvés
+        par le package-lock.json de leur racine (`node_modules/<nom>` : link et resolved = dossier du membre,
+        et aucune copie non-link du même nom, à quelque profondeur que ce soit)."""
+        d, res = posixpath.dirname(chemin), {}
         for racine, membres in self.workspaces().items():
-            if d != racine and d not in membres.values():
+            if d != racine and d not in {dm for dm, _ in membres.values()}:
                 continue
             lock = self.json_de(posixpath.join(racine, "package-lock.json"))
             paquets = lock.get("packages") if isinstance(lock, dict) else None
-            for nom, dm in membres.items():
-                e = paquets.get("node_modules/" + nom) if isinstance(paquets, dict) else None
+            if not isinstance(paquets, dict):
+                continue
+            for nom, (dm, version) in membres.items():
+                cle = "node_modules/" + nom
+                e = paquets.get(cle)
                 rel = posixpath.relpath(dm, racine) if racine else dm
-                if isinstance(e, dict) and e.get("link") is True and e.get("resolved") == rel:
-                    res.add(nom)
+                copie = any(k == cle or k.endswith("/" + cle) for k, v in paquets.items()
+                            if not (isinstance(v, dict) and v.get("link")))
+                if isinstance(e, dict) and e.get("link") is True and e.get("resolved") == rel and not copie:
+                    res[nom] = version
         return res
 
     def lock(self, chemin, illisibles=None):

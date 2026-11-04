@@ -288,9 +288,25 @@ printf '{"workspaces":["packages/*"],"dependencies":{"evil-pkg":"^9.0.0"}}' > "$
 ws_negatif "sans preuve link dans le lockfile" evil-pkg
 nouveau_ws ws-version-lien
 printf '{"workspaces":["packages/*"],"dependencies":{"evil-pkg":"^9.0.0"}}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
-valide "$d" "lien"
+ws_negatif "lien prouvé mais spec différent de la version du membre" evil-pkg
+nouveau_ws ws-spec-egal
+printf '{"workspaces":["packages/*"],"dependencies":{"evil-pkg":"^1.0.0"}}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
+valide "$d" "spec égal"
 lance "$d" --ci --base main --cible HEAD
-[ "$CODE" = 0 ] && ok "verifie-manifestes workspace : lien prouvé, version quelconque exemptée" || ko "verifie-manifestes workspace lien prouvé : $CODE $ERREUR"
+[ "$CODE" = 0 ] && ok "verifie-manifestes workspace : spec égal à la version du membre exempté" || ko "verifie-manifestes workspace spec égal : $CODE $ERREUR"
+nouveau_ws ws-racine-membre
+mkdir -p "$d/packages/a/x"
+printf '{"workspaces":["packages/*"]}' > "$d/package.json"
+printf '{"name":"a","workspaces":["x"],"dependencies":{"evil-pkg":"*"}}' > "$d/packages/a/package.json"
+printf '{"name":"evil-pkg","version":"1.0.0"}' > "$d/packages/a/x/package.json"
+printf '{"lockfileVersion":3,"packages":{"":{"name":"a"},"node_modules/evil-pkg":{"resolved":"x","link":true}}}' > "$d/packages/a/package-lock.json"
+ws_negatif "une racine membre d'une autre racine est écartée" evil-pkg
+nouveau_ws ws-copie
+mkdir -p "$d/packages/a"
+printf '{"workspaces":["packages/*"]}' > "$d/package.json"
+printf '{"name":"a","version":"1.0.0","dependencies":{"evil-pkg":"*"}}' > "$d/packages/a/package.json"
+printf '{"lockfileVersion":3,"packages":{"":{"name":"r"},"node_modules/evil-pkg":{"resolved":"packages/evil","link":true},"packages/evil":{"name":"evil-pkg","version":"1.0.0"},"packages/a/node_modules/evil-pkg":{"version":"9.0.0"}}}' > "$d/package-lock.json"
+ws_negatif "une copie non-link imbriquée annule la preuve" evil-pkg
 nouveau_ws ws-autre
 mkdir -p "$d/autre"
 printf '{"workspaces":["packages/*"]}' > "$d/package.json"; printf '%s' "$LOCK_LIEN" > "$d/package-lock.json"
