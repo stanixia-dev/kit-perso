@@ -103,6 +103,7 @@ Le scan lit chaque commit un par un (un secret retiré au commit suivant reste d
 | Pre : chemin protégé | bloque | — | bloque |
 | Pre : contenu écrit | bloque | avertit | bloque |
 | Pre Bash : chemin ou texte de la commande | bloque | — | bloque |
+| Pre Bash : script de banc | laisse passer l'invocation exacte d'un script déclaré et intact ; refuse toute autre mention | — | passe |
 | Pre Bash : scan avant commit, push, PR | bloque | avertit ; scan incomplet (budget de 10 s) : avertit, mais bloque `git push` et `gh pr create` | bloque |
 | Post : sortie | masque + alerte | — | sortie intacte |
 | Stop, SubagentStop | bloque une fois, puis avertit | — | passe |
@@ -117,6 +118,22 @@ Tests : `bash tests/test_secrets.sh` (appelé par `tests/test_hooks.sh`), `HOME`
 ### Exceptions de secrets
 
 `.garde-secret-exceptions` (racine du dépôt) : une ligne `<glob relatif> <empreinte|*> <AAAA-MM-JJ> <raison>`, `#` pour un commentaire. L'empreinte est celle affichée par le message de blocage, jamais la valeur ; `*` couvre tout le chemin, lecture comprise. Sans effet hors de la racine du dépôt ni sur `~/.ssh` et autres identifiants personnels. En CI, seules les exceptions déjà sur `main` comptent ; celles de la PR sont listées dans le résumé, non appliquées. Le fichier est protégé contre les écritures de l'agent.
+
+### Scripts de banc
+
+Pour lancer une commande de test qui consomme des identifiants de banc local (`.banc/*.env`) sans que l'agent les lise, l'utilisateur déclare dans `.garde-secret-exceptions` deux directives (un premier mot `script` ou `masque` ; ce ne sont ni des exceptions ni des lignes invalides) :
+
+```
+script scripts/captures-banc.sh <sha256> 2026-11-04 captures Playwright du banc local
+masque .banc/*.env 2026-11-04 identifiants jetables du banc local
+```
+
+- `script <chemin> <sha256> <AAAA-MM-JJ> <raison>` : chemin relatif à la racine (`[A-Za-z0-9._/-]+`, sans `..`), empreinte complète de 64 hex donnée par `sha256sum <chemin>`. Empreinte ou date mal formée : exécution refusée.
+- `masque <glob> <AAAA-MM-JJ> <raison>` : les valeurs de ces fichiers (clés au nom de secret : `PASSW`, `TOKEN`…, comme pour `.env`) rejoignent les valeurs masquées dans toute sortie.
+
+Flux : l'agent écrit le script ; l'utilisateur le relit, calcule l'empreinte et l'ajoute ; toute modification du script oblige à mettre l'empreinte à jour. Le hook ne laisse passer que la commande exacte `scripts/banc.sh` ou `./scripts/banc.sh` (aucun argument, redirection, pipe, préfixe ni interpréteur), depuis la racine du dépôt, sans lien symbolique, si l'empreinte correspond et si toute URL du script vise `127.0.0.1`, `localhost` ou `[::1]`. Toute autre commande Bash qui cite le script est refusée (`cat` compris : l'outil Read reste permis) ; Edit et Write du script sont refusés ; la lecture directe de `.banc/*.env` reste bloquée.
+
+Résiduels assumés : un script non déclaré qui source un `.env` passe le filtre Pre (le hook ne lit pas les scripts), seul le masquage rattrape les valeurs connues affichées en clair ; le code lancé par le script épinglé (`package.json`, config Playwright, tests, `node_modules/.bin`) reste modifiable par l'agent, qui peut lui faire afficher une valeur encodée ou l'envoyer sur le réseau ; les cibles en `127.0.0.1` ne sont pas vérifiables (seul le texte du script épinglé est contrôlé) ; le script peut être remplacé avant ou pendant l'exécution (processus en arrière-plan, `mv` ou `git checkout` du dossier, et bash relit le script pendant qu'il s'exécute) ; une mention indirecte du script par variable (`f=scripts/banc.sh; bash $f`) n'est pas détectée.
 
 ## Verrouillage (à appliquer par l'utilisateur)
 

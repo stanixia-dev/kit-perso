@@ -3,7 +3,7 @@
 Modes : CLI (défaut), --hook pre (PreToolUse), --hook post (PostToolUse / PostToolUseFailure), --hook stop (Stop), --ci (strict).
 Le filtre de commandes est une aide ; les barrières sont le masquage de la sortie et le scan du résultat git.
 Sortie 2 + message sur stderr = refus. Aucun message ne contient une valeur de secret."""
-import argparse, fnmatch, hashlib, importlib.util, json, math, os, re, sys, time
+import argparse, fnmatch, glob, hashlib, importlib.util, json, math, os, re, sys, time
 from collections import Counter
 from datetime import date
 
@@ -123,6 +123,70 @@ def racine_de(dossier):
 
 # ---------- exceptions ----------
 
+DIRECTIVES = ("script", "masque")
+
+def chemin_relatif_sur(c, glob=False):
+    """Chemin relatif sans `..`, `.`, composant vide ni `/` initial ; caractères sûrs (glob : `*?[]` en plus)."""
+    if not re.fullmatch(r"[A-Za-z0-9._/*?\[\]-]+" if glob else r"[A-Za-z0-9._/-]+", c):
+        return False
+    return all(x not in ("", ".", "..") for x in c.split("/"))
+
+def directives(texte):
+    """([(chemin, sha256|None)], [glob], avertissements) : directives `script` et `masque`."""
+    scripts, masques, avert = [], [], []
+    for n, l in enumerate(texte.splitlines(), 1):
+        p = l.split(None, 4)
+        if not p or p[0] not in DIRECTIVES:
+            continue
+        if p[0] == "script":
+            if len(p) < 2 or not chemin_relatif_sur(p[1]):
+                avert.append(f"{EXCEPTIONS} ligne {n} ignorée (script : chemin relatif invalide)")
+                continue
+            ok = len(p) >= 5 and re.fullmatch(r"[0-9a-f]{64}", p[2]) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[3])
+            if ok:
+                try:
+                    date.fromisoformat(p[3])
+                except ValueError:
+                    ok = False
+            if not ok:
+                avert.append(f"{EXCEPTIONS} ligne {n} : empreinte ou date invalide, exécution de {p[1]} refusée")
+            scripts.append((p[1], p[2] if ok else None))
+        else:
+            ok = len(p) >= 4 and chemin_relatif_sur(p[1], True) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[2])
+            if ok:
+                try:
+                    date.fromisoformat(p[2])
+                except ValueError:
+                    ok = False
+            if ok:
+                masques.append(p[1])
+            else:
+                avert.append(f"{EXCEPTIONS} ligne {n} ignorée (masque : attendu glob AAAA-MM-JJ raison)")
+    return scripts, masques, avert
+
+def racine_locale(cwd):
+    """Premier dossier ancêtre de realpath(cwd) qui contient `.git` ; sans appeler git."""
+    d = os.path.realpath(cwd or os.getcwd())
+    while True:
+        if os.path.exists(os.path.join(d, ".git")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+def directives_du_depot(cwd):
+    """(racine, scripts, masques) du dépôt de cwd ; rien sans racine ni fichier."""
+    racine = racine_locale(cwd)
+    if not racine:
+        return None, [], []
+    try:
+        with open(os.path.join(racine, EXCEPTIONS), encoding="utf-8") as f:
+            scripts, masques, _ = directives(f.read())
+    except OSError:
+        return racine, [], []
+    return racine, scripts, masques
+
 def lit_exceptions(texte):
     """([(glob, empreinte|*, date, raison)], avertissements)."""
     res, avert = [], []
@@ -131,6 +195,8 @@ def lit_exceptions(texte):
         if not l or l.startswith("#"):
             continue
         p = l.split(None, 3)
+        if p[0] in DIRECTIVES:
+            continue
         try:
             if len(p) < 4 or not (p[1] == "*" or re.fullmatch(r"[0-9a-f]{12}", p[1])) \
                     or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[2]):
@@ -503,6 +569,75 @@ def scan_depot(cwd, budget=None):
         trouv = sans_exceptions(trouv, exceptions_du_depot(racine)[0])
     return [t for t in trouv if t[2] == "fort"], [t for t in trouv if t[2] != "fort"], illis
 
+HOTES_LOCAUX = {"127.0.0.1", "localhost", "[::1]"}
+
+def hote_non_local(texte):
+    """Libellé (jamais vide) de la première cible non locale d'une URL du texte, sinon None."""
+    for m in re.finditer(r"([a-z][a-z0-9+.-]*)://([^/\s'\"]*)", texte, re.I):
+        schema, auto = m.group(1).lower(), m.group(2)
+        if not auto:
+            if schema == "file":
+                continue
+            return "(hôte vide)"
+        if "@" in auto:
+            return auto
+        if auto.startswith("["):
+            fin = auto.find("]")
+            hote, reste = (auto[:fin + 1], auto[fin + 1:]) if fin > 0 else (auto, "x")
+            if reste and not re.fullmatch(r":\d*", reste):
+                return auto
+        else:
+            hote = auto.split(":")[0]
+        if hote.lower() not in HOTES_LOCAUX:
+            return hote or auto
+    return None
+
+def controle_banc(cmd, cwd):
+    """Vrai si la commande est l'invocation exacte d'un script de banc déclaré et intact ; refuse (exit 2) une commande
+    qui le cite autrement ou dont une condition échoue ; None si aucun script déclaré n'est en cause."""
+    racine, scripts, _ = directives_du_depot(cwd)
+    if not scripts:
+        return None
+    r = os.path.realpath(racine)
+    s = cmd.strip()
+    for chemin, sha in scripts:
+        abs_ = os.path.join(r, chemin)
+        if s not in (chemin, "./" + chemin):
+            continue
+        if os.path.realpath(cwd or os.getcwd()) != r:
+            refuse(f"⛔ Bloqué par garde-secret : lance-le depuis la racine du dépôt ({chemin}).")
+        if os.path.realpath(abs_) != abs_:
+            refuse(f"⛔ Bloqué par garde-secret : script de banc ({chemin}) derrière un lien symbolique.")
+        try:
+            if not os.path.isfile(abs_):
+                raise OSError
+            with open(abs_, "rb") as f:
+                contenu = f.read()
+        except OSError:
+            refuse(f"⛔ Bloqué par garde-secret : script de banc ({chemin}) illisible ou absent.")
+        if sha is None or hashlib.sha256(contenu).hexdigest() != sha:
+            refuse(f"⛔ Bloqué par garde-secret : script modifié depuis sa déclaration ({chemin}) : demande à "
+                   "l'utilisateur de le relire et de mettre à jour l'empreinte.")
+        hote = hote_non_local(contenu.decode("utf-8", "replace"))
+        if hote:
+            refuse(f"⛔ Bloqué par garde-secret : cible non locale ({hote}) dans {chemin}.")
+        return True
+    base = cwd or os.getcwd()
+    sans_guil = cmd.replace("'", "").replace('"', "")
+    cands = set()
+    for c in candidats(cmd) + candidats(sans_guil):
+        c = developpe(c)
+        cibles = glob.glob(c, root_dir=base) if re.search(r"[*?\[]", c) else []
+        for x in cibles + [c]:
+            cands.add(os.path.realpath(os.path.join(base, x)))
+    for chemin, _ in scripts:
+        abs_ = os.path.join(r, chemin)
+        nom = re.escape(chemin.rsplit("/", 1)[-1])
+        if re.search(rf"(?<![\w.-]){nom}(?![\w.-])", cmd + "\n" + sans_guil) or abs_ in cands:
+            refuse(f"⛔ Bloqué par garde-secret : script de banc déclaré : lance-le seul, tel quel, depuis la racine "
+                   f"({chemin}) ; pour le lire, utilise l'outil Read.")
+    return None
+
 def pre(data):
     outil = data.get("tool_name") or "Bash"
     ti = data.get("tool_input") or {}
@@ -522,6 +657,11 @@ def pre(data):
     elif outil in ECRITURE:
         chemin = ti.get("file_path") or ti.get("notebook_path") or ""
         if chemin:
+            cible = os.path.realpath(chemin if os.path.isabs(chemin) else os.path.join(cwd, chemin))
+            for dossier in {cwd, os.path.dirname(cible)}:
+                racine, scripts, _ = directives_du_depot(dossier) if os.path.isdir(dossier) else (None, [], [])
+                if racine and any(cible == os.path.join(os.path.realpath(racine), c) for c, _ in scripts):
+                    refuse("⛔ Bloqué par garde-secret : script de banc épinglé : modification réservée à l'utilisateur.")
             controle_chemin(chemin, cwd)
         textes = [ti[k] for k in ("new_string", "content", "new_source") if isinstance(ti.get(k), str)]
         textes += [e["new_string"] for e in ti.get("edits") or [] if isinstance(e, dict) and isinstance(e.get("new_string"), str)]
@@ -532,6 +672,8 @@ def pre(data):
         if forts:
             refuse("⛔ Bloqué par garde-secret : secret dans le texte de la commande ("
                    + ", ".join(f"{n} {empreinte(v)}" for _, n, v in forts) + f"). {ACCES}")
+        if controle_banc(cmd, cwd):
+            return
         ctx = {"hits": [], "scan": False, "livre": False, "cwd": cwd}
         bash_chemins(cmd, ctx)
         if ctx["hits"]:
@@ -556,6 +698,24 @@ def pre(data):
 
 NOM_SECRET = re.compile(r"(?i)TOKEN|SECRET|PASSW|PASSPHRASE|API_?KEY|PRIVATE_?KEY|CREDENTIAL")
 
+def valeurs_env(fichier, ajoute):
+    """Passe à `ajoute(clé, valeur)` chaque affectation `CLE=valeur` du fichier (guillemets et commentaire de fin gérés)."""
+    try:
+        with open(fichier, encoding="utf-8", errors="replace") as f:
+            lignes = f.read().splitlines()
+    except OSError:
+        return
+    for l in lignes:
+        m = re.match(r"\s*(?:export\s+)?([A-Za-z_]\w*)\s*=\s*(.*)$", l)
+        if m:
+            val = m.group(2).strip()
+            if val[:1] in ("'", '"'):  # valeur citée : jusqu'à la guillemet fermante
+                fin = val.find(val[0], 1)
+                val = val[1:fin] if fin > 0 else val[1:]
+            else:  # sinon, sans commentaire de fin de ligne
+                val = re.split(r"\s+#", val, maxsplit=1)[0].strip()
+            ajoute(m.group(1), val)
+
 def valeurs_connues(cwd):
     vals = set()
     def ajoute(k, v):
@@ -564,21 +724,13 @@ def valeurs_connues(cwd):
     for k, v in os.environ.items():
         ajoute(k, v)
     for nom in (".env", ".env.local"):
-        try:
-            with open(os.path.join(cwd, nom), encoding="utf-8", errors="replace") as f:
-                lignes = f.read().splitlines()
-        except OSError:
-            continue
-        for l in lignes:
-            m = re.match(r"\s*(?:export\s+)?([A-Za-z_]\w*)\s*=\s*(.*)$", l)
-            if m:
-                val = m.group(2).strip()
-                if val[:1] in ("'", '"'):  # valeur citée : jusqu'à la guillemet fermante
-                    fin = val.find(val[0], 1)
-                    val = val[1:fin] if fin > 0 else val[1:]
-                else:  # sinon, sans commentaire de fin de ligne
-                    val = re.split(r"\s+#", val, maxsplit=1)[0].strip()
-                ajoute(m.group(1), val)
+        valeurs_env(os.path.join(cwd, nom), ajoute)
+    racine, _, masques = directives_du_depot(cwd)
+    for g in masques:
+        for rel in glob.glob(g, root_dir=racine):
+            f = os.path.join(racine, rel)
+            if os.path.isfile(f):
+                valeurs_env(f, ajoute)
     return sorted(vals, key=len, reverse=True)
 
 def masque_texte(s, connus, trouves):

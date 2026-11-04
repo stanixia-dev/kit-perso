@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.0 — 2026-11-04
+
+- garde-secret : directives `script` et `masque` dans `.garde-secret-exceptions`. Un script de banc local déclaré avec son `sha256` peut être lancé tel quel par l'agent (sans argument, depuis la racine, sans lien symbolique, URL locales seulement) ; toute autre mention en Bash et toute écriture du script sont refusées ; les valeurs des fichiers `masque` sont masquées dans les sorties. Durcissements : écriture du script refusée même depuis un `cwd` hors du dépôt, autorités d'URL vides ou `[::1]` suivi d'autre chose que `:port` refusées, mentions du script entre guillemets ou par joker refusées (#31).
+
 ## 3.1.4 — 2026-11-04
 
 - garde-deps : la licence OFL-1.1 (polices libres : Google Fonts, Fontsource), ses variantes `OFL-1.1-RFN` / `OFL-1.1-no-RFN` et le classifieur PyPI correspondant sont acceptés ; README et relecteur mis à jour (#26).
