@@ -102,7 +102,7 @@ sortie_rappel 'gh pr create --fill' | grep -q '/clear' && ok "rappel-clear aprè
 # garde-deps : "commande|attendu" (0 = passe sans sortie, 2 = bloque)
 for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          'npm install' 'pip install -r requirements.txt' 'pip install -e .' 'npm i ./local' 'cargo add --path ../x' \
-         'cargo add cc0' "bash -c 'echo \"a && npm i gpl-pkg\"'" "bash -c 'ls && echo ok'" "git commit -m 'doc: npm i gpl-pkg \`npm i gpl-pkg\`'" 'cargo add bon 2>&1 | tail -1' \
+         'cargo add cc0' 'npm i @fontsource/police' "bash -c 'echo \"a && npm i gpl-pkg\"'" "bash -c 'ls && echo ok'" "git commit -m 'doc: npm i gpl-pkg \`npm i gpl-pkg\`'" 'cargo add bon 2>&1 | tail -1' \
          "git commit -m \"\$(cat <<'EOF'"$'\nAjoute l\'analyse de npm i x\nEOF\n)\"' \
          "cat > notes.md <<'EOF'"$'\nnpm i gpl-pkg\nEOF' "cat <<'EOF' | tee n.md"$'\nnpm i gpl-pkg\nEOF' \
          'ls #c && npm i gpl-pkg' 'echo $# && cargo add bon' \

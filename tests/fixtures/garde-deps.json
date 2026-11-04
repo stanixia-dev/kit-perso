@@ -302,5 +302,21 @@
    }
   }
  },
- "osv-npm-depublie": {}
+ "osv-npm-depublie": {},
+ "npm-@fontsource__police": {
+  "dist-tags": {
+   "latest": "1.0.0"
+  },
+  "versions": {
+   "1.0.0": {
+    "license": "OFL-1.1"
+   }
+  },
+  "time": {
+   "created": "2020-01-01T00:00:00Z",
+   "modified": "2026-06-01T00:00:00Z",
+   "1.0.0": "2026-06-01T00:00:00Z"
+  }
+ },
+ "osv-npm-@fontsource__police": {}
 }

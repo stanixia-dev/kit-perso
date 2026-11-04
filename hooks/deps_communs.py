@@ -22,7 +22,7 @@ def protege(chemin, cwd=None):
                for m in PROTEGES for h in homes)
 
 OSV_ECO = {"crates": "crates.io", "npm": "npm", "pypi": "PyPI"}
-OK = {"mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "zlib", "0bsd", "unlicense", "cc0-1.0"}
+OK = {"mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "zlib", "0bsd", "unlicense", "cc0-1.0", "ofl-1.1"}
 CLASSIFIERS = {
     "MIT License": "MIT", "Apache Software License": "Apache-2.0", "BSD License": "BSD-3-Clause",
     "ISC License (ISCL)": "ISC", "zlib/libpng License": "Zlib", "The Unlicense (Unlicense)": "Unlicense",
