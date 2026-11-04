@@ -44,7 +44,7 @@ puis redémarrer Claude Code. Pour développer sans installer : `claude --plugin
 
 ## Contrôle des dépendances
 
-Règles appliquées à chaque paquet ajouté ou modifié (cargo, npm/pnpm/yarn, pip/uv/poetry) : bloque une licence non permissive (hors MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD, Unlicense, CC0-1.0), une faille OSV connue, un paquet déprécié ou yanked, une dernière publication de plus de 2 ans. Avertit pour MPL/LGPL, les avis RustSec informatifs et les registres injoignables.
+Règles appliquées à chaque paquet ajouté ou modifié (cargo, npm/pnpm/yarn, pip/uv/poetry) : bloque une licence non permissive (hors MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD, Unlicense, CC0-1.0, OFL-1.1), une faille OSV connue, un paquet déprécié ou yanked, une dernière publication de plus de 2 ans. Avertit pour MPL/LGPL, les avis RustSec informatifs et les registres injoignables.
 Un paquet refusé, c'est l'utilisateur qui l'ajoute lui-même s'il l'accepte. Le relecteur lance `hooks/verifie-manifestes.py --base main` sur le diff.
 
 Trois couches, de la plus rapide à la plus sûre :

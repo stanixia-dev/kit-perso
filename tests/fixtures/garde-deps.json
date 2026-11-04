@@ -318,5 +318,23 @@
    "1.0.0": "2026-06-01T00:00:00Z"
   }
  },
- "osv-npm-@fontsource__police": {}
+ "osv-npm-@fontsource__police": {},
+ "pypi-police": {
+  "info": {
+   "version": "1.0.0",
+   "license_expression": null,
+   "classifiers": [
+    "License :: OSI Approved :: SIL Open Font License 1.1 (OFL-1.1)"
+   ]
+  },
+  "releases": {
+   "1.0.0": [
+    {
+     "yanked": false,
+     "upload_time_iso_8601": "2026-06-01T00:00:00Z"
+    }
+   ]
+  }
+ },
+ "osv-pypi-police": {}
 }
