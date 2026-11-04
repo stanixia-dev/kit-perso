@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.4 — 2026-11-04
+
+- garde-deps : la licence OFL-1.1 (polices libres : Google Fonts, Fontsource), ses variantes `OFL-1.1-RFN` / `OFL-1.1-no-RFN` et le classifieur PyPI correspondant sont acceptés ; README et relecteur mis à jour (#26).
+- verifie-manifestes : les dépendances vers un paquet d'un workspace npm (spec `*`, `""`, `x` ou version exacte du membre, hors alias `npm:`, avec `workspaces` à la racine) ne sont plus cherchées sur le registre ni bloquées en `--ci`, à condition que le `package-lock.json` de la racine prouve le lien (`link: true`, `resolved` vers le dossier du membre, aucune copie non liée). Sans lockfile, la vérification reste normale (#27).
+
 ## 3.1.3 — 2026-11-03
 
 - garde-deps : le script de `sed -i` (valeur de `-e`/`--expression` ou de leurs préfixes et formes collées, sinon premier argument non-option) n'est plus pris pour une cible d'écriture ; `-f`/`--file` fournit le script, aucun argument n'est alors retiré. Le script reste une cible s'il contient une commande `w` ou `s///w` vers un chemin protégé, et une commande `e` (`1e cmd`) est analysée comme du shell. `sed -i … <chemin protégé>` reste bloqué. `perl -i` reste traité comme avant (son script peut écrire n'importe où).
