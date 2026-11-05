@@ -94,7 +94,7 @@ Tests : `bash tests/test_ci_projet.sh` (appelé par `tests/test_hooks.sh`), hors
 - `--ci` : 2 essais de 10 s, aucun cache ; index injoignable ou `node` absent : sortie 2 (fail-closed).
 - CLI (`python3 hooks/verifie-runtime.py`) : 1 essai de 4 s, cache lu et écrit ; index injoignable sans cache : sortie 2.
 - `--hook pre` (PreToolUse Bash) : ne s'active que si la commande contient `node`, `npm`, `npx`, `pnpm`, `yarn` ou `corepack` (mot entier : `node_modules` ne compte pas) ; Node vulnérable : commande refusée (faux positifs acceptés, `nvm` passe pour réparer). Fail-open : `node` introuvable ou index injoignable sans cache donnent sortie 0 (avertissement dans le second cas).
-- Cache : `$CLAUDE_PLUGIN_DATA/node-corriges.json` (sinon `~/.claude/plugins/data/kit-perso/`), valable 6 h, au plus un essai réseau toutes les 15 min ; périmé, il reste utilisé avec la mention « nodejs.org injoignable ». Désactivé hors de `~/.claude/plugins/` (dossier protégé en écriture par garde-deps).
+- Cache : `$CLAUDE_PLUGIN_DATA/node-corriges.json` (sinon `~/.claude/plugins/data/kit-perso/`), valable 6 h, au plus un essai réseau toutes les 15 min ; périmé, il reste utilisé avec la mention « nodejs.org injoignable ». Désactivé hors de `~/.claude/plugins/` (dossier protégé en écriture par garde-deps). Avec `KIT_PERSO_NODE_INDEX` défini, le vrai cache (sous le `~/.claude/plugins` de la base de comptes, pas `$HOME`) n'est ni lu ni écrit : un index de test ne peut pas l'empoisonner. Une préversion (`-rc`) compte comme inférieure à la version finale. Le hook reconnaît aussi `nodejs`, `pnpx` et `yarnpkg`.
 
 Résidus assumés :
 - le hook contrôle le `node` du `PATH` du hook : un `nvm use` dans la commande ou un chemin absolu vers un autre binaire lui échappe ;

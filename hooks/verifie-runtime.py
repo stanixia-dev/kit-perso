@@ -6,11 +6,11 @@ Usage : verifie-runtime.py [--ci | --hook pre]
   --ci         : 2 essais de 10 s, aucun cache, sortie 2 si index injoignable (fail-closed).
   --hook pre   : PreToolUse Bash, JSON sur stdin ; fail-open (sortie 0) si node ou l'index manquent.
 Variable de test KIT_PERSO_NODE_INDEX=<fichier> : lit ce fichier au lieu du réseau."""
-import datetime, json, os, re, shutil, subprocess, sys, tempfile, time, urllib.request
+import datetime, json, os, pwd, re, shutil, subprocess, sys, tempfile, time, urllib.request
 
 URL = "https://nodejs.org/dist/index.json"
 FRAIS, PAUSE = 6 * 3600, 15 * 60
-MOTS = re.compile(r"(?<![\w.-])(node|npm|npx|pnpm|yarn|corepack)(?![\w.-])")
+MOTS = re.compile(r"(?<![\w.-])(node|nodejs|npm|npx|pnpm|pnpx|yarn|yarnpkg|corepack)(?![\w.-])")
 
 def version_node():
     chemin = shutil.which("node")
@@ -21,7 +21,10 @@ def version_node():
     except (OSError, subprocess.TimeoutExpired):
         return None
     m = re.match(r"v(\d+)\.(\d+)\.(\d+)", r.stdout.strip())
-    return tuple(int(x) for x in m.groups()) if m else None
+    if not m:
+        return None
+    # une préversion (suffixe après x.y.z) est strictement inférieure à la version finale
+    return tuple(int(x) for x in m.groups()) + (0 if r.stdout.strip()[m.end():m.end() + 1] == "-" else 1,)
 
 def lire_index(essais, delai):
     """Renvoie {majeure: (x, y, z)} ou None si injoignable ou inexploitable."""
@@ -57,6 +60,11 @@ def chemin_cache():
     racine = os.path.realpath(os.path.expanduser("~/.claude/plugins"))
     if not (dossier + os.sep).startswith(racine + os.sep):
         return None
+    if os.environ.get("KIT_PERSO_NODE_INDEX"):
+        # un index de test ne doit ni lire ni empoisonner le vrai cache (chemin via la base de comptes, pas $HOME)
+        vrai = os.path.realpath(os.path.join(pwd.getpwuid(os.getuid()).pw_dir, ".claude", "plugins"))
+        if (dossier + os.sep).startswith(vrai + os.sep):
+            return None
     return os.path.join(dossier, "node-corriges.json")
 
 def lire_cache(chemin):
@@ -67,8 +75,6 @@ def lire_cache(chemin):
         for k, v in c["corriges"].items():
             m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", v)
             corriges[int(k)] = tuple(int(x) for x in m.groups())
-        if not corriges:
-            return None
         return {"lu": float(c["lu"]), "essai": float(c["essai"]), "corriges": corriges}
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
@@ -91,9 +97,10 @@ def obtenir(ci):
     chemin = chemin_cache()
     cache = lire_cache(chemin) if chemin else None
     maintenant = time.time()
-    if cache and maintenant - cache["lu"] < FRAIS:
+    valide = bool(cache and cache["corriges"])  # un cache sans corriges ne sert qu'à limiter les essais réseau
+    if valide and maintenant - cache["lu"] < FRAIS:
         return cache["corriges"], None
-    perime = (cache["corriges"], datetime.date.fromtimestamp(cache["lu"]).isoformat()) if cache else (None, None)
+    perime = (cache["corriges"], datetime.date.fromtimestamp(cache["lu"]).isoformat()) if valide else (None, None)
     if cache and maintenant - cache["essai"] < PAUSE:
         return perime
     corriges = lire_index(1, 4)
@@ -101,12 +108,12 @@ def obtenir(ci):
         if chemin:
             ecrire_cache(chemin, maintenant, maintenant, corriges)
         return corriges, None
-    if chemin and cache:
-        ecrire_cache(chemin, cache["lu"], maintenant, cache["corriges"])
+    if chemin:
+        ecrire_cache(chemin, cache["lu"] if cache else 0, maintenant, cache["corriges"] if cache else {})
     return perime
 
 def fmt(v):
-    return "v" + ".".join(map(str, v))
+    return "v" + ".".join(map(str, v[:3]))
 
 def main():
     args = sys.argv[1:]
@@ -134,7 +141,7 @@ def main():
         sys.exit(2)
     suffixe = f" (index du {perime}, nodejs.org injoignable)" if perime else ""
     m = v[0]
-    if m in corriges and v < corriges[m]:
+    if m in corriges and v < corriges[m] + (1,):
         print(f"⛔ Node {fmt(v)} vulnérable : la branche {m} est corrigée en {fmt(corriges[m])} "
               f"(nodejs.org, champ security). Demande à l'utilisateur de mettre à jour "
               f"(`nvm install {m} && nvm alias default {m}`){suffixe}", file=sys.stderr)

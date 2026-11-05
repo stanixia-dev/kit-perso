@@ -20,7 +20,7 @@ Le job `node` généré par `/kit-perso:ci-projet` doit utiliser une branche maj
 
 ### Script `hooks/verifie-runtime.py` (stdlib, autonome : n'importe rien du kit)
 Il vit dans `hooks/`, comme les autres contrôles, et la CI du projet le récupère par le checkout du kit au SHA figé. Il est autonome pour pouvoir tourner seul dans le job `node`.
-- **Version utilisée** : `node --version` via `shutil.which("node")` (délai de 5 s), au format `^v(\d+)\.(\d+)\.(\d+)` (suffixe toléré, ignoré). Si `node` est introuvable ou illisible : hook → 0 en silence ; CLI et `--ci` → 2.
+- **Version utilisée** : `node --version` via `shutil.which("node")` (délai de 5 s), au format `^v(\d+)\.(\d+)\.(\d+)` (suffixe toléré ; une préversion `-rc` compte comme strictement inférieure à la version finale). Si `node` est introuvable ou illisible : hook → 0 en silence ; CLI et `--ci` → 2.
 - **Index** : `GET https://nodejs.org/dist/index.json`, avec un `User-Agent` kit-perso. On en tire `corriges = {majeure: max(version)}` sur les entrées où `security` est vrai et dont `version` correspond à `^v\d+\.\d+\.\d+$`. Un index qui n'est pas une liste, ou d'où `corriges` sort vide, compte comme injoignable. Variable de test `KIT_PERSO_NODE_INDEX=<fichier>` : lit ce fichier au lieu du réseau, et un fichier absent compte comme injoignable (même principe que `GARDE_DEPS_FIXTURES`).
 - **Règle** : la version `V`, de majeure `M`, est vulnérable si `M ∈ corriges` et `V < corriges[M]` (comparaison de tuples). Si `M` n'a aucune version de sécurité (nouvelle branche, branche impaire), le contrôle passe.
 - **Message de blocage** : « Node vX.Y.Z vulnérable : la branche M est corrigée en vA.B.C (nodejs.org, champ security). Demande à l'utilisateur de mettre à jour (`nvm install M && nvm alias default M`) ». En cas de succès, le CLI et `--ci` impriment « Node vX.Y.Z : à jour (branche M corrigée en vA.B.C) ».
@@ -36,12 +36,12 @@ Le mode hook est fail-open, comme les autres couches locales : sur la devbox fil
 
 ### Hook local (PreToolUse Bash)
 - Nouvelle entrée de `hooks/hooks.json` sous `PreToolUse`, avec le matcher `Bash` : `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/verifie-runtime.py" --hook pre`, timeout 15, sans `onFailure` (un plantage reste fail-open).
-- **Chemin rapide** : si `tool_input.command` ne contient pas un des mots `node|npm|npx|pnpm|yarn|corepack`, le hook sort en 0 sans lancer de processus, sans réseau et sans lire le cache. Le mot est cherché avec la regex `(?<![\w.-])(…)(?![\w.-])`, donc `node_modules` et `nodejs.org` ne déclenchent rien.
+- **Chemin rapide** : si `tool_input.command` ne contient pas un des mots `node|nodejs|npm|npx|pnpm|pnpx|yarn|yarnpkg|corepack`, le hook sort en 0 sans lancer de processus, sans réseau et sans lire le cache. Le mot est cherché avec la regex `(?<![\w.-])(…)(?![\w.-])`, donc `node_modules` et `nodejs.org` ne déclenchent rien.
 - Si la version est vulnérable, le hook sort en 2 avec le message sur stderr, et la commande est refusée. `nvm` ne déclenche pas le hook, pour que l'utilisateur puisse réparer.
 - Le hook est placé en PreToolUse plutôt qu'en Stop pour empêcher l'exécution du runtime vulnérable, au lieu de la signaler après coup.
 
 ### Cache (modes hook et CLI)
-- Fichier : `$CLAUDE_PLUGIN_DATA/node-corriges.json`, sinon `~/.claude/plugins/data/kit-perso/node-corriges.json`. Si le `realpath` du dossier n'est pas sous `~/.claude/plugins/`, le cache est désactivé : ce dossier est déjà protégé en écriture par garde-deps (`PROTEGES`), donc l'agent ne peut pas forger un cache.
+- Fichier : `$CLAUDE_PLUGIN_DATA/node-corriges.json`, sinon `~/.claude/plugins/data/kit-perso/node-corriges.json`. Si le `realpath` du dossier n'est pas sous `~/.claude/plugins/`, le cache est désactivé : ce dossier est déjà protégé en écriture par garde-deps (`PROTEGES`), donc l'agent ne peut pas forger un cache. Quand `KIT_PERSO_NODE_INDEX` est défini, le cache situé sous le vrai `~/.claude/plugins` (chemin par `pwd.getpwuid`, pas `$HOME`) n'est ni lu ni écrit, pour qu'un index de test ne l'empoisonne pas. Un cache sans `corriges` (échec réseau sans cache) enregistre seulement `essai`, sans valoir pour le verdict.
 - Format : `{"lu": <epoch du dernier index lu>, "essai": <epoch du dernier essai réseau>, "corriges": {"24": "24.22.1", …}}`. Un fichier illisible ou mal formé compte comme absent. L'écriture est atomique (fichier temporaire puis `os.replace`).
 - Logique :
   1. Si `maintenant - lu < 6 h`, on utilise le cache.

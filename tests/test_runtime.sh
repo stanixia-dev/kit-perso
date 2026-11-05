@@ -35,7 +35,7 @@ export KIT_PERSO_NODE_INDEX="$IDX"
 
 # ---------- règle et CI ----------
 for mode in "" "--ci"; do
-  for cas in v24.22.0:2 v26.12.0:2 v24.22.1:0 v24.23.0:0 v27.0.0:0 v22.23.4:0 v24.22.1-rc1:0; do
+  for cas in v24.22.0:2 v26.12.0:2 v24.22.1:0 v24.23.0:0 v27.0.0:0 v22.23.4:0 v24.22.1-rc1:2 v24.22.1-rc.1:2; do
     v=${cas%:*}; attendu=${cas#*:}
     sortie=$(lance "$v" $mode 2>&1); c=$?
     [ "$c" = "$attendu" ] && ok "règle $v ${mode:-cli} -> $attendu" || ko "règle $v ${mode:-cli} (sortie $c)"
@@ -96,6 +96,24 @@ lance v24.22.0 >/dev/null 2>&1; r=$?
 rm -rf "$HOME/.claude"
 CLAUDE_PLUGIN_DATA="$TMP/ailleurs" lance v24.22.0 >/dev/null 2>&1; r=$?
 [ "$r" = 2 ] && [ ! -e "$TMP/ailleurs" ] && [ ! -e "$HOME/.claude" ] && ok "cache hors ~/.claude/plugins : rien écrit" || ko "cache hors plugins ($r)"
+# index de test : jamais de lecture ni d'écriture du vrai cache (chemin par la base de comptes, pas $HOME)
+VRAI=$(python3 -c 'import os,pwd; print(os.path.join(pwd.getpwuid(os.getuid()).pw_dir, ".claude/plugins/data/kit-perso-test-runtime-$$"))')
+CLAUDE_PLUGIN_DATA="$VRAI" lance v24.22.0 >/dev/null 2>&1; r=$?
+[ "$r" = 2 ] && [ ! -e "$VRAI" ] && ok "index de test : vrai cache non écrit" || ko "vrai cache écrit par un index de test ($r)"
+rm -rf "$VRAI"
+# sans cache, un échec réseau enregistre l'essai (limite des essais), sans valider le cache
+rm -rf "$HOME/.claude"
+KIT_PERSO_NODE_INDEX="$TMP/absent" lance v24.22.0 >/dev/null 2>&1
+python3 -c 'import json,sys,time; c=json.load(open(sys.argv[1])); sys.exit(0 if c["corriges"]=={} and c["essai"]>time.time()-60 else 1)' "$CACHE" \
+  && ok "échec sans cache : essai enregistré" || ko "essai non enregistré sans cache"
+lance v24.22.0 >/dev/null 2>"$TMP/err"; r=$?
+[ "$r" = 2 ] && ! grep -q 'vulnérable' "$TMP/err" && grep -q 'injoignable' "$TMP/err" && ok "cache vide : pas de verdict, pas de réseau" || ko "cache vide ($r)"
+# mots supplémentaires
+rm -rf "$HOME/.claude"
+for c in 'nodejs app.js' 'pnpx tsc' 'yarnpkg install'; do
+  hook v24.22.0 "$c" >/dev/null 2>&1; [ $? = 2 ] && ok "hook bloque : $c" || ko "hook bloque : $c"
+done
+rm -rf "$HOME/.claude"
 ln -s "$TMP" "$HOME/lien" 2>/dev/null; mkdir -p "$HOME/.claude/plugins"; ln -s "$TMP/ailleurs2" "$HOME/.claude/plugins/data" 2>/dev/null
 CLAUDE_PLUGIN_DATA="$HOME/.claude/plugins/data" lance v24.22.0 >/dev/null 2>&1
 [ ! -e "$TMP/ailleurs2/node-corriges.json" ] && ok "cache : lien symbolique sortant refusé" || ko "cache via lien symbolique"
