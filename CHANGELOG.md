@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.0 — 2026-11-05
+
+- Runtime Node contrôlé : nouveau `verifie-runtime.py` (refuse un Node plus ancien que la dernière version de sécurité de sa branche, index nodejs.org, cache, `--ci` fail-closed) et hook PreToolUse Bash local (fail-open). `/kit-perso:ci-projet` : le job `node` utilise `actions/setup-node` sur `.nvmrc` (`check-latest`), impose `engines` et lance le contrôle ; génération de `.nvmrc` et `.npmrc` s'ils sont absents (#34).
+
 ## 3.2.0 — 2026-11-04
 
 - garde-secret : directives `script` et `masque` dans `.garde-secret-exceptions`. Un script de banc local déclaré avec son `sha256` peut être lancé tel quel par l'agent (sans argument, depuis la racine, sans lien symbolique, URL locales seulement) ; toute autre mention en Bash et toute écriture du script sont refusées ; les valeurs des fichiers `masque` sont masquées dans les sorties. Durcissements : écriture du script refusée même depuis un `cwd` hors du dépôt, autorités d'URL vides ou `[::1]` suivi d'autre chose que `:port` refusées, mentions du script entre guillemets ou par joker refusées (#31).

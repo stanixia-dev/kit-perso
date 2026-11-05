@@ -79,11 +79,30 @@ for r in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin); do
 
 **SHA figé.** Le workflow du projet porte le SHA complet du kit (`ref:` du checkout de `stanixia-dev/kit-perso`, ligne d'en-tête `# Généré par kit-perso <version>…`). Il est protégé contre l'agent comme tout `.github/workflows/` : changer de version du kit est un commit de l'utilisateur (relancer le skill, recopier). Si kit-perso redevient privé, le checkout échoue et le job `deps` est rouge : les PR restent bloquées tant que le check est obligatoire.
 
+**Runtime Node.** Le job `node` lit la branche majeure dans `.nvmrc` (`actions/setup-node` avec `check-latest: true`, donc le dernier correctif de cette branche), impose `engines` (`npm_config_engine_strict`) et lance `verifie-runtime.py --ci` (checkout du kit au SHA figé, supprimé avant le lint et les tests). Le skill génère aussi `.nvmrc` (première suite de chiffres de `engines.node`, sinon `lts/*` avec un avis) et `.npmrc` (`engine-strict=true`), seulement s'ils n'existent pas dans le projet (`cp -n`) ; un `.npmrc` existant n'est pas lu, un avis rappelle d'y ajouter `engine-strict=true`.
+
 **Après la fusion des workflows** : `deps` ne tourne qu'une fois les workflows sur `main`. Ensuite, Settings > Rules > Rulesets > New branch ruleset, cible `main`, Require status checks : `deps` et les jobs de tests générés (`rust`, `node`, `python`) ; ce sont les noms de jobs, affichés dans la PR `kit-perso-deps / deps` et `kit-perso-tests / rust`, etc.
 
 **Détection.** `livrer` (avant le push) et l'agent `specs` (au démarrage) signalent, en lecture seule, un dépôt sans workflow, sans le job `deps` du kit ou dont les checks de `main` ne sont pas obligatoires (rulesets et protection classique). Ils distinguent « pas de CI configurée » de « CI configurée mais pas déclenchée ». `livrer` annonce et continue, sans bloquer.
 
 Tests : `bash tests/test_ci_projet.sh` (appelé par `tests/test_hooks.sh`), hors réseau (`--ref <sha>`).
+
+## Contrôle du runtime
+
+`hooks/verifie-runtime.py` refuse un Node plus ancien que la dernière version de sécurité de sa branche majeure (index `https://nodejs.org/dist/index.json`, champ `security`). Une branche sans version de sécurité passe ; une branche en fin de vie aussi (l'index ne la signale pas, ticket séparé). Rust n'est pas couvert (spec future).
+
+- `--ci` : 2 essais de 10 s, aucun cache ; index injoignable ou `node` absent : sortie 2 (fail-closed).
+- CLI (`python3 hooks/verifie-runtime.py`) : 1 essai de 4 s, cache lu et écrit ; index injoignable sans cache : sortie 2.
+- `--hook pre` (PreToolUse Bash) : ne s'active que si la commande contient `node`, `npm`, `npx`, `pnpm`, `yarn` ou `corepack` (mot entier : `node_modules` ne compte pas) ; Node vulnérable : commande refusée (faux positifs acceptés, `nvm` passe pour réparer). Fail-open : `node` introuvable ou index injoignable sans cache donnent sortie 0 (avertissement dans le second cas).
+- Cache : `$CLAUDE_PLUGIN_DATA/node-corriges.json` (sinon `~/.claude/plugins/data/kit-perso/`), valable 6 h, au plus un essai réseau toutes les 15 min ; périmé, il reste utilisé avec la mention « nodejs.org injoignable ». Désactivé hors de `~/.claude/plugins/` (dossier protégé en écriture par garde-deps). Avec `KIT_PERSO_NODE_INDEX` défini, le vrai cache (sous le `~/.claude/plugins` de la base de comptes, pas `$HOME`) n'est ni lu ni écrit : un index de test ne peut pas l'empoisonner. Une préversion (`-rc`) compte comme inférieure à la version finale. Le hook reconnaît aussi `nodejs`, `pnpx` et `yarnpkg`.
+
+Résidus assumés :
+- le hook contrôle le `node` du `PATH` du hook : un `nvm use` dans la commande ou un chemin absolu vers un autre binaire lui échappe ;
+- la détection porte sur le texte de la commande : `make test`, `./node_modules/.bin/x` ou un script qui lance npm ne sont pas vus ;
+- Yarn Berry ignore `engine-strict` ;
+- le job de tests tourne en `pull_request` : une PR peut modifier ce workflow. L'agent ne peut pas (garde-deps protège `.github/workflows/`) et le job `deps` reste la barrière.
+
+Tests : `bash tests/test_runtime.sh` (appelé par `tests/test_hooks.sh`), hors réseau (`KIT_PERSO_NODE_INDEX`).
 
 ## Contrôle des secrets
 
