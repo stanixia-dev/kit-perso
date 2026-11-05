@@ -1,5 +1,5 @@
 # Spec — Runtime Node épinglé et contrôlé
-Statut : en cours
+Statut : livrée
 Tickets : #34
 
 ## 1. Objectif
@@ -86,15 +86,15 @@ Le job reçoit aussi `env: npm_config_engine_strict: "true"`, qui impose `engine
 6. Mettre à jour `SKILL.md`, le README, le CHANGELOG (`## 3.3.0 — <date de livraison>`, une entrée qui cite #34), et passer `plugin.json` en 3.3.0. Clôture et archivage selon `agents/codeur.md`.
 
 ## 6. Critères d'acceptation
-- [ ] Avec la fixture et un faux `node` : v24.22.0 et v26.12.0 donnent 2 avec un message qui cite la version corrigée ; v24.22.1, v24.23.0, v27.0.0 et v22.23.4 donnent 0.
-- [ ] `--ci` avec l'index injoignable, ou sans `node` dans le `PATH`, donne 2. Le mode hook dans les mêmes cas donne 0 (avertissement `systemMessage` quand l'index est injoignable).
-- [ ] Hook, commande `ls -la` ou `cat node_modules/x/package.json` : 0, et le faux `node` n'est pas lancé (pas de fichier témoin).
-- [ ] Hook, `npm ci` avec un Node vulnérable : 2. Avec `nvm install 24` : 0.
-- [ ] Cache frais écrit au premier appel, puis index absent : le blocage se fait quand même, sans essai réseau. Cache périmé (`lu` ancien) avec l'index absent : blocage, message « nodejs.org injoignable ». Cache mal formé : traité comme absent. `CLAUDE_PLUGIN_DATA` hors de `~/.claude/plugins/` : aucun fichier écrit.
-- [ ] `kit-perso-tests.yml` : chaque ligne `uses:` est épinglée sur 40 hex suivis de ` # v`. Les checkouts ont tous `persist-credentials: false`. Le job `node` contient `node-version-file: .nvmrc`, `check-latest: true`, `package-manager-cache: false`, `npm_config_engine_strict`, et `run: python3 .kit-perso/hooks/verifie-runtime.py --ci && rm -rf .kit-perso` avant `npm`. Aucun `token:`, `secrets.` ni `${{` dans un `run`.
-- [ ] `.nvmrc` : `{"engines":{"node":">=26"}}` donne `26`, `package.json` qui ne contient que « x » donne `lts/*` avec un avis. Un `.nvmrc` ou un `.npmrc` existant dans le projet n'est ni lu (`.npmrc`), ni généré, ni copié par la commande. Sans `package.json`, aucun des deux n'est généré.
-- [ ] La commande imprimée contient `cp -n` pour chaque fichier généré, et `git add` liste les workflows puis ces fichiers.
-- [ ] `git diff --stat main...HEAD -- .github/workflows` est vide ; README, CHANGELOG et 3.3.0 sont à jour.
+- [x] Avec la fixture et un faux `node` : v24.22.0 et v26.12.0 donnent 2 avec un message qui cite la version corrigée ; v24.22.1, v24.23.0, v27.0.0 et v22.23.4 donnent 0.
+- [x] `--ci` avec l'index injoignable, ou sans `node` dans le `PATH`, donne 2. Le mode hook dans les mêmes cas donne 0 (avertissement `systemMessage` quand l'index est injoignable).
+- [x] Hook, commande `ls -la` ou `cat node_modules/x/package.json` : 0, et le faux `node` n'est pas lancé (pas de fichier témoin).
+- [x] Hook, `npm ci` avec un Node vulnérable : 2. Avec `nvm install 24` : 0.
+- [x] Cache frais écrit au premier appel, puis index absent : le blocage se fait quand même, sans essai réseau. Cache périmé (`lu` ancien) avec l'index absent : blocage, message « nodejs.org injoignable ». Cache mal formé : traité comme absent. `CLAUDE_PLUGIN_DATA` hors de `~/.claude/plugins/` : aucun fichier écrit.
+- [x] `kit-perso-tests.yml` : chaque ligne `uses:` est épinglée sur 40 hex suivis de ` # v`. Les checkouts ont tous `persist-credentials: false`. Le job `node` contient `node-version-file: .nvmrc`, `check-latest: true`, `package-manager-cache: false`, `npm_config_engine_strict`, et `run: python3 .kit-perso/hooks/verifie-runtime.py --ci && rm -rf .kit-perso` avant `npm`. Aucun `token:`, `secrets.` ni `${{` dans un `run`.
+- [x] `.nvmrc` : `{"engines":{"node":">=26"}}` donne `26`, `package.json` qui ne contient que « x » donne `lts/*` avec un avis. Un `.nvmrc` ou un `.npmrc` existant dans le projet n'est ni lu (`.npmrc`), ni généré, ni copié par la commande. Sans `package.json`, aucun des deux n'est généré.
+- [x] La commande imprimée contient `cp -n` pour chaque fichier généré, et `git add` liste les workflows puis ces fichiers.
+- [x] `git diff --stat main...HEAD -- .github/workflows` est vide ; README, CHANGELOG et 3.3.0 sont à jour.
 
 ## 7. Tests
 Commande du projet :
@@ -119,6 +119,6 @@ bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py skills/ci-projet/*.
 - [x] L1 — contrôle du runtime et hook local (étapes 1-3)
   Fichiers : hooks/verifie-runtime.py, hooks/hooks.json, tests/test_runtime.sh, tests/fixtures/node-index.json, tests/test_hooks.sh
   Fait quand : cas règle, CI, hook et cache verts — `bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py`
-- [ ] L2 — gabarit CI, .nvmrc/.npmrc, doc, 3.3.0, clôture (étapes 4-6)
+- [x] L2 — gabarit CI, .nvmrc/.npmrc, doc, 3.3.0, clôture (étapes 4-6)
   Fichiers : skills/ci-projet/genere-ci.py, skills/ci-projet/SKILL.md, tests/test_ci_projet.sh, README.md, CHANGELOG.md, .claude-plugin/plugin.json
   Fait quand : cas ci-projet verts, suite complète verte — `bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py skills/ci-projet/*.py && claude plugin validate --strict .`
