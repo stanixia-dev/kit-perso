@@ -116,7 +116,7 @@ bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py skills/ci-projet/*.
 - SHA de `actions/setup-node` v7.1.0 vérifié (`949feb2413d6458794dcd2491c4babbbce0c15c1`, commit).
 
 ## Lots
-- [ ] L1 — contrôle du runtime et hook local (étapes 1-3)
+- [x] L1 — contrôle du runtime et hook local (étapes 1-3)
   Fichiers : hooks/verifie-runtime.py, hooks/hooks.json, tests/test_runtime.sh, tests/fixtures/node-index.json, tests/test_hooks.sh
   Fait quand : cas règle, CI, hook et cache verts — `bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py`
 - [ ] L2 — gabarit CI, .nvmrc/.npmrc, doc, 3.3.0, clôture (étapes 4-6)
