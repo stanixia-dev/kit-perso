@@ -213,7 +213,7 @@ for c in 'gh api repos/o/r/milestones' 'rtk gh api repos/o/r/milestones' "gh api
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
 # détection de la CI (livrer, specs) : deux GET admis, écriture sur la protection refusée
-code_garde_j() { json_cmd "$1" | python3 hooks/garde-git.py >/dev/null 2>&1; echo $?; }
+code_garde_j() { json_cmd "$1" | sed 's/}$/,"cwd":"\/tmp"}/' | python3 hooks/garde-git.py >/dev/null 2>&1; echo $?; }
 for c in "gh api repos/{owner}/{repo}/rules/branches/main --jq '[.[] | select(.type == \"required_status_checks\")] | length'" \
          "gh api repos/{owner}/{repo}/branches/main/protection --jq '.required_status_checks.checks | length'"; do
   [ "$(code_garde_j "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
