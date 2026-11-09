@@ -538,6 +538,20 @@ for c in 'bash scripts/banc.sh' 'sh -x scripts/banc.sh' 'source scripts/banc.sh'
 done
 mkdir -p "$d/sous"
 hk Bash "$d/sous" command '../scripts/banc.sh'; bloque "banc : depuis un sous-dossier"
+# formes admises : `cd <racine> &&` devant, `2>&1` et un seul filtre de lecture derrière
+mkdir -p "$d/sous"
+for c in "cd $d && scripts/banc.sh" "cd $d && ./scripts/banc.sh 2>&1" "cd $d && scripts/banc.sh 2>&1 | head -5" 'cd .. && scripts/banc.sh'; do
+  hk Bash "$d/sous" command "$c"; passe "script de banc depuis un sous-dossier : $c"
+done
+hk Bash "$d" command 'cd . && scripts/banc.sh 2>&1 | tail -n 3'; passe "script de banc : cd . puis filtre"
+hk Bash "$d" command 'scripts/banc.sh 2>&1 | tail -n 20'; passe "script de banc : 2>&1 puis tail"
+cd_home=$(printf '%s' "$d" | sed "s|^$HOME|~|"); [ "$cd_home" = "$d" ] || { hk Bash "$TMP" command "cd $cd_home && scripts/banc.sh"; passe "script de banc : cd ~/…"; }
+for c in "cd $d && scripts/banc.sh; rm x" "cd $d && scripts/banc.sh | sh" 'scripts/banc.sh | tail -n 3 | sh' 'scripts/banc.sh | tail $(id)' \
+         'scripts/banc.sh | tail -f x > o' 'scripts/banc.sh | tee o' 'scripts/banc.sh 2>&1 | sh' 'scripts/banc.sh | grep P .banc/identifiants.env' \
+         "cd $d/sous && scripts/banc.sh" 'cd /tmp && scripts/banc.sh' "cd $d && cat scripts/banc.sh" "cd $d && scripts/banc.sh &" 'scripts/banc.sh 2>&1 | tail `id`'; do
+  hk Bash "$d/sous" command "$c"; bloque "banc : $c"; sans_secret "banc : $c" "$BV"
+done
+hk Bash "$d/sous" command 'scripts/banc.sh 2>&1'; bloque "banc : sous-dossier sans cd, avec 2>&1"
 hk Bash "$d/sous" command 'scripts/banc.sh'; bloque "banc : racine non courante"
 ln -s scripts/banc.sh "$d/l"
 hk Bash "$d" command './l'; bloque "banc : lien l vers le script"

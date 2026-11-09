@@ -600,11 +600,23 @@ def controle_banc(cmd, cwd):
         return None
     r = os.path.realpath(racine)
     s = cmd.strip()
+    base0 = cwd or os.getcwd()
+    # formes admises autour du script : `cd <racine> &&` devant ; `2>&1` et un seul `| tail|head|grep <args sûrs>` derrière
+    avec_cd = False
+    m = re.match(r"cd\s+([^\s'\"`$;&|<>()\\]+)\s*&&\s*(.*)", s, re.S)
+    if m:
+        cible = os.path.realpath(os.path.join(base0, os.path.expanduser(m.group(1))))
+        if cible == r:
+            avec_cd, s = True, m.group(2)
+    filtre = None
+    m = re.fullmatch(r"(\S+?)(\s+2>&1)?(?:\s*\|\s*((?:tail|head|grep)(?:\s+[^$`;&|<>\n]*)?))?\s*", s)
+    if m and (m.group(2) or m.group(3)):
+        s, filtre = m.group(1), m.group(3)
     for chemin, sha in scripts:
         abs_ = os.path.join(r, chemin)
         if s not in (chemin, "./" + chemin):
             continue
-        if os.path.realpath(cwd or os.getcwd()) != r:
+        if not avec_cd and os.path.realpath(base0) != r:
             refuse(f"⛔ Bloqué par garde-secret : lance-le depuis la racine du dépôt ({chemin}).")
         if os.path.realpath(abs_) != abs_:
             refuse(f"⛔ Bloqué par garde-secret : script de banc ({chemin}) derrière un lien symbolique.")
@@ -621,7 +633,7 @@ def controle_banc(cmd, cwd):
         hote = hote_non_local(contenu.decode("utf-8", "replace"))
         if hote:
             refuse(f"⛔ Bloqué par garde-secret : cible non locale ({hote}) dans {chemin}.")
-        return True
+        return filtre or True  # le filtre éventuel reste soumis aux contrôles de chemins
     base = cwd or os.getcwd()
     sans_guil = cmd.replace("'", "").replace('"', "")
     cands = set()
@@ -634,8 +646,9 @@ def controle_banc(cmd, cwd):
         abs_ = os.path.join(r, chemin)
         nom = re.escape(chemin.rsplit("/", 1)[-1])
         if re.search(rf"(?<![\w.-]){nom}(?![\w.-])", cmd + "\n" + sans_guil) or abs_ in cands:
-            refuse(f"⛔ Bloqué par garde-secret : script de banc déclaré : lance-le seul, tel quel, depuis la racine "
-                   f"({chemin}) ; pour le lire, utilise l'outil Read.")
+            refuse(f"⛔ Bloqué par garde-secret : script de banc déclaré : lance-le tel quel, depuis la racine "
+                   f"({chemin}), ou après `cd <racine> &&`, avec au plus `2>&1` et un seul `| tail|head|grep <args>` "
+                   "(sans $ ` ; & | > <) ; pour le lire, utilise l'outil Read.")
     return None
 
 def pre(data):
@@ -672,8 +685,11 @@ def pre(data):
         if forts:
             refuse("⛔ Bloqué par garde-secret : secret dans le texte de la commande ("
                    + ", ".join(f"{n} {empreinte(v)}" for _, n, v in forts) + f"). {ACCES}")
-        if controle_banc(cmd, cwd):
+        banc = controle_banc(cmd, cwd)
+        if banc is True:
             return
+        if banc:
+            cmd = banc  # script admis : seul le filtre de lecture est encore analysé
         ctx = {"hits": [], "scan": False, "livre": False, "cwd": cwd}
         bash_chemins(cmd, ctx)
         if ctx["hits"]:
