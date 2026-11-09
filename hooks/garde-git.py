@@ -153,7 +153,7 @@ def decoupe_reelle(cmd):
     """Segments où les séparateurs entre guillemets, les commentaires et les corps de heredoc ne coupent pas : liste de
     textes, ou None si la commande ne peut pas être analysée sûrement (guillemet ouvert, heredoc mal formé, `$'`, `${`,
     backtick entre guillemets doubles…) : l'appelant garde alors le contrôle complet."""
-    if re.search(r"\$['\"{]", cmd):
+    if re.search(r"\$['\"{]|`|\(\(", cmd):  # ANSI-C, ${ }, backticks, arithmétique : trop ambigus
         return None
     a = aplatit(cmd)
     segs, cur, q, pile, attente, i = [], [], None, [], [], 0
@@ -181,10 +181,10 @@ def decoupe_reelle(cmd):
         if q is None and a.startswith("<<<", i):
             cur.append("<<<"); i += 3; continue
         if q is None and a.startswith("<<", i):
-            m = re.match(r"<<(-?)\s*(?:(['\"])(\w+)\2|\\?(\w+))", a[i:])
+            m = re.match(r"<<(-?)\s*(?:(['\"])(\w+)\2|(\w+))(?=[\s;&|<>)]|$)", a[i:])
             if not m:
                 return None
-            attente.append((m.group(3) or m.group(4), bool(m.group(1)), bool(m.group(2) or "\\" in m.group(0))))
+            attente.append((m.group(3) or m.group(4), bool(m.group(1)), bool(m.group(2))))
             cur.append(m.group(0)); i += len(m.group(0)); continue
         if q is None and c in ";|&\n":
             if c == "\n" and attente:

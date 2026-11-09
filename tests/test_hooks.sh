@@ -233,10 +233,14 @@ for c in 'bash -c "gh api -X DELETE repos/o/r"' 'sh -c "gh api -X DELETE repos/o
          "echo \$'\\'' ; gh api -X DELETE repos/o/r" $'cat <<EOF\n$(gh api -X DELETE repos/o/r)\nEOF' \
          $'cat <<\'EOF\'\nx\nEOF\ngh api -X DELETE repos/o/r' "echo 'a;b'; gh api -X DELETE repos/o/r" \
          "gh api -X DELETE repos/o/r --jq '.a; .b'" $'cat <<EOF\nx\ngh api -X DELETE repos/o/r' \
-         'find . -exec gh api -X DELETE repos/o/r \;'; do
+         'find . -exec gh api -X DELETE repos/o/r \;' \
+         $'cat <<EOF-X\nEOF-X\ngh api -X POST repos/o/r/issues -f title=t\nEOF' $'cat <<EOF.x\nEOF.x\ngh api -X POST repos/o/r/issues -f title=t\nEOF' \
+         $'cat <<E"OF"\nE\ngh api -X POST repos/o/r/issues -f title=t\nEOF' $'cat <<\'E\'OF\nE\ngh api -X POST repos/o/r/issues -f title=t\nEOF' \
+         $'cat <<E\\OF\nE\ngh api -X POST repos/o/r/issues -f title=t\nEOF' $'echo $((1<<EOF))\ngh api -X POST repos/o/r/issues -f title=t\nEOF' \
+         $'(( x <<EOF ))\ngh api -X POST repos/o/r/issues -f title=t\nEOF' $'echo `# c`; gh api -X POST repos/o/r/issues -f title=t'; do
   [ "$(code_garde_j "$c")" = 2 ] && ok "garde-git bloque (position de commande) $c" || ko "garde-git position $c"
 done
-for c in 'gh issue edit 9 --milestone v1 -t x' 'gh issue edit 9 --add-label x''gh issue edit 9' 'gh issue edit 9 -m v1 -R o/r' \
+for c in 'gh issue edit 9 --milestone v1 -t x' 'gh issue edit 9 --add-label x' 'gh issue edit 9' 'gh issue edit 9 -m v1 -R o/r' \
          'gh issue edit https://github.com/o/r/issues/9 -m v1' 'gh issue create -R autre/r -t x' 'gh issue -R o/r create -t x' \
          'gh issue create -wRstanixia-dev/kit-perso -t x' 'gh issue create -R stanixia-dev/.. -t x' 'gh issue create -R stanixia-dev/a/b -t x' \
          'gh issue create -R stanixia-dev -t x' 'gh issue create -R github.com/stanixia-dev/kit-perso -t x'; do

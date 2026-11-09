@@ -633,7 +633,7 @@ def controle_banc(cmd, cwd):
         hote = hote_non_local(contenu.decode("utf-8", "replace"))
         if hote:
             refuse(f"⛔ Bloqué par garde-secret : cible non locale ({hote}) dans {chemin}.")
-        return filtre or True  # le filtre éventuel reste soumis aux contrôles de chemins
+        return (filtre, r) if filtre else True  # le filtre éventuel reste soumis aux contrôles de chemins (cwd = racine)
     base = cwd or os.getcwd()
     sans_guil = cmd.replace("'", "").replace('"', "")
     cands = set()
@@ -689,7 +689,7 @@ def pre(data):
         if banc is True:
             return
         if banc:
-            cmd = banc  # script admis : seul le filtre de lecture est encore analysé
+            cmd, cwd = banc  # script admis : seul le filtre de lecture est encore analysé, depuis la racine
         ctx = {"hits": [], "scan": False, "livre": False, "cwd": cwd}
         bash_chemins(cmd, ctx)
         if ctx["hits"]:
