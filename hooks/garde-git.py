@@ -130,19 +130,105 @@ def aplatit(cmd):
         i += 1
     return "".join(out)
 
+SEPARATEURS = r"\|\||&&|[;|&\n]"
+
+def _jetons(seg):
+    seg = seg.rstrip()
+    if seg.endswith("\\"):
+        seg = seg[:-1]  # `\;` de find -exec (le `;` a servi de séparateur)
+    try:
+        toks = shlex.split(seg)
+    except ValueError:
+        toks = seg.split()
+    return saute_prefixes(toks)
+
 def segments(cmd):
     # Découpe sur ; && || | & et retours ligne (approximatif mais suffisant)
-    for seg in re.split(r"\|\||&&|[;|&\n]", aplatit(cmd)):
-        seg = seg.rstrip()
-        if seg.endswith("\\"):
-            seg = seg[:-1]  # `\;` de find -exec (le `;` a servi de séparateur)
-        try:
-            toks = shlex.split(seg)
-        except ValueError:
-            toks = seg.split()
-        toks, affecte = saute_prefixes(toks)
+    for seg in re.split(SEPARATEURS, aplatit(cmd)):
+        toks, affecte = _jetons(seg)
         if toks:
             yield toks, affecte
+
+def decoupe_reelle(cmd):
+    """Segments où les séparateurs entre guillemets, les commentaires et les corps de heredoc ne coupent pas : liste de
+    textes, ou None si la commande ne peut pas être analysée sûrement (guillemet ouvert, heredoc mal formé, `$'`, `${`,
+    backtick entre guillemets doubles…) : l'appelant garde alors le contrôle complet."""
+    if re.search(r"\$['\"{]|`|\(\(", cmd):  # ANSI-C, ${ }, backticks, arithmétique : trop ambigus
+        return None
+    a = aplatit(cmd)
+    segs, cur, q, pile, attente, i = [], [], None, [], [], 0
+    def coupe():
+        segs.append("".join(cur)); cur.clear()
+    while i < len(a):
+        c = a[i]
+        if c == "\\" and q != "'":
+            if q is None and a[i + 1:i + 2] in (";", "|", "&"):  # comme le découpage naïf : `\;` coupe (find -exec)
+                cur.append(c); coupe(); i += 2; continue
+            cur.append(a[i:i + 2]); i += 2; continue
+        if q is None and c == "#" and (i == 0 or a[i - 1] in " \t\n;|&("):
+            j = a.find("\n", i)
+            i = len(a) if j < 0 else j
+            continue
+        if q != "'" and a.startswith(("$;", "`;"), i):
+            if c == "`" and q == '"':
+                return None
+            if q == '"':
+                pile.append(q); q = None
+            cur.append(c); coupe(); i += 2
+            continue
+        if q is None and c == ")" and pile:
+            q = pile.pop(); cur.append(c); i += 1; continue
+        if q is None and a.startswith("<<<", i):
+            cur.append("<<<"); i += 3; continue
+        if q is None and a.startswith("<<", i):
+            m = re.match(r"<<(-?)\s*(?:(['\"])(\w+)\2|(\w+))(?=[\s;&|<>)]|$)", a[i:])
+            if not m:
+                return None
+            attente.append((m.group(3) or m.group(4), bool(m.group(1)), bool(m.group(2))))
+            cur.append(m.group(0)); i += len(m.group(0)); continue
+        if q is None and c in ";|&\n":
+            if c == "\n" and attente:
+                lignes = a[i + 1:].split("\n")
+                pos = i + 1
+                for delim, tiret, cite in attente:
+                    n = 0
+                    while n < len(lignes) and (lignes[n].strip() if tiret else lignes[n]) != delim:
+                        n += 1
+                    if n >= len(lignes):
+                        return None
+                    corps = "\n".join(lignes[:n])
+                    if not cite:  # expansions `$( )` / backticks du corps : toujours des commandes
+                        for morceau in re.split(r"\$;|`;", corps)[1:]:
+                            segs.extend(re.split(SEPARATEURS, morceau))
+                    pos += len("\n".join(lignes[:n + 1])) + 1
+                    lignes = lignes[n + 1:]
+                attente = []
+                coupe(); i = pos - 1
+                continue
+            coupe(); i += 1
+            continue
+        if c in "'\"":
+            if q is None:
+                q = c
+            elif q == c:
+                q = None
+        cur.append(c); i += 1
+    if q or pile or attente:
+        return None
+    coupe()
+    return segs
+
+def segments_reels(cmd):
+    """Liste de (jetons, affectation) des vraies commandes, ou None si non analysable."""
+    segs = decoupe_reelle(cmd)
+    if segs is None:
+        return None
+    res = []
+    for seg in segs:
+        toks, affecte = _jetons(seg)
+        if toks:
+            res.append((toks, affecte))
+    return res
 
 def commande_interne(toks):
     """eval … ou bash|sh|zsh|dash|ksh -c/-lc … : renvoie la chaîne à ré-analyser (ou None)."""
@@ -302,7 +388,7 @@ def verifie_gh_lecture(t, mots, reste, pos0):
     for motif, raison in regles:
         if re.search(motif, j, re.IGNORECASE):
             bloque(raison)
-    if mots and mots[0] in ("api", "issue"):
+    if mots and mots[0] in ("api", "issue") and (API_CONTROLE or mots[0] != "api"):
         (verifie_api if mots[0] == "api" else verifie_issue)(t[:pos0] + t[pos0 + 1:])  # sans le jeton api/issue
 
 API_VALEURS_LONGUES = {"--header", "--preview", "--jq", "--template", "--cache", "--hostname", "--method",
@@ -437,6 +523,7 @@ def verifie_issue(args):
 MOT_LIVRE = re.compile(r"\bgh\b|\bgit\s+push\b")
 
 CMD_BRUT = ""
+API_CONTROLE = True  # faux : le segment n'est que du texte (guillemets, heredoc, commentaire), `gh api` n'y est pas exécuté
 
 def est_executeur(toks):
     """eval, ou shell lancé avec -c/-lc, -s, une redirection << ou sans script (donc alimenté par stdin)."""
@@ -482,13 +569,23 @@ def verifie_segment(toks, affecte, cwd, profondeur):
 def analyse(cmd, cwd, profondeur, affecte_parent=False):
     if profondeur > 5:
         bloque("commandes imbriquées (eval / bash -c) trop profondes.")
+    global API_CONTROLE
+    reels = segments_reels(cmd) if profondeur == 0 else None  # None : non analysable ou commande interne, tout est contrôlé
+    cles = {tuple(t) for t, _ in reels} if reels is not None else None
+    vus = set()
     for toks, affecte in segments(cmd):
         base = toks[0].rsplit("/", 1)[-1]
         if base in ("cd", "pushd"):
             # suit les `cd <dossier> && …` (worktrees)
             cwd = resout(cwd, toks[1] if len(toks) > 1 else os.path.expanduser("~"))
             continue
+        vus.add(tuple(toks))
+        API_CONTROLE = cles is None or tuple(toks) in cles
         verifie_segment(toks, affecte or affecte_parent, cwd, profondeur)
+    API_CONTROLE = True
+    for toks, affecte in reels or []:  # vraies commandes `gh` que le découpage naïf a coupées (guillemets contenant ; | &)
+        if tuple(toks) not in vus and toks[0].rsplit("/", 1)[-1] == "gh":
+            verifie_segment(toks, affecte or affecte_parent, cwd, profondeur)
 
 CWD_SESSION = None
 
