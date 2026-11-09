@@ -219,7 +219,24 @@ for c in "gh api repos/{owner}/{repo}/rules/branches/main --jq '[.[] | select(.t
   [ "$(code_garde_j "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
 [ "$(code_garde_j 'gh api -X PUT repos/o/r/branches/main/protection')" = 2 ] && ok "garde-git bloque le PUT sur la protection" || ko "garde-git PUT protection"
-for c in 'gh issue edit 9 --milestone v1 -t x' 'gh issue edit 9 --add-label x' 'gh issue edit 9' 'gh issue edit 9 -m v1 -R o/r' \
+# gh api : contrôlé seulement en position de commande (pas dans un heredoc, un argument entre guillemets, un commentaire)
+for c in "python3 -c 'import os; gh api -X DELETE repos/o/r'" 'echo "gh api -X DELETE repos/o/r"' 'grep "gh api -X DELETE" f' \
+         $'cat <<EOF\ngh api -X DELETE repos/o/r\nEOF' $'cat <<\'EOF\'\ngh api -X DELETE repos/o/r\nEOF' \
+         'ls # gh api -X DELETE repos/o/r' 'ls # x; gh api -X DELETE repos/o/r' \
+         $'git commit -m "$(cat <<\'EOF\'\ngh api -X DELETE repos/o/r\nEOF\n)"' \
+         "gh api repos/o/r/milestones --jq '.a; .b'"; do
+  [ "$(code_garde_j "$c")" = 0 ] && ok "garde-git laisse passer (texte) $c" || ko "garde-git texte $c"
+done
+for c in 'bash -c "gh api -X DELETE repos/o/r"' 'sh -c "gh api -X DELETE repos/o/r"' 'eval "gh api -X DELETE repos/o/r"' \
+         'echo a; gh api -X DELETE repos/o/r' 'cd /x && V=1 gh api -X DELETE repos/o/r' 'echo "a" | gh api -X DELETE repos/o/r' \
+         'echo "$(gh api -X DELETE repos/o/r)"' 'echo "$(echo "a; b"; gh api -X DELETE repos/o/r)"' \
+         "echo \$'\\'' ; gh api -X DELETE repos/o/r" $'cat <<EOF\n$(gh api -X DELETE repos/o/r)\nEOF' \
+         $'cat <<\'EOF\'\nx\nEOF\ngh api -X DELETE repos/o/r' "echo 'a;b'; gh api -X DELETE repos/o/r" \
+         "gh api -X DELETE repos/o/r --jq '.a; .b'" $'cat <<EOF\nx\ngh api -X DELETE repos/o/r' \
+         'find . -exec gh api -X DELETE repos/o/r \;'; do
+  [ "$(code_garde_j "$c")" = 2 ] && ok "garde-git bloque (position de commande) $c" || ko "garde-git position $c"
+done
+for c in 'gh issue edit 9 --milestone v1 -t x' 'gh issue edit 9 --add-label x''gh issue edit 9' 'gh issue edit 9 -m v1 -R o/r' \
          'gh issue edit https://github.com/o/r/issues/9 -m v1' 'gh issue create -R autre/r -t x' 'gh issue -R o/r create -t x' \
          'gh issue create -wRstanixia-dev/kit-perso -t x' 'gh issue create -R stanixia-dev/.. -t x' 'gh issue create -R stanixia-dev/a/b -t x' \
          'gh issue create -R stanixia-dev -t x' 'gh issue create -R github.com/stanixia-dev/kit-perso -t x'; do

@@ -1,6 +1,6 @@
 {
   "name": "kit-perso",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "description": "Agents, skills et hooks personnels : flux specs → codeur → relecteur, garde-fous git.",
   "author": {"name": "stanixia-dev"},
   "repository": "https://github.com/stanixia-dev/kit-perso",

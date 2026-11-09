@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.3.1 — 2026-11-09
+
+- garde-secret : un script de banc déclaré peut aussi être lancé après `cd <racine> &&` (de n'importe quel dossier), suivi de `2>&1` et/ou d'un seul filtre de lecture `tail`, `head` ou `grep` (arguments sans `$`, backtick, `;`, `&`, `|`, `<`, `>`). Mêmes vérifications qu'avant (empreinte, lien symbolique, hôte non local, racine) ; le message de refus indique la forme admise.
+- garde-git : `gh api` n'est contrôlé que s'il est en position de commande ; son texte dans un heredoc, un argument entre guillemets ou un commentaire n'est plus bloqué. Commande non analysable (heredoc mal formé, `$'`, `${`, eval, `bash -c`, `sh -c`) : contrôle inchangé.
+
 ## 3.3.0 — 2026-11-05
 
 - Runtime Node contrôlé : nouveau `verifie-runtime.py` (refuse un Node plus ancien que la dernière version de sécurité de sa branche, index nodejs.org, cache, `--ci` fail-closed) et hook PreToolUse Bash local (fail-open). `/kit-perso:ci-projet` : le job `node` utilise `actions/setup-node` sur `.nvmrc` (`check-latest`), impose `engines` et lance le contrôle ; génération de `.nvmrc` et `.npmrc` s'ils sont absents (#34).
