@@ -53,4 +53,11 @@ g -C "$D" checkout -q main
 [ -z "$(ls -A "$TMPDIR")" ] && [ -z "$(g -C "$D" status --porcelain)" ] && [ ! -e "$D/.git/worktrees" ] \
   && [ "$(g -C "$D" for-each-ref)" = "$REFS" ] && ok "propre : rien derrière, dépôt intact" || ko "propre"
 
+# contrôles de texte
+t() { grep -qF -- "$2" "$RACINE/$1" && ok "$1 contient $2" || ko "$1 ne contient pas $2"; }
+for m in '— test :' '(négatif)' '(non-régression)' '(fumée)' 'Contre-test : non applicable' 'skill `run`'; do t agents/specs.md "$m"; done
+for m in 'tests rouges avant : oui/non' "avant l'implémentation"; do t agents/codeur.md "$m"; done
+for m in 'scripts/contre-test.sh' 'Contre-test :' '(non-régression)' '(négatif)' '(fumée)' 'merge-base'; do t agents/relecteur.md "$m"; done
+t README.md '## Contre-test'
+
 exit $((ECHECS > 0))

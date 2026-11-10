@@ -15,7 +15,9 @@ Format de la spec (≤ 120 lignes, ≤ 200 si la section Conception est présent
 3. **Conception** (facultatif, réservé aux specs d'architecture) — composants, modèle de données, API, sécurité.
 4. **Fichiers** — liste `chemin — créer/modifier — ce qui change`.
 5. **Étapes** — numérotées, chacune vérifiable.
-6. **Critères d'acceptation** — cases à cocher testables.
+6. **Critères d'acceptation** — cases à cocher, chacune reliée à un test : elle se termine par `— test : <commande>`, suivie du nom du cas quand la commande en lance plusieurs (`— test : manuel (<vérification>)` seulement pour ce qui ne s'automatise pas).
+   Marqueurs : `(négatif)` entrée invalide, erreur ou refus attendu (au moins un par fonctionnalité) ; `(non-régression)` comportement déjà présent sur `main` (peut passer sur la base) ; `(fumée)` obligatoire si la spec touche une interface ou un serveur : l'appli démarre réellement (skill `run` si elle est disponible, sinon commande de lancement du projet), la commande s'arrête seule (`timeout`) et sort en 0 si l'appli répond.
+   Spec sans changement de comportement (refactor, doc seule) : ligne `Contre-test : non applicable (<raison>)` sous les critères.
 7. **Tests** — commandes exactes à lancer.
 8. **Questions ouvertes** — ce que l'utilisateur doit trancher (vide si rien).
 9. **Lots** (facultatif) — seulement si le travail se découpe en au moins 2 étapes testables séparément ; sinon, omets la section. Sous le titre `## Lots`, chaque lot tient en 3 lignes :

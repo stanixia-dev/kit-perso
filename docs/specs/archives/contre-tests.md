@@ -1,5 +1,5 @@
 # Spec — contre-tests (des tests qui prouvent le comportement)
-Statut : en cours
+Statut : livrée
 
 ## 1. Objectif
 Faire en sorte que le flux specs → codeur → relecteur garantisse que les tests prouvent le changement, et pas seulement qu'ils sont verts. La spec relie chaque critère à un test et exige des cas négatifs. Le codeur écrit les tests d'abord et les voit échouer. Le relecteur rejoue les tests nouveaux de la branche sur le code de base (contre-test) : un test qui passe déjà sur la base ne prouve rien.
@@ -90,15 +90,15 @@ Usage : `contre-test.sh [--base <ref>] [--fichiers <pathspec>]... -- <commande> 
 6. `README.md`, section `## Contre-test` (8 lignes au plus) : marqueurs, tests d'abord, usage du script et codes de sortie, exceptions, limites (tests dans le source ; base qui échoue pour une raison d'environnement). `CHANGELOG.md` : entrée `3.4.0`. `plugin.json` : `3.4.0`.
 
 ## 6. Critères d'acceptation
-- [ ] Le script renvoie 0 quand un test nouveau échoue sur la base — test : `bash tests/test_contre_test.sh` (cas b1 « rouge »)
-- [ ] Le script renvoie 1 quand le test nouveau passe déjà sur la base — test : `bash tests/test_contre_test.sh` (cas b2 « vert »)
-- [ ] Le script renvoie 3 sans fichier de test nouveau ou modifié, et `--fichiers` remplace les valeurs par défaut — test : `bash tests/test_contre_test.sh` (cas b3 et `nulle-part/`)
-- [ ] (négatif) Une ref inconnue, un dossier hors dépôt ou une commande absente donnent le code 2 — test : `bash tests/test_contre_test.sh` (3 cas)
-- [ ] Le script ne laisse rien derrière lui et n'écrit rien dans le dépôt (`TMPDIR` vide, status propre, pas de `.git/worktrees`, refs inchangées) — test : `bash tests/test_contre_test.sh` (cas « propre »)
-- [ ] `node_modules` de la racine est visible dans le clone — test : `bash tests/test_contre_test.sh` (cas `marq`)
-- [ ] Les agents specs, codeur et relecteur et le README portent les règles et les marqueurs — test : `bash tests/test_contre_test.sh` (contrôles de texte)
-- [ ] (non-régression) La détection de la CI dans `agents/specs.md` est intacte — test : `bash tests/test_ci_projet.sh`
-- [ ] La suite complète passe et le plugin est valide — test : `bash tests/test_hooks.sh && claude plugin validate --strict .`
+- [x] Le script renvoie 0 quand un test nouveau échoue sur la base — test : `bash tests/test_contre_test.sh` (cas b1 « rouge »)
+- [x] Le script renvoie 1 quand le test nouveau passe déjà sur la base — test : `bash tests/test_contre_test.sh` (cas b2 « vert »)
+- [x] Le script renvoie 3 sans fichier de test nouveau ou modifié, et `--fichiers` remplace les valeurs par défaut — test : `bash tests/test_contre_test.sh` (cas b3 et `nulle-part/`)
+- [x] (négatif) Une ref inconnue, un dossier hors dépôt ou une commande absente donnent le code 2 — test : `bash tests/test_contre_test.sh` (3 cas)
+- [x] Le script ne laisse rien derrière lui et n'écrit rien dans le dépôt (`TMPDIR` vide, status propre, pas de `.git/worktrees`, refs inchangées) — test : `bash tests/test_contre_test.sh` (cas « propre »)
+- [x] `node_modules` de la racine est visible dans le clone — test : `bash tests/test_contre_test.sh` (cas `marq`)
+- [x] Les agents specs, codeur et relecteur et le README portent les règles et les marqueurs — test : `bash tests/test_contre_test.sh` (contrôles de texte)
+- [x] (non-régression) La détection de la CI dans `agents/specs.md` est intacte — test : `bash tests/test_ci_projet.sh`
+- [x] La suite complète passe et le plugin est valide — test : `bash tests/test_hooks.sh && claude plugin validate --strict .`
 
 ## 7. Tests
 ```
@@ -117,6 +117,6 @@ bash scripts/contre-test.sh --base main -- bash tests/test_hooks.sh   # attendu 
 - [x] L1 — Script de contre-test et ses tests, écrits d'abord (étapes 1-2)
   Fichiers : `scripts/contre-test.sh`, `tests/test_contre_test.sh`, `tests/test_hooks.sh`
   Fait quand : script et dépôts jetables verts, suite complète verte — `bash tests/test_hooks.sh`
-- [ ] L2 — Règles des agents, README et version (étapes 3-6)
+- [x] L2 — Règles des agents, README et version (étapes 3-6)
   Fichiers : `tests/test_contre_test.sh`, `agents/specs.md`, `agents/codeur.md`, `agents/relecteur.md`, `README.md`, `CHANGELOG.md`, `.claude-plugin/plugin.json`
   Fait quand : contrôles de texte verts, contre-test rouge sur la base — `bash tests/test_hooks.sh && bash scripts/contre-test.sh --base main -- bash tests/test_hooks.sh`
