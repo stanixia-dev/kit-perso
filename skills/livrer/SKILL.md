@@ -1,13 +1,12 @@
 ---
 name: livrer
-description: Pousse la branche claude/<sujet> courante et ouvre la PR avec un corps structuré. À utiliser quand la relecture est OK et que l'utilisateur demande de livrer.
+description: Pousse la branche claude/<sujet> courante et ouvre la PR avec un corps structuré. À utiliser seulement quand le relecteur a rendu OK sur le HEAD courant (pas après un correctif non relu) ; l'orchestrateur la lance alors de lui-même.
 argument-hint: "[chemin de la spec]"
-disable-model-invocation: true
 ---
 
 Livre la branche courante : $ARGUMENTS (chemin de la spec, facultatif).
 
-1. Refuse si `git branch --show-current` ne commence pas par `claude/` ou si `git status --porcelain` n'est pas vide. Explique pourquoi et arrête-toi.
+1. Invoquée sans demande de l'utilisateur et sans relecture OK du HEAD courant : arrête-toi et dis-le. Refuse aussi si `git branch --show-current` ne commence pas par `claude/` ou si `git status --porcelain` n'est pas vide. Explique pourquoi et arrête-toi.
 2. Lance les tests/lint du projet ; s'ils échouent, arrête-toi et dis-le.
 3. Contrôle de la CI (lecture seule ; ne bloque pas : annonce clairement le résultat puis continue, sans demander) :
    - `git fetch -q origin main`, puis `W` = `git ls-tree --name-only origin/main .github/workflows/` filtré sur `*.yml|*.yaml`.
