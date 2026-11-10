@@ -1,8 +1,7 @@
 ---
 name: livrer
-description: Pousse la branche claude/<sujet> courante et ouvre la PR avec un corps structuré. À utiliser quand la relecture est OK et que l'utilisateur demande de livrer.
+description: Pousse la branche claude/<sujet> courante et ouvre la PR avec un corps structuré. L'orchestrateur la lance de lui-même dès que la relecture est OK, ou l'utilisateur via /kit-perso:livrer.
 argument-hint: "[chemin de la spec]"
-disable-model-invocation: true
 ---
 
 Livre la branche courante : $ARGUMENTS (chemin de la spec, facultatif).

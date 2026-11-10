@@ -37,7 +37,7 @@ puis redémarrer Claude Code. Pour développer sans installer : `claude --plugin
 
 ## Ajouter un élément
 
-- Skill : `skills/<nom-kebab-fr>/SKILL.md`, `name` = nom du dossier, `description` en français (ce qu'il fait + « À utiliser quand… »), `disable-model-invocation: true` dès qu'il y a un effet de bord (push, suppression, réseau). Fichiers annexes dans le même dossier.
+- Skill : `skills/<nom-kebab-fr>/SKILL.md`, `name` = nom du dossier, `description` en français (ce qu'il fait + « À utiliser quand… »), `disable-model-invocation: true` dès qu'il y a un effet de bord (push, suppression, réseau), sauf `livrer` : l'orchestrateur la lance de lui-même après une relecture OK, pour que les projets avancent sans manipulation (push sur `claude/*` et PR seulement, sous `garde-git` et `garde-secret` ; la fusion reste à l'utilisateur). Fichiers annexes dans le même dossier.
 - Agent : `agents/<nom>.md` avec `name`, `description`, `model`, `effort`, `tools` (liste minimale) ; rapport final borné en lignes.
 - Hook : script dans `hooks/`, déclaré dans `hooks/hooks.json` via `${CLAUDE_PLUGIN_ROOT}`, cas ajouté à `tests/test_hooks.sh`.
 - Chaque ajout : montée MINEURE, entrée au CHANGELOG, et `claude plugin validate --strict .` vert.

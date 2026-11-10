@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.2 — 2026-11-10
+
+- `livrer` : n'est plus réservée à l'utilisateur (`disable-model-invocation` retiré). L'orchestrateur la lance de lui-même dès que la relecture est OK ; la fusion de la PR reste à l'utilisateur.
+
 ## 3.3.1 — 2026-11-09
 
 - garde-secret : un script de banc déclaré peut aussi être lancé après `cd <racine> &&` (de n'importe quel dossier), suivi de `2>&1` et/ou d'un seul filtre de lecture `tail`, `head` ou `grep` (arguments sans `$`, backtick, `;`, `&`, `|`, `<`, `>`). Mêmes vérifications qu'avant (empreinte, lien symbolique, hôte non local, racine) ; le message de refus indique la forme admise.
