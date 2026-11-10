@@ -199,6 +199,12 @@ Toute spec porte sous son titre `Statut : en cours`. Dans le commit de son derni
 
 Le statut n'a que deux valeurs, `en cours` et `livrée`. La validation de la spec est le feu vert de l'utilisateur à l'orchestrateur, pas un état : on n'écrit ni `validée` ni date. Le relecteur bloque toute autre valeur.
 
+## Contre-test
+
+Chaque critère d'acceptation se termine par `— test : <commande>` ; `(négatif)`, `(non-régression)` et `(fumée)` précisent sa nature (voir `agents/specs.md`). Le codeur écrit les tests d'abord et les voit échouer (`tests rouges avant : oui/non` au rapport).
+Le relecteur lance `scripts/contre-test.sh [--base <ref>] [--fichiers <pathspec>]... -- <commande>` : il rejoue les fichiers de test nouveaux ou modifiés sur la `merge-base`, dans un clone jetable. Sorties : 0 rouge sur la base (attendu), 1 vert (les tests ne prouvent rien), 2 erreur, 3 aucun fichier de test.
+Exceptions : cas `(non-régression)`, `Contre-test : non applicable (raison)` (refactor, doc). Limites : tests écrits dans le fichier source (non séparables) ; base qui échoue pour une raison d'environnement (contre-test non concluant).
+
 ## Tickets
 
 Si la spec répond à des tickets du dépôt, elle porte sous le statut la ligne `Tickets : #9, #10`. `livrer` ajoute alors au corps de la PR une section « Tickets » : `Closes #n` pour la PR qui termine la spec (archivée), `Refs #n` pour les autres ; GitHub ferme les tickets à la fusion.

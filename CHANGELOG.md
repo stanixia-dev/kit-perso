@@ -1,8 +1,12 @@
 # Changelog
 
-## 3.3.2 — 2026-11-10
+## 3.4.1 — 2026-11-10
 
 - `livrer` : n'est plus réservée à l'utilisateur (`disable-model-invocation` retiré). L'orchestrateur la lance de lui-même dès que la relecture est OK ; la fusion de la PR reste à l'utilisateur.
+
+## 3.4.0 — 2026-11-10
+
+- Contre-tests : nouveau `scripts/contre-test.sh` (rejoue les tests nouveaux de la branche sur la merge-base, clone jetable, codes 0 rouge / 1 vert / 2 erreur / 3 aucun test). Les agents `specs` (marqueurs `— test :`, `(négatif)`, `(non-régression)`, `(fumée)`), `codeur` (tests d'abord) et `relecteur` (contre-test, correspondance critère-test) appliquent la règle.
 
 ## 3.3.1 — 2026-11-09
 
