@@ -32,7 +32,8 @@ if [ ${#FICHIERS[@]} -eq 0 ]; then
 fi
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/contre-test.XXXXXX") || erreur "dossier temporaire impossible"
-trap 'rm -rf "$T"' EXIT INT TERM
+trap 'rm -rf "$T"' EXIT
+trap 'exit 2' INT TERM
 git clone -q --shared --no-checkout "$R" "$T/d" 2>/dev/null || erreur "clone impossible"
 git -C "$T/d" checkout -q --detach "$B" 2>/dev/null || erreur "checkout de la base impossible"
 git -C "$T/d" checkout -q "$H" -- "${FICHIERS[@]}" 2>/dev/null || erreur "checkout des fichiers de test impossible"
