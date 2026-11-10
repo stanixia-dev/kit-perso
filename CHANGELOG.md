@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.4.0 — 2026-11-10
+
+- Contre-tests : nouveau `scripts/contre-test.sh` (rejoue les tests nouveaux de la branche sur la merge-base, clone jetable, codes 0 rouge / 1 vert / 2 erreur / 3 aucun test). Les agents `specs` (marqueurs `— test :`, `(négatif)`, `(non-régression)`, `(fumée)`), `codeur` (tests d'abord) et `relecteur` (contre-test, correspondance critère-test) appliquent la règle.
+
 ## 3.3.1 — 2026-11-09
 
 - garde-secret : un script de banc déclaré peut aussi être lancé après `cd <racine> &&` (de n'importe quel dossier), suivi de `2>&1` et/ou d'un seul filtre de lecture `tail`, `head` ou `grep` (arguments sans `$`, backtick, `;`, `&`, `|`, `<`, `>`). Mêmes vérifications qu'avant (empreinte, lien symbolique, hôte non local, racine) ; le message de refus indique la forme admise.

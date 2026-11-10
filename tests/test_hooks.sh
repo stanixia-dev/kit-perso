@@ -319,5 +319,7 @@ bash tests/test_runtime.sh | grep -v '^OK' | sed 's/^/runtime: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_runtime.sh"
 bash tests/test_ci_projet.sh | grep -v '^OK' | sed 's/^/ci-projet: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_ci_projet.sh"
+bash tests/test_contre_test.sh | grep -v '^OK' | sed 's/^/contre-test: /'
+[ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_contre_test.sh"
 
 exit $((ECHECS > 0))
