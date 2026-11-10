@@ -114,7 +114,7 @@ bash scripts/contre-test.sh --base main -- bash tests/test_hooks.sh   # attendu 
 - « Les tests ne prouvent pas le changement » reste bloquant dès maintenant, sans rodage. Les marqueurs `(non-régression)` et `Contre-test : non applicable` couvrent les faux positifs.
 
 ## Lots
-- [ ] L1 — Script de contre-test et ses tests, écrits d'abord (étapes 1-2)
+- [x] L1 — Script de contre-test et ses tests, écrits d'abord (étapes 1-2)
   Fichiers : `scripts/contre-test.sh`, `tests/test_contre_test.sh`, `tests/test_hooks.sh`
   Fait quand : script et dépôts jetables verts, suite complète verte — `bash tests/test_hooks.sh`
 - [ ] L2 — Règles des agents, README et version (étapes 3-6)
