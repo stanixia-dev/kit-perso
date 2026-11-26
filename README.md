@@ -198,12 +198,15 @@ Les hooks protègent déjà les réglages Claude (`~/.claude/settings*.json`, `*
 Pas de `Read(**/.env.*)` : un refus l'emporte sur tout et rendrait `.env.example` illisible.
 
 
+## Brief du codeur
+
+- Le brief de l'orchestrateur au codeur, avec ou sans lots (`Objectif`, `Branche`, `Fichiers`, `Contraintes`, `Fait quand`) peut porter une ligne `Autorisations : <ce que l'utilisateur a explicitement autorisé, avec la date>` (`aucune` sinon), reportée de la mémoire de l'orchestrateur ; elle n'autorise pas à contourner un hook ou un refus : si une action reste refusée, le codeur s'arrête et le signale au rapport.
+
 ## Flux avec lots
 
 À utiliser quand la spec se découpe en lots testables séparément ; sinon, le flux reste inchangé. Le format est l'item Lots de `agents/specs.md`.
 
 - Un lot = un ou plusieurs commits verts suffixés `(L<n>)` sur `claude/<sujet>`, case cochée dans le dernier ; une seule PR ; un seul relecteur, à la fin. Un fichier imprévu mais nécessaire est ajouté à la ligne `Fichiers :` du lot (mineur pour le relecteur) ; les lockfiles et la config d'outil touchés sont listés d'avance.
-- Le brief de l'orchestrateur au codeur (`Objectif`, `Branche`, `Fichiers`, `Contraintes`, `Fait quand`) peut porter une ligne `Autorisations : <ce que l'utilisateur a explicitement autorisé, avec la date>` (`aucune` sinon), reportée de la mémoire de l'orchestrateur ; elle n'autorise pas à contourner un hook ou un refus : si une action reste refusée, le codeur s'arrête et le signale au rapport.
 - `> Coupure PR` se place là où une PR doit s'arrêter (obligatoire au-delà de 5 lots) ; si le brief arrête le codeur avant la prochaine coupure, il l'ajoute après le dernier lot traité. Le relecteur ignore le brief : le périmètre de la PR vient des cases et des coupures de la spec à HEAD.
 - Avec `> Coupure PR` : livrer la première PR, attendre que l'utilisateur la fusionne, faire `/clear`, puis créer `claude/<sujet>-2` depuis `main` à jour ; le codeur reprend aux lots non cochés (les cases cochées sont arrivées dans `main` avec la fusion).
 
@@ -235,6 +238,18 @@ Milestones : `gh api repos/{owner}/{repo}/milestones -f title=v1` (créer), `gh 
 `garde-git` bloque aussi `gh repo set-default` et `gh alias set|import`, et `create` refuse `--parent`, `--blocking` et `--blocked-by`.
 
 Résiduels : `git config alias.x …` puis `git x` (l'alias n'est pas résolu) ; `git -C <dépôt>` ou `--git-dir` vers un dépôt dont la configuration exécute du code (hooks, `core.sshCommand`) ; `cd` vers un autre dépôt avant `gh issue create` ; `gh api` : lecture libre, écriture limitée aux milestones de tout dépôt accessible au jeton ; l'auteur du ticket commenté n'est pas vérifié par un hook (règle du skill).
+
+## Cache du plugin
+
+`~/.claude/plugins/cache/kit-perso/kit-perso/` garde une copie de chaque version installée ; elles s'accumulent (disque de 58 Go sur la devbox). Nettoyage manuel, à faire par l'utilisateur (le dossier est protégé contre l'agent) : lister, repérer la version active (`claude plugin list`), puis supprimer seulement les dossiers des anciennes versions.
+
+```bash
+ls ~/.claude/plugins/cache/kit-perso/kit-perso/
+claude plugin list                      # version active de kit-perso
+rm -rf ~/.claude/plugins/cache/kit-perso/kit-perso/<ancienne-version>
+```
+
+Une version à la fois, jamais la version active ni un `rm -rf` sur `~/.claude` ou sur le dossier parent ; relancer Claude Code ensuite pour vérifier.
 
 ## Bascule depuis ~/.claude
 
