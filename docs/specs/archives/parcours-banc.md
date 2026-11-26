@@ -1,5 +1,5 @@
 # Spec — banc exigé quand le diff touche des chemins déclarés
-Statut : en cours
+Statut : livrée
 Tickets : #43
 
 ## 1. Objectif
@@ -90,20 +90,20 @@ exige scripts/banc.sh packages/kit/* 2026-11-26 composants partagés
 7. CHANGELOG `## 3.7.0 — <date>` citant #43, `plugin.json` en `3.7.0`. Clôture et archivage selon `agents/codeur.md`.
 
 ## 6. Critères d'acceptation
-- [ ] Un diff qui touche `web/a.ts`, avec `exige scripts/banc.sh web/* …`, donne `exige scripts/banc.sh : 1 fichier(s) (web/a.ts)` et le code 0 — test : `bash tests/test_secrets.sh` (cas « exige : chemin couvert »)
-- [ ] Deux lignes `exige` pour un même script : union ; plus de 3 fichiers donnent `, …` — test : `bash tests/test_secrets.sh` (cas « exige : union »)
-- [ ] `web/*` couvre `web/sous/b.ts` — test : `bash tests/test_secrets.sh` (cas « exige : sous-dossier »)
-- [ ] Un diff hors glob donne `aucun banc exigé` et le code 0 — test : `bash tests/test_secrets.sh` (cas « exige : hors glob »)
-- [ ] (négatif) Pas de `.garde-secret-exceptions` → `aucun banc exigé`, code 0 — test : `bash tests/test_secrets.sh` (cas « exige : sans fichier »)
-- [ ] (négatif) `exige` vers un script non déclaré, glob `../x` ou date invalide → ligne `⚠` et `aucun banc exigé`, code 0 — test : `bash tests/test_secrets.sh` (cas « exige : ligne ignorée … »)
-- [ ] (négatif) `--exige --base inconnue` → code 2 — test : `bash tests/test_secrets.sh` (cas « exige : base inconnue »)
-- [ ] (négatif) Une ligne `exige` valide n'est plus signalée « invalide » par `garde-secret.py --base main` — test : `bash tests/test_secrets.sh` (cas « exige : pas une exception »)
-- [ ] (non-régression) Le script de banc déclaré, sans `exige`, se lance comme avant ; `--empreintes` est inchangé — test : `bash tests/test_secrets.sh` (cas « script de banc : … », « depend : --empreintes … »)
-- [ ] (non-régression) Suite complète du kit verte — test : `bash tests/test_hooks.sh`
-- [ ] Relecteur : `--exige`, ligne du brief acceptée si son SHA = HEAD, sinon relancement ; bloquants « non lancé » et « rouge » ; mineur sur `⚠` ; ligne `Banc :` au rapport ; consigne de recopie dans `description:` — test : manuel (relire `agents/relecteur.md` contre la section 3)
-- [ ] Codeur : suite complète exigée après le dernier commit, ligne `Banc :` au rapport, refus ou rouge signalés — test : manuel (relire `agents/codeur.md`)
-- [ ] livrer : pas de section sans exigence ; arrêt si une ligne manque, si le SHA diffère ou si elle est rouge ; ligne de totaux sans chemin de script — test : manuel (relire `skills/livrer/SKILL.md`)
-- [ ] README et CHANGELOG à jour, `plugin.json` en 3.7.0, aucun chemin de projet hors exemple — test : manuel (`grep -n "web/\|packages/kit" agents skills hooks -r` ne renvoie rien)
+- [x] Un diff qui touche `web/a.ts`, avec `exige scripts/banc.sh web/* …`, donne `exige scripts/banc.sh : 1 fichier(s) (web/a.ts)` et le code 0 — test : `bash tests/test_secrets.sh` (cas « exige : chemin couvert »)
+- [x] Deux lignes `exige` pour un même script : union ; plus de 3 fichiers donnent `, …` — test : `bash tests/test_secrets.sh` (cas « exige : union »)
+- [x] `web/*` couvre `web/sous/b.ts` — test : `bash tests/test_secrets.sh` (cas « exige : sous-dossier »)
+- [x] Un diff hors glob donne `aucun banc exigé` et le code 0 — test : `bash tests/test_secrets.sh` (cas « exige : hors glob »)
+- [x] (négatif) Pas de `.garde-secret-exceptions` → `aucun banc exigé`, code 0 — test : `bash tests/test_secrets.sh` (cas « exige : sans fichier »)
+- [x] (négatif) `exige` vers un script non déclaré, glob `../x` ou date invalide → ligne `⚠` et `aucun banc exigé`, code 0 — test : `bash tests/test_secrets.sh` (cas « exige : ligne ignorée … »)
+- [x] (négatif) `--exige --base inconnue` → code 2 — test : `bash tests/test_secrets.sh` (cas « exige : base inconnue »)
+- [x] (négatif) Une ligne `exige` valide n'est plus signalée « invalide » par `garde-secret.py --base main` — test : `bash tests/test_secrets.sh` (cas « exige : pas une exception »)
+- [x] (non-régression) Le script de banc déclaré, sans `exige`, se lance comme avant ; `--empreintes` est inchangé — test : `bash tests/test_secrets.sh` (cas « script de banc : … », « depend : --empreintes … »)
+- [x] (non-régression) Suite complète du kit verte — test : `bash tests/test_hooks.sh`
+- [x] Relecteur : `--exige`, ligne du brief acceptée si son SHA = HEAD, sinon relancement ; bloquants « non lancé » et « rouge » ; mineur sur `⚠` ; ligne `Banc :` au rapport ; consigne de recopie dans `description:` — test : manuel (relire `agents/relecteur.md` contre la section 3)
+- [x] Codeur : suite complète exigée après le dernier commit, ligne `Banc :` au rapport, refus ou rouge signalés — test : manuel (relire `agents/codeur.md`)
+- [x] livrer : pas de section sans exigence ; arrêt si une ligne manque, si le SHA diffère ou si elle est rouge ; ligne de totaux sans chemin de script — test : manuel (relire `skills/livrer/SKILL.md`)
+- [x] README et CHANGELOG à jour, `plugin.json` en 3.7.0, aucun chemin de projet hors exemple — test : manuel (`grep -n "web/\|packages/kit" agents skills hooks -r` ne renvoie rien)
 
 ## 7. Tests
 ```bash
