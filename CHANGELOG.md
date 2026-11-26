@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.8.0 — 2026-11-26
+
+- Mémoire durable : règle à coller dans `~/.claude/CLAUDE.md` (README, section « Mémoire ») et skill `/kit-perso:archiver-memoire`, qui copie `memory/` dans `historique/<date>-memoire/`, signale les lignes d'index de plus de 150 caractères et les fichiers de plus de 3 Ko, et propose une réécriture au durable après accord (#45).
+
 ## 3.7.0 — 2026-11-26
 
 - Banc exigé : directive `exige <script> <glob> <date> <raison>` de `.garde-secret-exceptions` et option `garde-secret.py --exige` ; si le diff touche un glob déclaré, le relecteur bloque tant que la suite n'a pas tourné verte sur le HEAD (ligne `Banc :` du codeur ou relancement), `livrer` ajoute une section Banc à la PR. Sans directive, rien ne change (#43).

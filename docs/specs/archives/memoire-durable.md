@@ -1,6 +1,6 @@
 # Mémoire durable et archivage de l'historique
 
-Statut : en cours
+Statut : livrée
 Tickets : #45
 
 ## Objectif
@@ -77,18 +77,18 @@ Interdit à la skill : supprimer un fichier de `memory/` ou de `historique/` san
 
 ## Critères d'acceptation
 
-- [ ] Copie intégrale : `historique/<date>-memoire/` est identique à `memory/` (`diff -r`, sous-dossier et lien symbolique compris), et `memory/` reste inchangé (mêmes empreintes avant et après) — test : `bash tests/test_archiver_memoire.sh` (cas « copie intégrale »)
-- [ ] Une archive existe déjà à la même date : le script crée `-2`, puis `-3`, sans toucher aux archives existantes — test : `bash tests/test_archiver_memoire.sh` (cas « même date »)
-- [ ] (négatif) Mémoire absente (dossier inexistant, ou vide, ou ne contenant que des sous-dossiers vides) : code 1, `aucune mémoire` sur stderr, pas de `historique/` — test : `bash tests/test_archiver_memoire.sh` (cas « mémoire absente »)
-- [ ] (négatif) `--memoire` dont le dernier composant n'est pas `memory`, ou `--date 2026-13-01` / `--date x` : code 2, rien d'écrit — test : `bash tests/test_archiver_memoire.sh` (cas « refus »)
-- [ ] Une ligne d'index de 151 caractères est signalée avec son numéro ; une ligne de 150 caractères accentués ne l'est pas — test : `bash tests/test_archiver_memoire.sh` (cas « ligne d'index »)
-- [ ] Un fichier de 3073 octets est signalé ; un fichier de 3072 octets ne l'est pas ; sans signalement, `Rien à signaler.` — test : `bash tests/test_archiver_memoire.sh` (cas « taille »)
-- [ ] `MEMORY.md` absent mais un autre fichier présent : la copie a lieu et `MEMORY.md absent` est signalé — test : `bash tests/test_archiver_memoire.sh` (cas « index absent »)
-- [ ] Sans `--memoire` : le dossier mémoire est dérivé du dépôt (le même depuis un worktree et un sous-dossier), et d'un dossier hors git, `/tmp/a.b` donnant `-tmp-a-b` — test : `bash tests/test_archiver_memoire.sh` (cas « dérivation »)
-- [ ] (non-régression) La commande de la skill depuis le cache du plugin n'est bloquée ni par `garde-deps` ni par `garde-git` — test : `bash tests/test_hooks.sh`
-- [ ] Le plugin se valide avec 4 skills, et le README contient le bloc de règle exact de la section Conception — test : `claude plugin validate --strict . && grep -q 'Une ligne d.index de MEMORY.md tient en 150 caractères au plus' README.md`
-- [ ] La skill n'écrit dans `memory/` qu'après un « oui » de l'utilisateur et ne supprime rien — test : manuel (lancer `/kit-perso:archiver-memoire` dans un projet de test, répondre « non » : `memory/` est inchangé)
-- [ ] `plugin.json` en 3.8.0, CHANGELOG à jour, aucun nom de projet propre dans le kit — test : manuel (`grep -rni hive skills agents hooks README.md` ne renvoie rien de nouveau)
+- [x] Copie intégrale : `historique/<date>-memoire/` est identique à `memory/` (`diff -r`, sous-dossier et lien symbolique compris), et `memory/` reste inchangé (mêmes empreintes avant et après) — test : `bash tests/test_archiver_memoire.sh` (cas « copie intégrale »)
+- [x] Une archive existe déjà à la même date : le script crée `-2`, puis `-3`, sans toucher aux archives existantes — test : `bash tests/test_archiver_memoire.sh` (cas « même date »)
+- [x] (négatif) Mémoire absente (dossier inexistant, ou vide, ou ne contenant que des sous-dossiers vides) : code 1, `aucune mémoire` sur stderr, pas de `historique/` — test : `bash tests/test_archiver_memoire.sh` (cas « mémoire absente »)
+- [x] (négatif) `--memoire` dont le dernier composant n'est pas `memory`, ou `--date 2026-13-01` / `--date x` : code 2, rien d'écrit — test : `bash tests/test_archiver_memoire.sh` (cas « refus »)
+- [x] Une ligne d'index de 151 caractères est signalée avec son numéro ; une ligne de 150 caractères accentués ne l'est pas — test : `bash tests/test_archiver_memoire.sh` (cas « ligne d'index »)
+- [x] Un fichier de 3073 octets est signalé ; un fichier de 3072 octets ne l'est pas ; sans signalement, `Rien à signaler.` — test : `bash tests/test_archiver_memoire.sh` (cas « taille »)
+- [x] `MEMORY.md` absent mais un autre fichier présent : la copie a lieu et `MEMORY.md absent` est signalé — test : `bash tests/test_archiver_memoire.sh` (cas « index absent »)
+- [x] Sans `--memoire` : le dossier mémoire est dérivé du dépôt (le même depuis un worktree et un sous-dossier), et d'un dossier hors git, `/tmp/a.b` donnant `-tmp-a-b` — test : `bash tests/test_archiver_memoire.sh` (cas « dérivation »)
+- [x] (non-régression) La commande de la skill depuis le cache du plugin n'est bloquée ni par `garde-deps` ni par `garde-git` — test : `bash tests/test_hooks.sh`
+- [x] Le plugin se valide avec 4 skills, et le README contient le bloc de règle exact de la section Conception — test : `claude plugin validate --strict . && grep -q 'Une ligne d.index de MEMORY.md tient en 150 caractères au plus' README.md`
+- [x] La skill n'écrit dans `memory/` qu'après un « oui » de l'utilisateur et ne supprime rien — test : manuel (lancer `/kit-perso:archiver-memoire` dans un projet de test, répondre « non » : `memory/` est inchangé)
+- [x] `plugin.json` en 3.8.0, CHANGELOG à jour, aucun nom de projet propre dans le kit — test : manuel (`grep -rni hive skills agents hooks README.md` ne renvoie rien de nouveau)
 
 ## Tests
 
@@ -107,6 +107,6 @@ claude plugin validate --strict .
 - [x] L1 — Script d'archivage et ses tests (étapes 1-2)
   Fichiers : `skills/archiver-memoire/archiver-memoire.py`, `tests/test_archiver_memoire.sh`, `tests/test_hooks.sh`
   Fait quand : tous les cas du script passent — `bash tests/test_hooks.sh`
-- [ ] L2 — Skill, règle dans le README, version 3.8.0 (étapes 3-4)
+- [x] L2 — Skill, règle dans le README, version 3.8.0 (étapes 3-4)
   Fichiers : `skills/archiver-memoire/SKILL.md`, `README.md`, `CHANGELOG.md`, `.claude-plugin/plugin.json`
   Fait quand : plugin valide et règle présente — `claude plugin validate --strict . && bash tests/test_hooks.sh`
