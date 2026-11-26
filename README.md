@@ -81,7 +81,25 @@ for r in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin); do
 
 **Runtime Node.** Le job `node` lit la branche majeure dans `.nvmrc` (`actions/setup-node` avec `check-latest: true`, donc le dernier correctif de cette branche), impose `engines` (`npm_config_engine_strict`) et lance `verifie-runtime.py --ci` (checkout du kit au SHA figé, supprimé avant le lint et les tests). Le skill génère aussi `.nvmrc` (première suite de chiffres de `engines.node`, sinon `lts/*` avec un avis) et `.npmrc` (`engine-strict=true`), seulement s'ils n'existent pas dans le projet (`cp -n`) ; un `.npmrc` existant n'est pas lu, un avis rappelle d'y ajouter `engine-strict=true`.
 
-**Après la fusion des workflows** : `deps` ne tourne qu'une fois les workflows sur `main`. Ensuite, Settings > Rules > Rulesets > New branch ruleset, cible `main`, Require status checks : `deps` et les jobs de tests générés (`rust`, `node`, `python`) ; ce sont les noms de jobs, affichés dans la PR `kit-perso-deps / deps` et `kit-perso-tests / rust`, etc.
+**CI rapide (`.kit-perso-ci`).** Fichier facultatif à la racine du projet, lu par le générateur seulement (jamais en CI, jamais avec `--sans-tests`) :
+
+```
+# commentaire
+runs-on self-hosted linux x64 homelab
+chemins rust crates/** Cargo.toml Cargo.lock
+chemins node ui/** package.json package-lock.json
+```
+
+`runs-on <label>…` (au plus une ligne ; défaut `ubuntu-24.04`) s'applique à tous les jobs de `kit-perso-tests.yml`, `filtre` et `resume` compris ; `deps` reste sur `ubuntu-24.04`. `chemins <job> <motif>…` déclare les chemins d'un job (`rust`, `node`, `python` ; `*` traverse les `/`). Un fichier invalide est refusé (sortie 2, rien d'écrit). Sans fichier : aucun filtre, tous les jobs tournent.
+
+- **Filtre fail-safe.** Avec au moins une ligne `chemins`, un job `filtre` décide ; un job filtré a `needs: filtre` et un `if`. Il saute un job seulement si c'est prouvé : une PR qui ne touche que `ui/**` saute `rust`. Un fichier qui n'est dans aucun chemin déclaré (doc, workflow, config racine), un push sur `main`, un diff vide ou une base incohérente lancent tous les jobs. Il n'y a pas de liste « ignorés » : une PR qui ne touche que la doc lance tout.
+- **`resume`.** Toujours généré avec les tests (`if: !cancelled()`) : rouge si un job a échoué ou été annulé, ou si `filtre` a échoué ; vert si les jobs sont verts ou sautés. Le check à exiger est `deps` + `resume` (un ruleset qui exige déjà `rust` reste valable : un job sauté par `if` compte comme réussi).
+- **Concurrence.** `kit-perso-tests.yml` annule l'exécution précédente de la même ref ; sur `main`, seul le dernier push est testé. Pas de `concurrency` dans `deps` (en `pull_request_target`, `github.ref` est la même branche de base pour toutes les PR).
+- **Cache, runner hébergé** : `actions/cache` épinglé par SHA. rust : `~/.cargo/registry`, `~/.cargo/git/db` et `target`, clé sur `Cargo.lock` ; node (avec `package-lock.json`) : `~/.npm`, clé sur le lockfile. Un cache écrit par une PR n'est lisible que par cette PR, `main` n'en restaure jamais un ; `npm ci` et `--locked` vérifient de toute façon les sommes du lockfile.
+- **Cache, runner auto-hébergé** (label `self-hosted`) : pas d'`actions/cache`, qui ferait envoyer et retélécharger `target/` par Internet à chaque exécution (quota de 10 Go par dépôt) alors que le disque du runner garde tout. `~/.cargo/registry` et `~/.npm` persistent dans le HOME du runner ; `target/` est effacé par le checkout, donc le job rust écrit `CARGO_TARGET_DIR=<_work/dépôt>/kit-perso-target` (dossier propre au runner et au dépôt, non nettoyé). Le code d'une PR peut y écrire, mais il s'exécute déjà sur la machine avec les droits du runner : pas de surface nouvelle. Ce dossier grossit : nettoyage manuel (`cargo sweep --time 14` dans le projet, ou `rm -rf` du dossier `kit-perso-target`).
+- **2e runner.** Ajouter un runner auto-hébergé : l'installer avec le label voulu (Settings > Actions > Runners), puis mettre ce label dans `runs-on` de `.kit-perso-ci`, relancer le skill et recopier. Deux runners au même label se partagent la file, mais chacun a son propre `_work` : le répertoire persistant n'est donc pas partagé, le premier passage sur un runner repart d'un `target/` vide.
+
+**Après la fusion des workflows** : `deps` ne tourne qu'une fois les workflows sur `main`. Ensuite, Settings > Rules > Rulesets > New branch ruleset, cible `main`, Require status checks : `deps` et `resume` ; ce sont les noms de jobs, affichés dans la PR `kit-perso-deps / deps` et `kit-perso-tests / resume`.
 
 **Détection.** `livrer` (avant le push) et l'agent `specs` (au démarrage) signalent, en lecture seule, un dépôt sans workflow, sans le job `deps` du kit ou dont les checks de `main` ne sont pas obligatoires (rulesets et protection classique). Ils distinguent « pas de CI configurée » de « CI configurée mais pas déclenchée ». `livrer` annonce et continue, sans bloquer.
 

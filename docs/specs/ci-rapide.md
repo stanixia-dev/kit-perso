@@ -88,20 +88,20 @@ Un job sauté n'est que la conséquence de la sortie de `filtre`, et un échec d
 ## Critères d'acceptation
 
 Noms de cas = libellés `ok` de `bash tests/test_ci_projet.sh`.
-- [ ] `kit-perso-tests.yml` a `concurrency` (groupe `kit-perso-tests-${{ github.ref }}`, `cancel-in-progress: true`), `kit-perso-deps.yml` n'en a pas — test : `bash tests/test_ci_projet.sh` (concurrency dans tests, absente de deps)
-- [ ] Sans `.kit-perso-ci` : jobs de tests sur `ubuntu-24.04`, pas de job `filtre`, ni `needs` ni `if` sur rust/node/python, `resume` présent — test : `bash tests/test_ci_projet.sh` (sans config : aucun filtre, resume présent)
-- [ ] Mode hébergé : `actions/cache` épinglé (40 hex + `# v`) dans rust (chemins cargo + `target`, clé sur `Cargo.lock`) et dans node avec `package-lock.json` seulement — test : `bash tests/test_ci_projet.sh` (cache hébergé rust et npm)
-- [ ] `runs-on self-hosted …` : tous les jobs de tests sur la liste de labels, aucun `actions/cache`, étape `CARGO_TARGET_DIR` après le checkout du job rust, `deps` toujours sur `ubuntu-24.04` — test : `bash tests/test_ci_projet.sh` (runs-on auto-hébergé, répertoire persistant)
-- [ ] Mixte avec `chemins rust` et `chemins node` : `filtre` en premier, `FILTRES` JSON exact, jobs filtrés avec `needs: filtre` et `if` ; `resume` dernier avec `if: ${{ !cancelled() }}` et `needs` listant `filtre` et tous les jobs — test : `bash tests/test_ci_projet.sh` (structure mixte filtrée)
-- [ ] Rust seul et web seul : un job + `resume` dont `needs` ne liste que ce job (et `filtre` si déclaré) — test : `bash tests/test_ci_projet.sh` (structure rust seul, structure web seul)
-- [ ] Le message imprimé demande les checks `deps`, `resume` — test : `bash tests/test_ci_projet.sh` (checks : deps et resume)
-- [ ] Le filtre saute `rust` pour une PR qui ne touche que des fichiers `node`, et lance les deux pour un fichier non classé — test : `bash tests/test_ci_projet.sh` (filtre : node seul saute rust ; filtre : fichier non classé lance tout)
-- [ ] Le filtre lance tout si `BASE` est vide, si `HEAD^1` ≠ `BASE` ou si le diff est vide — test : `bash tests/test_ci_projet.sh` (filtre : push lance tout ; filtre : base différente lance tout ; filtre : diff vide lance tout)
-- [ ] (négatif) `FILTRES` invalide ou `GITHUB_OUTPUT` absent : sortie 2, rien d'ajouté à la sortie — test : `bash tests/test_ci_projet.sh` (filtre : FILTRES invalide refusé)
-- [ ] (négatif) `.kit-perso-ci` avec directive inconnue, `runs-on` double, motif invalide ou job non généré : sortie 2, rien d'écrit — test : `bash tests/test_ci_projet.sh` (refus .kit-perso-ci : …)
-- [ ] (négatif) `--sans-tests` ignore un `.kit-perso-ci` invalide (seul `deps`, sortie 0) — test : `bash tests/test_ci_projet.sh` (sans tests : config non lue)
-- [ ] (non-régression) Propriétés de sécurité (un événement par workflow, actions épinglées, `persist-credentials: false` sur chaque checkout, pas de `${{` dans un `run`, pas de `secrets.`), job node et ligne run de `deps` inchangés — test : `bash tests/test_ci_projet.sh` (propriétés de sécurité…, job node…, ligne run du job deps sort 0)
-- [ ] (non-régression) Toute la suite du kit passe — test : `bash tests/test_hooks.sh`
+- [x] `kit-perso-tests.yml` a `concurrency` (groupe `kit-perso-tests-${{ github.ref }}`, `cancel-in-progress: true`), `kit-perso-deps.yml` n'en a pas — test : `bash tests/test_ci_projet.sh` (concurrency dans tests, absente de deps)
+- [x] Sans `.kit-perso-ci` : jobs de tests sur `ubuntu-24.04`, pas de job `filtre`, ni `needs` ni `if` sur rust/node/python, `resume` présent — test : `bash tests/test_ci_projet.sh` (sans config : aucun filtre, resume présent)
+- [x] Mode hébergé : `actions/cache` épinglé (40 hex + `# v`) dans rust (chemins cargo + `target`, clé sur `Cargo.lock`) et dans node avec `package-lock.json` seulement — test : `bash tests/test_ci_projet.sh` (cache hébergé rust et npm)
+- [x] `runs-on self-hosted …` : tous les jobs de tests sur la liste de labels, aucun `actions/cache`, étape `CARGO_TARGET_DIR` après le checkout du job rust, `deps` toujours sur `ubuntu-24.04` — test : `bash tests/test_ci_projet.sh` (runs-on auto-hébergé, répertoire persistant)
+- [x] Mixte avec `chemins rust` et `chemins node` : `filtre` en premier, `FILTRES` JSON exact, jobs filtrés avec `needs: filtre` et `if` ; `resume` dernier avec `if: ${{ !cancelled() }}` et `needs` listant `filtre` et tous les jobs — test : `bash tests/test_ci_projet.sh` (structure mixte filtrée)
+- [x] Rust seul et web seul : un job + `resume` dont `needs` ne liste que ce job (et `filtre` si déclaré) — test : `bash tests/test_ci_projet.sh` (structure rust seul, structure web seul)
+- [x] Le message imprimé demande les checks `deps`, `resume` — test : `bash tests/test_ci_projet.sh` (checks : deps et resume)
+- [x] Le filtre saute `rust` pour une PR qui ne touche que des fichiers `node`, et lance les deux pour un fichier non classé — test : `bash tests/test_ci_projet.sh` (filtre : node seul saute rust ; filtre : fichier non classé lance tout)
+- [x] Le filtre lance tout si `BASE` est vide, si `HEAD^1` ≠ `BASE` ou si le diff est vide — test : `bash tests/test_ci_projet.sh` (filtre : push lance tout ; filtre : base différente lance tout ; filtre : diff vide lance tout)
+- [x] (négatif) `FILTRES` invalide ou `GITHUB_OUTPUT` absent : sortie 2, rien d'ajouté à la sortie — test : `bash tests/test_ci_projet.sh` (filtre : FILTRES invalide refusé)
+- [x] (négatif) `.kit-perso-ci` avec directive inconnue, `runs-on` double, motif invalide ou job non généré : sortie 2, rien d'écrit — test : `bash tests/test_ci_projet.sh` (refus .kit-perso-ci : …)
+- [x] (négatif) `--sans-tests` ignore un `.kit-perso-ci` invalide (seul `deps`, sortie 0) — test : `bash tests/test_ci_projet.sh` (sans tests : config non lue)
+- [x] (non-régression) Propriétés de sécurité (un événement par workflow, actions épinglées, `persist-credentials: false` sur chaque checkout, pas de `${{` dans un `run`, pas de `secrets.`), job node et ligne run de `deps` inchangés — test : `bash tests/test_ci_projet.sh` (propriétés de sécurité…, job node…, ligne run du job deps sort 0)
+- [x] (non-régression) Toute la suite du kit passe — test : `bash tests/test_hooks.sh`
 - [ ] Sur un projet réel, après copie par l'utilisateur : une PR qui ne touche que les chemins `node` affiche `rust` sauté et `resume` vert ; deux pushs rapprochés annulent la 1re exécution — test : manuel (onglet Checks de la PR)
 
 ## Tests
@@ -124,6 +124,6 @@ bash tests/test_hooks.sh
 - [x] L2 — Filtre par chemins et job `resume` (étapes 4-5)
   Fichiers : `skills/ci-projet/filtre-chemins.py`, `skills/ci-projet/genere-ci.py`, `tests/test_ci_projet.sh`
   Fait quand : cas filtre, structure et checks verts — `bash tests/test_ci_projet.sh`
-- [ ] L3 — Documentation, version, clôture (étape 6)
+- [x] L3 — Documentation, version, clôture (étape 6)
   Fichiers : `README.md`, `skills/ci-projet/SKILL.md`, `CHANGELOG.md`, `.claude-plugin/plugin.json`
   Fait quand : suite complète verte — `bash tests/test_hooks.sh`

@@ -6,7 +6,10 @@ G="$RACINE/skills/ci-projet/genere-ci.py"
 ECHECS=0
 ok() { echo "OK    $1"; }
 ko() { echo "ECHEC $1"; ECHECS=$((ECHECS + 1)); }
-TMP=$(mktemp -d)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+T0=$(mktemp -d) || exit 2; TMP=$(cd "$T0" && pwd -P) || exit 2
+case "$TMP" in /*) ;; *) echo "TMP non absolu : $TMP" >&2; exit 2;; esac
+case "$TMP/" in "$RACINE"/*|"$PWD"/) echo "TMP dans le dépôt : $TMP" >&2; exit 2;; esac
 trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home"; mkdir -p "$HOME"
 g() { git -c user.name=t -c user.email=t@t "$@"; }
