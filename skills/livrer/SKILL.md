@@ -35,14 +35,17 @@ Livre la branche courante : $ARGUMENTS (chemin de la spec, facultatif).
    Termine le corps par la ligne d'attribution demandée par le contexte, si elle existe.
 6. Suis la CI via l'API REST (pas la commande `gh pr checks` en mode suivi, incompatible avec un jeton à droits fins) et sans `sleep` long au premier plan. Lance la boucle en arrière-plan (`run_in_background` ou Monitor), puis attends sa fin :
    ```
-   B=<branche>; T=$(date +%s)
-   until [ "$(gh run list --branch "$B" --json status --jq '[.[] | select(.status != "completed")] | length')" = 0 ] \
+   B=$(git branch --show-current); C=$(git rev-parse HEAD); T=$(date +%s)
+   until [ "$(gh run list --branch "$B" --commit "$C" --json status --jq 'length > 0 and all(.[]; .status == "completed")')" = true ] \
+       || { [ $(( $(date +%s) - T )) -gt 300 ] && [ "$(gh run list --branch "$B" --commit "$C" --json status --jq '[.[] | select(.status != "completed") | .status] | unique == ["queued"]')" = true ]; } \
        || [ $(( $(date +%s) - T )) -gt 600 ]; do sleep 20; done
-   gh run list --branch "$B" --json status,conclusion,name,databaseId
+   gh run list --branch "$B" --commit "$C" --json status,conclusion,name,databaseId,createdAt
    ```
-   - Aucun run au premier relevé : relance une fois après quelques secondes ; sinon, si `W` était vide, dis « pas de CI configurée (/kit-perso:ci-projet) », et sinon « CI configurée mais pas déclenchée : vérifier `on:` du workflow, Actions activées (Settings > Actions), workflow présent sur main ».
-   - Un run `queued` depuis plus de 5 min : dis « runner occupé ou hors ligne » et rends la main, sans attendre davantage, avec la commande pour revérifier : `gh run list --branch <branche> --json status,conclusion,name,databaseId`.
-   - Rouge (`conclusion` = `failure`) : donne le check en échec et les 30 dernières lignes de `gh run view <databaseId> --log-failed`, sans corriger : l'utilisateur décide.
+   La boucle attend tant qu'aucun run n'apparaît (plafond 10 min). Commande de revérification : `gh run list --branch "$B" --commit "$C" --json status,conclusion,name,databaseId,createdAt`.
+   - Aucun run à la sortie : si `W` était vide, dis « pas de CI configurée (/kit-perso:ci-projet) », et sinon « CI configurée mais pas déclenchée : vérifier `on:` du workflow, Actions activées (Settings > Actions), workflow présent sur main ».
+   - Sortie après plus de 5 min avec tous les runs non terminés en `queued` : dis « runner occupé ou hors ligne » et rends la main, avec la commande de revérification.
+   - Plafond de 10 min atteint avec des runs encore en cours : dis « CI toujours en cours après 10 min » et rends la main, avec la commande de revérification.
+   - Rouge (`conclusion` autre que `success`, `skipped` ou `neutral`, donc aussi `cancelled`, `timed_out`, `action_required`) : donne le check en échec et les 30 dernières lignes de `gh run view <databaseId> --log-failed`, sans corriger : l'utilisateur décide.
 7. Termine par l'état de la CI (avec les messages `CI :` du contrôle), le lien de la PR, un résumé en 3 lignes et le rappel de faire `/clear`. Ne commence pas d'autre tâche.
 
 Interdit : `--force`, `gh pr merge`, tout push sur `main`.

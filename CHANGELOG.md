@@ -2,7 +2,7 @@
 
 ## 3.4.2 — 2026-11-26
 
-- `livrer` : suivi de la CI via `gh run list --json` (REST, compatible jeton fin) au lieu de `gh pr checks --watch`, par une boucle `until` en arrière-plan ; le 403 « Upgrade to GitHub Pro » des rulesets/protection est reconnu (« plan gratuit : checks obligatoires indisponibles ») ; un job `queued` depuis plus de 5 min est signalé (« runner occupé ou hors ligne ») avec la commande de revérification (#46).
+- `livrer` : suivi de la CI via `gh run list --json` (REST, compatible jeton fin) au lieu de `gh pr checks --watch`, par une boucle `until` en arrière-plan ; le 403 « Upgrade to GitHub Pro » des rulesets/protection est reconnu (« plan gratuit : checks obligatoires indisponibles ») ; un run `queued` depuis plus de 5 min (mesuré par la boucle, filtrée sur le commit) est signalé, tout comme le plafond de 10 min atteint ; toute conclusion hors `success`/`skipped`/`neutral` est rouge (« runner occupé ou hors ligne ») avec la commande de revérification (#46).
 
 ## 3.4.1 — 2026-11-10
 
