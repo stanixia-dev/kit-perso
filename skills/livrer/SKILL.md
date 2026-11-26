@@ -8,7 +8,11 @@ Livre la branche courante : $ARGUMENTS (chemin de la spec, facultatif).
 
 1. Invoquée sans demande de l'utilisateur et sans relecture OK du HEAD courant : arrête-toi et dis-le. Refuse aussi si `git branch --show-current` ne commence pas par `claude/` ou si `git status --porcelain` n'est pas vide. Explique pourquoi et arrête-toi.
 2. Lance les tests/lint du projet ; s'ils échouent, arrête-toi et dis-le.
-3. Contrôle de la CI (lecture seule ; ne bloque pas : annonce clairement le résultat puis continue, sans demander) :
+3. Banc exigé : lance `python3 "$S" --exige --base main`, où `S=$(ls ~/.claude/plugins/cache/kit-perso/kit-perso/*/hooks/garde-secret.py 2>/dev/null | sort -V | tail -1)` (dans le dépôt kit-perso : `hooks/garde-secret.py`).
+   - `aucun banc exigé` (ou script introuvable) : pas de section Banc dans la PR.
+   - Sinon, reprends les lignes `Banc :` du rapport de relecture OK sur le HEAD courant. Arrête-toi et dis « banc exigé sans résultat de relecture sur <HEAD> » si une ligne manque, si son SHA diffère de `git rev-parse HEAD` ou si elle est rouge (`M` > 0, ou code non nul sans comptes).
+   - Sinon, retiens une ligne de totaux pour tous les scripts exigés : `Banc : <N> réussis / <M> échecs sur <sha court, 7 caractères>`. Ne cite pas le chemin du script : garde-secret refuse sa mention dans un heredoc.
+4. Contrôle de la CI (lecture seule ; ne bloque pas : annonce clairement le résultat puis continue, sans demander) :
    - `git fetch -q origin main`, puis `W` = `git ls-tree --name-only origin/main .github/workflows/` filtré sur `*.yml|*.yaml`.
    - `D` : `git grep -q verifie-manifestes origin/main -- .github/workflows` (job `deps` du kit présent).
    - `R` (rulesets) : `gh api repos/{owner}/{repo}/rules/branches/main --jq '[.[] | select(.type == "required_status_checks")] | length'` ; échec avec `HTTP 403` et `Upgrade to GitHub Pro` sur stderr = plan gratuit (voir `G`) ; autre échec = inconnu.
@@ -23,17 +27,18 @@ Livre la branche courante : $ARGUMENTS (chemin de la spec, facultatif).
      - `R` ou `P` inconnu (hors `G`) : « règles de main illisibles (droits ou réseau) »
 
    Répète ces messages dans le message final.
-4. `git push -u origin <branche>`.
-5. `gh pr create` avec un titre en français et un corps contenant les sections :
+5. `git push -u origin <branche>`.
+6. `gh pr create` avec un titre en français et un corps contenant les sections :
    - Quoi
    - Pourquoi
    - Comment tester
+   - Banc, seulement si le contrôle 3 a retenu une ligne de totaux : cette ligne, après « Comment tester »
    - Spec (lien vers le chemin donné en argument ; s'il n'existe plus, vers `docs/specs/archives/<même nom>`)
 
    - Tickets, seulement si la spec porte une ligne `Tickets : #a, #b` : une ligne `Closes #a` par ticket si la spec est archivée (PR qui la termine), sinon `Refs #a`
 
    Termine le corps par la ligne d'attribution demandée par le contexte, si elle existe.
-6. Suis la CI via l'API REST (pas la commande `gh pr checks` en mode suivi, incompatible avec un jeton à droits fins) et sans `sleep` long au premier plan. Lance la boucle en arrière-plan (`run_in_background` ou Monitor), puis attends sa fin :
+7. Suis la CI via l'API REST (pas la commande `gh pr checks` en mode suivi, incompatible avec un jeton à droits fins) et sans `sleep` long au premier plan. Lance la boucle en arrière-plan (`run_in_background` ou Monitor), puis attends sa fin :
    ```
    B=$(git branch --show-current); C=$(git rev-parse HEAD); T=$(date +%s)
    until [ "$(gh run list --branch "$B" --commit "$C" --json status --jq 'length > 0 and all(.[]; .status == "completed")')" = true ] \
@@ -46,6 +51,6 @@ Livre la branche courante : $ARGUMENTS (chemin de la spec, facultatif).
    - Sortie après plus de 5 min avec tous les runs non terminés en `queued` : dis « runner occupé ou hors ligne » et rends la main, avec la commande de revérification.
    - Plafond de 10 min atteint avec des runs encore en cours : dis « CI toujours en cours après 10 min » et rends la main, avec la commande de revérification.
    - Rouge (`conclusion` autre que `success`, `skipped` ou `neutral`, donc aussi `cancelled`, `timed_out`, `action_required`) : donne le check en échec et les 30 dernières lignes de `gh run view <databaseId> --log-failed`, sans corriger : l'utilisateur décide.
-7. Termine par l'état de la CI (avec les messages `CI :` du contrôle), le lien de la PR, un résumé en 3 lignes et le rappel de faire `/clear`. Ne commence pas d'autre tâche.
+8. Termine par l'état de la CI (avec les messages `CI :` du contrôle), le lien de la PR, un résumé en 3 lignes et le rappel de faire `/clear`. Ne commence pas d'autre tâche.
 
 Interdit : `--force`, `gh pr merge`, tout push sur `main`.
