@@ -93,7 +93,7 @@ done
 for c in 'gh issue create -t x -F f' 'gh issue comment 9 -F f' 'gh issue view 1 -R stanixia-dev/Hive' 'gh issue list --author @me --state open'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
-for c in 'git push -u origin claude/x' 'gh pr create --fill' 'gh pr checks --watch --interval 20' 'rtk git push -u origin claude/x'; do
+for c in 'git push -u origin claude/x' 'gh pr create --fill' 'gh pr checks --watch --interval 20' 'gh run list --branch x --commit abc --json status,conclusion,name,databaseId,createdAt' 'gh run view 123 --log-failed' 'B=$(git branch --show-current); C=$(git rev-parse HEAD); T=$(date +%s)\nuntil [ \"$(gh run list --branch \"$B\" --commit \"$C\" --json status --jq '"'"'length > 0 and all(.[]; .status == \"completed\")'"'"')\" = true ] \\\\\n    || [ $(( $(date +%s) - T )) -gt 600 ]; do sleep 20; done' 'rtk git push -u origin claude/x'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
 sortie_rappel 'gh pr create --fill' | grep -q '/clear' && ok "rappel-clear après gh pr create" || ko "rappel-clear pr create"
