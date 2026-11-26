@@ -43,10 +43,10 @@ for d in node_modules .venv; do
 done
 # node_modules des workspaces npm (sous-dossiers), sans descendre dans node_modules, .git ni target
 while IFS= read -r -d '' m; do
-  dest="$T/d/${m#"$R"/}"
-  [ -d "$(dirname "$dest")" ] && [ ! -e "$dest" ] && [ ! -L "$dest" ] && ln -s "$m" "$dest"
-done < <(find "$R" -mindepth 2 -maxdepth 4 \( -name .git -o -name target \) -prune \
-  -o -type d -name node_modules -print0 -prune 2>/dev/null)
+  rel=${m#./}; dest="$T/d/$rel"
+  [ -d "$(dirname "$dest")" ] && [ ! -e "$dest" ] && [ ! -L "$dest" ] && ln -s "$R/$rel" "$dest"
+done < <(cd "$R" && find . -maxdepth 4 \( -name .git -o -name target \) -prune \
+  -o -type d -name node_modules \( -path ./node_modules -o -print0 \) -prune 2>/dev/null)
 if [ -f "$R/Cargo.toml" ] && [ -z "${CARGO_TARGET_DIR:-}" ]; then
   export CARGO_TARGET_DIR="$R/target/contre-test"
 fi
