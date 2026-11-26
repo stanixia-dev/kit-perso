@@ -2,12 +2,17 @@
 # Tests hors réseau de l'archivage de la mémoire. Lancer depuis n'importe où.
 # Tout se passe sous un dossier jetable : HOME et mémoires factices.
 set -u
-RACINE=$(cd "$(dirname "$0")/.." && pwd)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+RACINE=$(cd "$(dirname "$0")/.." && pwd -P)
 S="$RACINE/skills/archiver-memoire/archiver-memoire.py"
 ECHECS=0
 ok() { echo "OK    $1"; }
 ko() { echo "ECHEC $1"; ECHECS=$((ECHECS + 1)); }
-TMP=$(cd "$(mktemp -d)" && pwd -P)
+T=$(mktemp -d) || exit 2
+TMP=$(cd "$T" && pwd -P) || exit 2
+case "$TMP" in /|"") exit 2 ;; /*) ;; *) exit 2 ;; esac
+case "$RACINE/" in "$TMP"/*) exit 2 ;; esac
+case "$TMP/" in "$RACINE"/*) exit 2 ;; esac
 trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home"; mkdir -p "$HOME"
 g() { git -c user.name=t -c user.email=t@t "$@"; }
@@ -26,7 +31,7 @@ empreintes() { (cd "$1" && find . -type f -o -type l | sort | while read -r f; d
 ligne() { python3 -c 'import sys; print(sys.argv[1] * int(sys.argv[2]))' "$1" "$2"; }
 
 # --- copie intégrale
-M=$(nouvelle_memoire a)
+M=$(nouvelle_memoire a) || exit 1; sous_tmp "$M"
 printf '%s\n' '- [Un](un.md) — durable' > "$M/MEMORY.md"
 echo un > "$M/un.md"; mkdir -p "$M/sous"; echo deux > "$M/sous/deux.md"; ln -s un.md "$M/lien.md"
 AVANT=$(empreintes "$M")
@@ -48,20 +53,24 @@ absente() { # $1 = libellé
   [ "$(code)" = 1 ] && grep -q 'aucune mémoire' "$TMP/err" && [ ! -e "$2/historique" ] && ok "mémoire absente : $1" || ko "mémoire absente : $1"
 }
 lance --memoire "$TMP/b/memory" --date 2026-11-26; absente "inexistant" "$TMP/b"
-M=$(nouvelle_memoire c); lance --memoire "$M" --date 2026-11-26; absente "vide" "$TMP/c"
-M=$(nouvelle_memoire d); mkdir -p "$M/x/y"; lance --memoire "$M" --date 2026-11-26; absente "sous-dossiers vides" "$TMP/d"
+M=$(nouvelle_memoire c) || exit 1; sous_tmp "$M"; lance --memoire "$M" --date 2026-11-26; absente "vide" "$TMP/c"
+M=$(nouvelle_memoire d) || exit 1; sous_tmp "$M"; mkdir -p "$M/x/y"; lance --memoire "$M" --date 2026-11-26; absente "sous-dossiers vides" "$TMP/d"
 
 # --- refus
-M=$(nouvelle_memoire e); echo x > "$M/MEMORY.md"
-lance --memoire "$M" --date 2026-13-01; c1=$(code)
-lance --memoire "$M" --date x; c2=$(code)
+M=$(nouvelle_memoire e) || exit 1; sous_tmp "$M"; echo x > "$M/MEMORY.md"
+lance --memoire "$M" --date 2026-13-01; c1=$(code); e1=$(cat "$TMP/err")
+lance --memoire "$M" --date x; c2=$(code); e2=$(cat "$TMP/err")
 mkdir -p "$TMP/f/autre"; echo x > "$TMP/f/autre/MEMORY.md"
 lance --memoire "$TMP/f/autre" --date 2026-11-26; c3=$(code)
-[ "$c1" = 2 ] && [ "$c2" = 2 ] && [ "$c3" = 2 ] && [ ! -e "$TMP/e/historique" ] && [ ! -e "$TMP/f/historique" ] \
+e3=$(cat "$TMP/err")
+case "$e1" in *'mal formée'*) m_err=0 ;; *) m_err=1 ;; esac
+case "$e2" in *'mal formée'*) ;; *) m_err=1 ;; esac
+case "$e3" in *'appeler « memory »'*) ;; *) m_err=1 ;; esac
+[ "$c1" = 2 ] && [ "$c2" = 2 ] && [ "$c3" = 2 ] && [ "$m_err" = 0 ] && [ ! -e "$TMP/e/historique" ] && [ ! -e "$TMP/f/historique" ] \
   && ok "refus : date mal formée, dossier non memory" || ko "refus ($c1 $c2 $c3)"
 
 # --- ligne d'index
-M=$(nouvelle_memoire g)
+M=$(nouvelle_memoire g) || exit 1; sous_tmp "$M"
 { ligne a 151; ligne é 150; echo court; } > "$M/MEMORY.md"
 lance --memoire "$M" --date 2026-11-26
 grep -q '^Ligne d.index trop longue : MEMORY.md:1 (151 caractères) « a\{60\}… »$' "$TMP/out" \
@@ -69,14 +78,14 @@ grep -q '^Ligne d.index trop longue : MEMORY.md:1 (151 caractères) « a\{60\}�
   && [ "$(code)" = 0 ] && ok "ligne d'index" || ko "ligne d'index : $(cat "$TMP/out")"
 
 # --- taille
-M=$(nouvelle_memoire h); echo x > "$M/MEMORY.md"; mkdir "$M/s"
+M=$(nouvelle_memoire h) || exit 1; sous_tmp "$M"; echo x > "$M/MEMORY.md"; mkdir "$M/s"
 head -c 3073 /dev/zero | tr '\0' x > "$M/s/gros.md"; head -c 3072 /dev/zero | tr '\0' x > "$M/pile.md"
 lance --memoire "$M" --date 2026-11-26
 grep -q '^Fichier trop gros : s/gros.md (3073 octets > 3072)$' "$TMP/out" && ! grep -q 'pile.md' "$TMP/out" \
   && ! grep -q '^Rien à signaler' "$TMP/out" && ok "taille : 3073 signalé, 3072 non" || ko "taille : $(cat "$TMP/out")"
 
 # --- index absent
-M=$(nouvelle_memoire i); echo x > "$M/autre.md"
+M=$(nouvelle_memoire i) || exit 1; sous_tmp "$M"; echo x > "$M/autre.md"
 lance --memoire "$M" --date 2026-11-26
 [ "$(code)" = 0 ] && grep -q '^MEMORY.md absent$' "$TMP/out" && [ -f "$TMP/i/historique/2026-11-26-memoire/autre.md" ] \
   && ok "index absent" || ko "index absent"

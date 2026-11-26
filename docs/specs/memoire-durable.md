@@ -1,6 +1,6 @@
 # Mémoire durable et archivage de l'historique
 
-Statut : livrée
+Statut : en cours
 Tickets : #45
 
 ## Objectif
@@ -87,8 +87,8 @@ Interdit à la skill : supprimer un fichier de `memory/` ou de `historique/` san
 - [x] Sans `--memoire` : le dossier mémoire est dérivé du dépôt (le même depuis un worktree et un sous-dossier), et d'un dossier hors git, `/tmp/a.b` donnant `-tmp-a-b` — test : `bash tests/test_archiver_memoire.sh` (cas « dérivation »)
 - [x] (non-régression) La commande de la skill depuis le cache du plugin n'est bloquée ni par `garde-deps` ni par `garde-git` — test : `bash tests/test_hooks.sh`
 - [x] Le plugin se valide avec 4 skills, et le README contient le bloc de règle exact de la section Conception — test : `claude plugin validate --strict . && grep -q 'Une ligne d.index de MEMORY.md tient en 150 caractères au plus' README.md`
-- [x] La skill n'écrit dans `memory/` qu'après un « oui » de l'utilisateur et ne supprime rien — test : manuel (lancer `/kit-perso:archiver-memoire` dans un projet de test, répondre « non » : `memory/` est inchangé)
-- [x] `plugin.json` en 3.8.0, CHANGELOG à jour, aucun nom de projet propre dans le kit — test : manuel (`grep -rni hive skills agents hooks README.md` ne renvoie rien de nouveau)
+- [ ] La skill n'écrit dans `memory/` qu'après un « oui » de l'utilisateur et ne supprime rien — test : manuel (lancer `/kit-perso:archiver-memoire` dans un projet de test, répondre « non » : `memory/` est inchangé) ; vérification manuelle par l'utilisateur après fusion
+- [x] `plugin.json` en 3.8.0, CHANGELOG à jour, aucun nom de projet propre dans le kit — test : manuel (`grep -rniw hive skills agents hooks README.md` ne renvoie rien de nouveau)
 
 ## Tests
 

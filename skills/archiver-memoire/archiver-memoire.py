@@ -79,6 +79,9 @@ def main():
 
     hist = os.path.join(os.path.dirname(m), "historique")
     base = os.path.join(hist, f"{date}-memoire")
+    rm, rh = os.path.realpath(m), os.path.realpath(hist)
+    if rh == rm or rh.startswith(rm + os.sep):
+        refus(f"historique/ est sous le dossier mémoire : {hist}")
     cible, n = base, 1
     while os.path.lexists(cible):
         n += 1
