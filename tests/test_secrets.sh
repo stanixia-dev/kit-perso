@@ -645,6 +645,19 @@ hk Bash "$d" command 'scripts/banc.sh connexion'; bloque "banc filtre : contrôl
 grep -q 'non locale' <<<"$ERREUR" && ok "banc filtre : contrôle, message de cible" || ko "banc filtre : contrôle, message de cible"
 d=$(banc_filtre bf7)
 hk Bash "$d/sous" command 'scripts/banc.sh connexion'; bloque "banc filtre : contrôle, sous-dossier sans cd"
+# ---------- scripts de banc : mention textuelle tolérée ----------
+d=$(banc_filtre bm1); rm -r "$d/.banc"  # le scan de git commit refuserait le fichier d'identifiants non suivi
+for c in "gh issue create --title t --body 'lance scripts/banc.sh connexion'" 'gh pr edit 3 --body "voir banc.sh"' \
+         "gh issue comment 1 --body 'banc.sh'" "git commit -m 'Corrige scripts/banc.sh'"; do
+  hk Bash "$d" command "$c"; vaut "banc mention : $c" 0
+done
+for c in 'gh issue create --body "$(scripts/banc.sh)"' "gh issue create --body 'x'\"\$(cat scripts/banc.sh)\"" \
+         'gh issue create --body-file scripts/banc.sh' "gh issue create --body 'x'; scripts/banc.sh | base64" \
+         "gh issue create --body 'scripts/banc.sh' | sh" "gh issue create --body 'non fermé scripts/banc.sh" \
+         "gh issue create --body \\'scripts/banc.sh\\'" $'gh issue create --body-file - <<\'EOF\'\nscripts/banc.sh\nEOF' \
+         "git commit -m 'x' scripts/banc.sh" "gh -R o/r issue create --body 'banc.sh'" "echo 'scripts/banc.sh'" "bash -c 'scripts/banc.sh'"; do
+  hk Bash "$d" command "$c"; bloque "banc mention refusée : $c"
+done
 python3 - "$S" <<'PY' && ok "directives : exceptions, directives et avertissements" || ko "directives"
 import importlib.util, sys
 s = importlib.util.spec_from_file_location("gs", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)

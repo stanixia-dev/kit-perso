@@ -628,6 +628,23 @@ def hote_non_local(texte):
             return hote or auto
     return None
 
+def hors_guillemets(s):
+    """`s` où chaque segment '…' ou "…" est remplacé par un blanc ; None si un guillemet n'est pas fermé
+    ou si un segment "…" contient $, ` ou \\ (substitution possible)."""
+    sortie, i = [], 0
+    while i < len(s):
+        q = s[i]
+        if q in "'\"":
+            j = s.find(q, i + 1)
+            if j < 0 or (q == '"' and re.search(r"[$`\\]", s[i:j])):
+                return None
+            sortie.append(" ")
+            i = j + 1
+        else:
+            sortie.append(q)
+            i += 1
+    return "".join(sortie)
+
 def controle_banc(cmd, cwd):
     """Vrai si la commande est l'invocation exacte d'un script de banc déclaré et intact ; refuse (exit 2) une commande
     qui le cite autrement ou dont une condition échoue ; None si aucun script déclaré n'est en cause."""
@@ -681,20 +698,32 @@ def controle_banc(cmd, cwd):
                        + ", ".join(noms[:20]) + ".")
         return (filtre, r) if filtre else True  # le filtre éventuel reste soumis aux contrôles de chemins (cwd = racine)
     base = cwd or os.getcwd()
-    sans_guil = cmd.replace("'", "").replace('"', "")
-    cands = set()
-    for c in candidats(cmd) + candidats(sans_guil):
-        c = developpe(c)
-        cibles = glob.glob(c, root_dir=base) if re.search(r"[*?\[]", c) else []
-        for x in cibles + [c]:
-            cands.add(os.path.realpath(os.path.join(base, x)))
-    for chemin, _ in scripts:
-        abs_ = os.path.join(r, chemin)
-        nom = re.escape(chemin.rsplit("/", 1)[-1])
-        if re.search(rf"(?<![\w.-]){nom}(?![\w.-])", cmd + "\n" + sans_guil) or abs_ in cands:
-            refuse(f"⛔ Bloqué par garde-secret : script de banc déclaré : lance-le tel quel, depuis la racine "
-                   f"({chemin}), ou après `cd <racine> &&`, avec au plus une cible de filtre déclarée `[<filtre>]`, `2>&1` et un seul `| tail|head|grep <args>` "
-                   "(sans $ ` ; & | > <) ; pour le lire, utilise l'outil Read.")
+
+    def cite(t):
+        """Vrai si le texte cite un script déclaré (mot du nom, ou chemin résolu vers le script)."""
+        sans_guil = t.replace("'", "").replace('"', "")
+        cands = set()
+        for c in candidats(t) + candidats(sans_guil):
+            c = developpe(c)
+            cibles = glob.glob(c, root_dir=base) if re.search(r"[*?\[]", c) else []
+            for x in cibles + [c]:
+                cands.add(os.path.realpath(os.path.join(base, x)))
+        for chemin, _ in scripts:
+            nom = re.escape(chemin.rsplit("/", 1)[-1])
+            if re.search(rf"(?<![\w.-]){nom}(?![\w.-])", t + "\n" + sans_guil) or os.path.join(r, chemin) in cands:
+                return chemin
+        return None
+
+    chemin = cite(cmd)
+    if chemin:
+        # mention tolérée : texte entre guillemets d'un `gh issue|pr create|edit|comment` ou d'un `git commit`
+        h = hors_guillemets(s)
+        if (h is not None and re.match(r"(gh (issue|pr) (create|edit|comment)|git commit)( |$)", h)
+                and not re.search(r"[;&|<>()$`\\#\n\r]", h) and not cite(h)):
+            return None
+        refuse(f"⛔ Bloqué par garde-secret : script de banc déclaré : lance-le tel quel, depuis la racine "
+               f"({chemin}), ou après `cd <racine> &&`, avec au plus une cible de filtre déclarée `[<filtre>]`, "
+               "`2>&1` et un seul `| tail|head|grep <args>` (sans $ ` ; & | > <) ; pour le lire, utilise l'outil Read.")
     return None
 
 def pre(data):
