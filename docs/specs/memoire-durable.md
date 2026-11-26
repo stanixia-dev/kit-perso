@@ -104,7 +104,7 @@ claude plugin validate --strict .
 
 ## Lots
 
-- [ ] L1 — Script d'archivage et ses tests (étapes 1-2)
+- [x] L1 — Script d'archivage et ses tests (étapes 1-2)
   Fichiers : `skills/archiver-memoire/archiver-memoire.py`, `tests/test_archiver_memoire.sh`, `tests/test_hooks.sh`
   Fait quand : tous les cas du script passent — `bash tests/test_hooks.sh`
 - [ ] L2 — Skill, règle dans le README, version 3.8.0 (étapes 3-4)

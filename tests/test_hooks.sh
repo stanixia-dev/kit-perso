@@ -99,7 +99,8 @@ done
 for c in 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nx `gh pr merge` et `git push origin main`\nEOF\n)\"'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
-for c in 'gh issue create -t x -F f' 'gh issue comment 9 -F f' 'gh issue view 1 -R stanixia-dev/Hive' 'gh issue list --author @me --state open'; do
+for c in 'gh issue create -t x -F f' 'gh issue comment 9 -F f' 'gh issue view 1 -R stanixia-dev/Hive' 'gh issue list --author @me --state open' \
+         'python3 ~/.claude/plugins/cache/k/3.8.0/skills/archiver-memoire/archiver-memoire.py --memoire ~/.claude/projects/-x/memory'; do
   [ "$(code_garde "$c")" = 0 ] && ok "garde-git laisse passer $c" || ko "garde-git $c"
 done
 for c in 'git push -u origin claude/x' 'gh pr create --fill' 'gh pr checks --watch --interval 20' 'gh run list --branch x --commit abc --json status,conclusion,name,databaseId,createdAt' 'gh run view 123 --log-failed' 'B=$(git branch --show-current); C=$(git rev-parse HEAD); T=$(date +%s)\nuntil [ \"$(gh run list --branch \"$B\" --commit \"$C\" --json status --jq '"'"'length > 0 and all(.[]; .status == \"completed\")'"'"')\" = true ] \\\\\n    || [ $(( $(date +%s) - T )) -gt 600 ]; do sleep 20; done' 'rtk git push -u origin claude/x'; do
@@ -122,6 +123,7 @@ for c in 'cargo add bon' 'pnpm add @scope/ok@1.0.0' 'cargo add mixte' \
          "python3 -c \"import json,os;d=json.load(open(os.path.expanduser('~/.claude/settings.json')));print('permissions' in d)\"" \
          'grep -r x .github/workflows' 'python3 ~/.claude/plugins/cache/k/3.1.0/skills/ci-projet/genere-ci.py' \
          'python3 ~/.claude/plugins/cache/k/3.1.0/skills/ci-projet/genere-ci.py 2>&1 | tail -5' \
+         'python3 ~/.claude/plugins/cache/k/3.8.0/skills/archiver-memoire/archiver-memoire.py --memoire ~/.claude/projects/-x/memory' \
          "git commit -m 'doc .github/workflows'" 'git diff main -- .garde-deps-exceptions' 'ls ~/.claude/hooks' \
          'echo ok > /dev/null' 'git status' 'curl -s https://x.io/a' 'echo "$(git log --format="%h #%s")"' 'git log --format="%h #%s"' \
          'sed -i "114s|a|python3 ~/.claude/plugins/x.py|" tests/test_hooks.sh' 'sed -i -e "s|a|.claude/hooks|" t.sh' \
@@ -329,6 +331,8 @@ bash tests/test_runtime.sh | grep -v '^OK' | sed 's/^/runtime: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_runtime.sh"
 bash tests/test_ci_projet.sh | grep -v '^OK' | sed 's/^/ci-projet: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_ci_projet.sh"
+bash tests/test_archiver_memoire.sh | grep -v '^OK' | sed 's/^/archiver-memoire: /'
+[ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_archiver_memoire.sh"
 bash tests/test_contre_test.sh | grep -v '^OK' | sed 's/^/contre-test: /'
 [ "${PIPESTATUS[0]}" = 0 ] || ko "tests/test_contre_test.sh"
 
