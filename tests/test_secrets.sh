@@ -2,6 +2,7 @@
 # Tests de garde-secret.py sur des dépôts jetables. Lancer depuis n'importe où.
 # Aucun jeton en clair : ils sont construits à l'exécution (concaténation). HOME est un dossier jetable.
 set -u
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
 RACINE=$(cd "$(dirname "$0")/.." && pwd)
 S="$RACINE/hooks/garde-secret.py"
 ECHECS=0
@@ -13,7 +14,7 @@ verifie_kit() {
   local fin; fin=$(git -C "$RACINE" branch --show-current; git -C "$RACINE" rev-parse HEAD; git -C "$RACINE" status --porcelain)
   [ "$fin" = "$ETAT_KIT_DEBUT" ] || { echo "ECHEC le dépôt du kit a changé pendant les tests (branche, HEAD ou arbre)"; return 1; }
 }
-TMP=$(mktemp -d)
+TMP=$(mktemp -d) && [ -d "$TMP" ] || exit 1
 trap 'rc=$?; rm -rf "$TMP"; verifie_kit || rc=1; exit $rc' EXIT
 export HOME="$TMP/home"
 mkdir -p "$HOME/.ssh" "$HOME/.config/gh"
@@ -825,13 +826,13 @@ d=$(exb ex1 'exige scripts/banc.sh web/* 2026-11-26 interface'); fic "$d" web/a.
 lance "$d" --exige --base main
 vaut "exige : chemin couvert" 0
 [ "$SORTIE" = "exige scripts/banc.sh : 1 fichier(s) (web/a.ts)" ] && ok "exige : sortie chemin couvert" || ko "exige : sortie chemin couvert ($SORTIE)"
-d=$(exb ex2 'exige scripts/banc.sh web/* 2026-11-26 a' 'exige scripts/banc.sh lib/* 2026-11-26 b'); fic "$d" web/a.ts web/b.ts lib/c.ts lib/d.ts
+d=$(exb ex2 'exige scripts/banc.sh web/* 2026-11-26 a' 'exige scripts/banc.sh lib/* 2026-11-26 b'); sur "$d"; fic "$d" web/a.ts web/b.ts lib/c.ts lib/d.ts
 lance "$d" --exige --base main
 [ "$SORTIE" = "exige scripts/banc.sh : 4 fichier(s) (lib/c.ts, lib/d.ts, web/a.ts, …)" ] && ok "exige : union" || ko "exige : union ($SORTIE)"
-d=$(exb ex3 'exige scripts/banc.sh web/* 2026-11-26 a'); fic "$d" web/sous/b.ts
+d=$(exb ex3 'exige scripts/banc.sh web/* 2026-11-26 a'); sur "$d"; fic "$d" web/sous/b.ts
 lance "$d" --exige --base main
 [ "$SORTIE" = "exige scripts/banc.sh : 1 fichier(s) (web/sous/b.ts)" ] && ok "exige : sous-dossier" || ko "exige : sous-dossier ($SORTIE)"
-d=$(exb ex4 'exige scripts/banc.sh web/* 2026-11-26 a'); fic "$d" doc/a.md
+d=$(exb ex4 'exige scripts/banc.sh web/* 2026-11-26 a'); sur "$d"; fic "$d" doc/a.md
 lance "$d" --exige --base main
 vaut "exige : hors glob, code" 0
 [ "$SORTIE" = "aucun banc exigé" ] && ok "exige : hors glob" || ko "exige : hors glob ($SORTIE)"
@@ -841,17 +842,23 @@ vaut "exige : sans fichier, code" 0
 [ "$SORTIE" = "aucun banc exigé" ] && ok "exige : sans fichier" || ko "exige : sans fichier ($SORTIE)"
 i=0
 for l in 'exige scripts/autre.sh web/* 2026-11-26 r' 'exige scripts/banc.sh ../x 2026-11-26 r' 'exige scripts/banc.sh web/* 2026-13-45 r' 'exige scripts/banc.sh web/*'; do
-  i=$((i + 1)); d=$(exb ex6$i "$l"); fic "$d" web/a.ts
+  i=$((i + 1)); d=$(exb ex6$i "$l"); sur "$d"; fic "$d" web/a.ts
   lance "$d" --exige --base main
   [ "$CODE" = 0 ] && grep -q '^⚠ ' <<<"$SORTIE" && grep -q '^aucun banc exigé$' <<<"$SORTIE" && ok "exige : ligne ignorée « $l »" || ko "exige : ligne ignorée « $l » ($CODE $SORTIE)"
 done
-d=$(exb ex7 'exige scripts/banc.sh web/* 2026-11-26 a'); fic "$d" web/a.ts
+d=$(exb ex7 'exige scripts/banc.sh web/* 2026-11-26 a'); sur "$d"; fic "$d" web/a.ts
 lance "$d" --exige --base inconnue
 vaut "exige : base inconnue" 2
-d=$(exb ex8 'exige scripts/banc.sh web/* 2026-11-26 a'); fic "$d" web/a.ts
-rm -rf "$d/.banc"; lance "$d" --base main
-vaut "exige : pas une exception, code" 0
-! grep -q 'invalide' <<<"$SORTIE$ERREUR" && ok "exige : pas une exception" || ko "exige : pas une exception ($SORTIE)"
+grep -q 'a échoué' <<<"$ERREUR" && ok "exige : base inconnue, message" || ko "exige : base inconnue, message ($ERREUR)"
+# une ligne exige valide n'est ni une exception invalide (lit_exceptions) ni un masque (directives)
+LIGNE_EXIGE='exige lib/*.txt 2026-11-26 r'
+RES=$(python3 -c 'import importlib.util, sys
+s = importlib.util.spec_from_file_location("gs", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+t = sys.argv[2] + "\n"
+exc, av = m.lit_exceptions(t)
+_, masques, _, _, av2 = m.directives(t)
+print(len(exc), len(av), len(masques), len(av2))' "$S" "$LIGNE_EXIGE")
+[ "$RES" = "0 0 0 0" ] && ok "exige : pas une exception, pas un masque" || ko "exige : pas une exception, pas un masque ($RES)"
 
 # ---------- FIN ----------
 exit $((ECHECS > 0))

@@ -155,6 +155,8 @@ def directives(texte):
                     ok = False
             deps_l.append((n, p[1], chemin, p[3] if ok else None))
             continue
+        if p[0] == "exige":  # lue par `exigences`, sans effet ici
+            continue
         if p[0] == "script":
             if len(p) < 2 or not chemin_relatif_sur(p[1]):
                 avert.append(f"{EXCEPTIONS} ligne {n} ignorée (script : chemin relatif invalide)")
@@ -518,17 +520,20 @@ def exige(depot, base):
         print(f"{depot} n'est pas un dépôt git", file=sys.stderr)
         return 2
     base = base or v.base_par_defaut(racine)
-    r = subprocess.run(["git", "-C", racine, "diff", "--name-only", "--no-renames", f"{base}...HEAD"],
-                       capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", racine, "diff", "--name-only", "-z", "--no-renames", f"{base}...HEAD"],
+                       capture_output=True, text=True, errors="surrogateescape")
     if r.returncode != 0:
         print(f"git diff {base}...HEAD a échoué : {r.stderr.strip()}", file=sys.stderr)
         return 2
-    fichiers = [f for f in r.stdout.splitlines() if f]
+    fichiers = [f for f in r.stdout.split("\0") if f]
     try:
         with open(os.path.join(racine, EXCEPTIONS), encoding="utf-8") as f:
             texte = f.read()
-    except OSError:
+    except FileNotFoundError:
         texte = ""
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"{EXCEPTIONS} illisible : {e}", file=sys.stderr)
+        return 2
     declares = {c for c, _ in directives(texte)[0]}
     globs, avert = exigences(texte, declares)
     for a in avert:

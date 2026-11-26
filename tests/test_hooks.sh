@@ -2,6 +2,7 @@
 # Tests des hooks par stdin JSON. Lancer depuis n'importe où.
 set -u
 cd "$(dirname "$0")/.." || exit 1
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
 RACINE=$(pwd)
 # Garde-fou : le dépôt du kit ne doit pas bouger pendant les tests (branche, HEAD, arbre de travail)
 ETAT_KIT_DEBUT=$(git -C "$RACINE" branch --show-current; git -C "$RACINE" rev-parse HEAD; git -C "$RACINE" status --porcelain)
