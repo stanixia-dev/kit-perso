@@ -88,15 +88,15 @@ La branche se place dans `main()`/`commande()` avant le scan git. L'agent peut l
 6. CHANGELOG `## 3.6.0 — <date de livraison>` (une entrée qui cite #33), `plugin.json` en `3.6.0`. Clôture et archivage selon `agents/codeur.md`.
 
 ## 6. Critères d'acceptation
-- [x] Dépôt `banc` avec `depend scripts/banc.sh outils/a.ts`, `depend scripts/banc.sh outils/lib` (dossier de 2 fichiers) et des empreintes justes : `scripts/banc.sh` → 0 sans sortie — test : `bash tests/test_secrets.sh` (« depend : dépendances intactes »)
+- [x] (non-régression) Dépôt `banc` avec `depend scripts/banc.sh outils/a.ts`, `depend scripts/banc.sh outils/lib` (dossier de 2 fichiers) et des empreintes justes : `scripts/banc.sh` → 0 sans sortie — test : `bash tests/test_secrets.sh` (« depend : dépendances intactes »)
 - [x] (négatif) `outils/a.ts` modifié d'un octet → 2, message qui contient `outils/a.ts`, `modifié` et `--empreintes` — test : `bash tests/test_secrets.sh` (« depend : fichier modifié »)
 - [x] (négatif) Dans `outils/lib` : fichier ajouté, fichier supprimé ou fichier modifié → 2, le message nomme `outils/lib` — test : `bash tests/test_secrets.sh` (« depend : dossier ajout|suppression|modif »)
 - [x] (négatif) Dépendance absente → 2 (`absent`) ; lien symbolique dans `outils/lib` → 2 ; `outils/a.ts` remplacé par un lien → 2 — test : `bash tests/test_secrets.sh` (« depend : absent|lien interne|lien »)
 - [x] (négatif) `depend` à empreinte de 12 hex ou à date invalide, pour un script déclaré → 2 (fail-closed) ; même ligne pour un script non déclaré → avertissement, aucun effet — test : `bash tests/test_secrets.sh` (« depend : mal formée »)
 - [x] (négatif) Deux dépendances modifiées → un seul refus qui nomme les deux — test : `bash tests/test_secrets.sh` (« depend : plusieurs »)
 - [x] (négatif) Dossier de 1001 fichiers → 2 (`plus de 1000 fichiers`) — test : `bash tests/test_secrets.sh` (« depend : arbre trop grand »)
-- [x] (négatif) Ligne `depend` écrite par Bash dans `.garde-secret-exceptions` → 2 (garde-deps) — test : `bash tests/test_hooks.sh`
-- [x] Edit et Write de `outils/a.ts` → 0 ; Edit de `scripts/banc.sh` → 2 — test : `bash tests/test_secrets.sh` (« depend : écriture »)
+- [x] (non-régression) Ligne `depend` écrite par Bash dans `.garde-secret-exceptions` → 2 (garde-deps) — test : `bash tests/test_hooks.sh`
+- [x] (non-régression) Edit et Write de `outils/a.ts` → 0 ; Edit de `scripts/banc.sh` → 2 — test : `bash tests/test_secrets.sh` (« depend : écriture »)
 - [x] `--empreintes` : tout à jour → code 0 ; dépendance modifiée → code 1 et une ligne `ligne N : depend scripts/banc.sh outils/a.ts <nouvelle empreinte> <date du jour> …`. Le fichier `.garde-secret-exceptions` reste identique (comparaison `sha256sum` avant et après). Recopier la ligne affichée rend `scripts/banc.sh` → 0 — test : `bash tests/test_secrets.sh` (« depend : --empreintes »)
 - [x] (non-régression) Sans ligne `depend`, tous les cas « banc » et « filtre » existants sont inchangés ; `depend` n'apparaît ni dans les exceptions ni dans les « ligne invalide » — test : `bash tests/test_secrets.sh`
 - [x] README, CHANGELOG et 3.6.0 à jour ; `git diff --stat main...HEAD -- .github/workflows` vide — test : `bash tests/test_hooks.sh && claude plugin validate --strict .`
