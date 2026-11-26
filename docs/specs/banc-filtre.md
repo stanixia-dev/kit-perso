@@ -124,7 +124,7 @@ Cas à ajouter dans `test_secrets.sh`, avec les helpers `banc`, `hk`, `passe`, `
 ## 8. Questions ouvertes
 
 ## Lots
-- [ ] L1 — directive `filtre` et argument (étapes 1-3)
+- [x] L1 — directive `filtre` et argument (étapes 1-3)
   Fichiers : hooks/garde-secret.py, tests/test_secrets.sh
   Fait quand : cas « banc filtre » et « directives » verts — `bash tests/test_hooks.sh`
 - [ ] L2 — mention textuelle tolérée (étape 4)

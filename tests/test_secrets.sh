@@ -603,6 +603,48 @@ po PostToolUse Bash "$d" stdout "u administrateur"
 rm "$d/.garde-secret-exceptions"
 po PostToolUse Bash "$d" stdout "mdp $BV fin"
 [ -z "$SORTIE" ] && ok "banc : sans directive masque, non masqué" || ko "banc : sans directive masque"
+# ---------- scripts de banc : argument de filtre ----------
+banc_filtre() { # $1 = nom ; banc + cibles tests/e2e/*.spec.ts déclarées
+  local d; d=$(banc "$1")
+  mkdir -p "$d/tests/e2e" "$d/sous"
+  touch "$d/tests/e2e/connexion.spec.ts" "$d/tests/e2e/entites.spec.ts" "$d/tests/e2e/Majuscule.spec.ts"
+  printf 'filtre scripts/banc.sh tests/e2e/*.spec.ts 2026-11-26 e2e\n' >> "$d/.garde-secret-exceptions"
+  echo "$d"
+}
+d=$(banc_filtre bf1)
+for c in 'scripts/banc.sh connexion' './scripts/banc.sh entites' $'scripts/banc.sh\tconnexion' 'scripts/banc.sh connexion 2>&1 | tail -n 20'; do
+  hk Bash "$d" command "$c"; passe "banc filtre : admis $c"
+done
+hk Bash "$d/sous" command "cd $d && scripts/banc.sh connexion"; passe "banc filtre : cd racine depuis un sous-dossier"
+touch "$d/tests/e2e/nouveau.spec.ts"
+hk Bash "$d" command 'scripts/banc.sh nouveau'; passe "banc filtre : cible ajoutée"
+d2=$(banc bf2); mkdir -p "$d2/outils"; touch "$d2/outils/test_api.py"
+printf 'filtre scripts/banc.sh outils/test_*.py 2026-11-26 e2e\n' >> "$d2/.garde-secret-exceptions"
+hk Bash "$d2" command 'scripts/banc.sh api'; passe "banc filtre : préfixe"
+for c in 'scripts/banc.sh connexion entites' 'scripts/banc.sh Majuscule' 'scripts/banc.sh --ui' 'scripts/banc.sh -x' "scripts/banc.sh 'connexion'" \
+         'scripts/banc.sh "connexion"' 'scripts/banc.sh $X' 'scripts/banc.sh $(echo connexion)' 'scripts/banc.sh `id`' 'scripts/banc.sh conn*' \
+         'scripts/banc.sh conn?xion' 'scripts/banc.sh connexion2>&1' $'scripts/banc.sh\nenv' $'scripts/banc.sh connexion\nenv' \
+         'scripts/banc.sh connexion; env' 'scripts/banc.sh connexion && env' 'scripts/banc.sh connexion > o' 'scripts/banc.sh connexion | sh' \
+         'scripts/banc.sh connexion | base64' 'scripts/banc.sh connexion &' 'X=1 scripts/banc.sh connexion' 'bash scripts/banc.sh connexion' \
+         'scripts/banc.sh ../connexion' 'scripts/banc.sh connexion.spec'; do
+  hk Bash "$d" command "$c"; bloque "banc filtre : refus $c"; sans_secret "banc filtre : refus $c" "$BV"
+done
+hk Bash "$d" command 'scripts/banc.sh inconnu'; bloque "banc filtre : cible inconnue"
+grep -q connexion <<<"$ERREUR" && ok "banc filtre : cible inconnue, message" || ko "banc filtre : cible inconnue, message"
+d=$(banc bf3)
+hk Bash "$d" command 'scripts/banc.sh connexion'; bloque "banc filtre : sans directive"
+grep -q 'aucune cible de filtre' <<<"$ERREUR" && ok "banc filtre : sans directive, message" || ko "banc filtre : sans directive, message"
+d=$(banc_filtre bf4); mv "$d/scripts" "$d/copie"; mkdir "$d/vrai"; ln -s vrai "$d/scripts"; cp "$d/copie/banc.sh" "$d/vrai/banc.sh"
+hk Bash "$d" command 'scripts/banc.sh connexion'; bloque "banc filtre : contrôle, scripts en lien"
+d=$(banc_filtre bf5); printf '# x\n' >> "$d/scripts/banc.sh"
+hk Bash "$d" command 'scripts/banc.sh connexion'; bloque "banc filtre : contrôle, script modifié"
+grep -q 'modifié' <<<"$ERREUR" && ok "banc filtre : contrôle, message d'empreinte" || ko "banc filtre : contrôle, message d'empreinte"
+d=$(banc_filtre bf6); printf 'curl https://exemple.org/x\n' >> "$d/scripts/banc.sh"
+printf 'script scripts/banc.sh %s 2026-11-04 r\nfiltre scripts/banc.sh tests/e2e/*.spec.ts 2026-11-26 e2e\n' "$(sha256sum "$d/scripts/banc.sh" | cut -d' ' -f1)" > "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'scripts/banc.sh connexion'; bloque "banc filtre : contrôle, URL non locale"
+grep -q 'non locale' <<<"$ERREUR" && ok "banc filtre : contrôle, message de cible" || ko "banc filtre : contrôle, message de cible"
+d=$(banc_filtre bf7)
+hk Bash "$d/sous" command 'scripts/banc.sh connexion'; bloque "banc filtre : contrôle, sous-dossier sans cd"
 python3 - "$S" <<'PY' && ok "directives : exceptions, directives et avertissements" || ko "directives"
 import importlib.util, sys
 s = importlib.util.spec_from_file_location("gs", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
@@ -610,10 +652,20 @@ h = "a" * 64
 t = f"x.txt {'0'*12} 2026-11-04 r\nscript a.sh {h} 2026-11-04 r\nmasque .banc/*.env 2026-11-04 r\nscript ../x.sh {h} 2026-11-04 r\n"
 exc, av = m.lit_exceptions(t)
 assert exc == [("x.txt", "0"*12, "2026-11-04", "r")] and av == [], (exc, av)
-sc, ma, av = m.directives(t)
-assert sc == [("a.sh", h)] and ma == [".banc/*.env"] and len(av) == 1 and "ligne 4" in av[0], (sc, ma, av)
+sc, ma, fi, av = m.directives(t)
+assert fi == {} and sc == [("a.sh", h)] and ma == [".banc/*.env"] and len(av) == 1 and "ligne 4" in av[0], (sc, ma, av)
 assert m.couvre(exc, "a.sh") is False
 assert m.directives(f"script a.sh {h[:12]} 2026-11-04 r")[0] == [("a.sh", None)]
+sa = f"script a.sh {h} 2026-11-04 r\n"
+r = m.directives(sa + "filtre a.sh x/*.ts 2026-11-26 r\n")
+assert len(r) == 4 and r[2] == {"a.sh": ["x/*.ts"]} and r[3] == [], r
+for l in ("filtre b.sh x/*.ts 2026-11-26 r", "filtre a.sh ../x/*.ts 2026-11-26 r", "filtre a.sh x/*a*.ts 2026-11-26 r",
+          "filtre a.sh x/?.ts 2026-11-26 r", "filtre a.sh x/*.ts 2026-13-01 r"):
+    r = m.directives(sa + l + "\n")
+    assert r[2] == {} and len(r[3]) == 1, (l, r)
+assert m.directives("filtre a.sh x/*.ts 2026-11-26 r\n")[2] == {}
+exc, av = m.lit_exceptions(sa + "filtre a.sh x/*.ts 2026-11-26 r\n")
+assert exc == [] and av == [], (exc, av)
 PY
 
 # ---------- FIN ----------
