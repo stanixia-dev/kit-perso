@@ -17,8 +17,10 @@ mkdir -p "$D/tests"; g -C "$D" init -q -b main
 echo 'echo 1' > "$D/f.sh"
 echo '[ "$(bash f.sh)" = 1 ]' > "$D/tests/t.sh"
 echo 'node_modules/' > "$D/.gitignore"
+mkdir -p "$D/sous"; echo s > "$D/sous/f"
 g -C "$D" add -A; g -C "$D" commit -q -m base
 mkdir -p "$D/node_modules"; echo x > "$D/node_modules/marq"
+mkdir -p "$D/sous/node_modules"; echo y > "$D/sous/node_modules/marq"
 g -C "$D" checkout -q -b b1
 echo 'echo 2' > "$D/f.sh"; echo '[ "$(bash f.sh)" = 2 ]' > "$D/tests/t.sh"
 g -C "$D" commit -q -am b1
@@ -48,6 +50,14 @@ ct b1 --base main --
 [ "$CODE" = 2 ] && ok "(négatif) rien après -- (2)" || ko "rien après -- ($CODE)"
 ct b1 --base main -- test -e node_modules/marq
 [ "$CODE" = 1 ] && ok "node_modules visible dans le clone (marq)" || ko "marq ($CODE)"
+ct b1 --base main -- test -e sous/node_modules/marq
+[ "$CODE" = 1 ] && ok "node_modules de sous-dossier visible dans le clone" || ko "sous/marq ($CODE)"
+touch "$D/Cargo.toml"
+(unset CARGO_TARGET_DIR; ct b1 --base main -- bash -c 'echo "CTD=$CARGO_TARGET_DIR"'; \
+  grep -qxF "CTD=$D/target/contre-test" <<<"$SORTIE") && ok "Cargo : cible dédiée target/contre-test" || ko "cible Cargo"
+(export CARGO_TARGET_DIR=/x/y; ct b1 --base main -- bash -c 'echo "CTD=$CARGO_TARGET_DIR"'; \
+  grep -qxF "CTD=/x/y" <<<"$SORTIE") && ok "Cargo : CARGO_TARGET_DIR préexistant conservé" || ko "cible Cargo préexistante"
+rm "$D/Cargo.toml"
 
 g -C "$D" checkout -q main
 [ -z "$(ls -A "$TMPDIR")" ] && [ -z "$(g -C "$D" status --porcelain)" ] && [ ! -e "$D/.git/worktrees" ] \
