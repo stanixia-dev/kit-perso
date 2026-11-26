@@ -123,7 +123,9 @@ def racine_de(dossier):
 
 # ---------- exceptions ----------
 
-DIRECTIVES = ("script", "masque")
+DIRECTIVES = ("script", "masque", "filtre")
+# argument de filtre : `[a-z0-9-]+` sans tiret initial (jamais pris pour une option)
+NOM_FILTRE = r"[a-z0-9][a-z0-9-]*"
 
 def chemin_relatif_sur(c, glob=False):
     """Chemin relatif sans `..`, `.`, composant vide ni `/` initial ; caractères sûrs (glob : `*?[]` en plus)."""
@@ -132,8 +134,9 @@ def chemin_relatif_sur(c, glob=False):
     return all(x not in ("", ".", "..") for x in c.split("/"))
 
 def directives(texte):
-    """([(chemin, sha256|None)], [glob], avertissements) : directives `script` et `masque`."""
+    """([(chemin, sha256|None)], [glob], {script: [glob]}, avertissements) : directives `script`, `masque` et `filtre`."""
     scripts, masques, avert = [], [], []
+    filtres, lignes = {}, []
     for n, l in enumerate(texte.splitlines(), 1):
         p = l.split(None, 4)
         if not p or p[0] not in DIRECTIVES:
@@ -151,6 +154,19 @@ def directives(texte):
             if not ok:
                 avert.append(f"{EXCEPTIONS} ligne {n} : empreinte ou date invalide, exécution de {p[1]} refusée")
             scripts.append((p[1], p[2] if ok else None))
+        elif p[0] == "filtre":
+            ok = len(p) >= 5 and chemin_relatif_sur(p[2], True) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[3])
+            if ok:
+                dernier = p[2].rsplit("/", 1)[-1]
+                ok = dernier.count("*") == 1 and not re.search(r"[?\[\]]", dernier)
+                try:
+                    date.fromisoformat(p[3])
+                except ValueError:
+                    ok = False
+            if ok:
+                lignes.append((n, p[1], p[2]))
+            else:
+                avert.append(f"{EXCEPTIONS} ligne {n} ignorée (filtre : attendu script glob AAAA-MM-JJ raison)")
         else:
             ok = len(p) >= 4 and chemin_relatif_sur(p[1], True) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[2])
             if ok:
@@ -162,7 +178,13 @@ def directives(texte):
                 masques.append(p[1])
             else:
                 avert.append(f"{EXCEPTIONS} ligne {n} ignorée (masque : attendu glob AAAA-MM-JJ raison)")
-    return scripts, masques, avert
+    declares = {c for c, _ in scripts}
+    for n, script, g in lignes:
+        if script in declares:
+            filtres.setdefault(script, []).append(g)
+        else:
+            avert.append(f"{EXCEPTIONS} ligne {n} ignorée (filtre : {script} n'est pas déclaré par `script`)")
+    return scripts, masques, filtres, avert
 
 def racine_locale(cwd):
     """Premier dossier ancêtre de realpath(cwd) qui contient `.git` ; sans appeler git."""
@@ -176,16 +198,30 @@ def racine_locale(cwd):
         d = parent
 
 def directives_du_depot(cwd):
-    """(racine, scripts, masques) du dépôt de cwd ; rien sans racine ni fichier."""
+    """(racine, scripts, masques, filtres) du dépôt de cwd ; rien sans racine ni fichier."""
     racine = racine_locale(cwd)
     if not racine:
-        return None, [], []
+        return None, [], [], {}
     try:
         with open(os.path.join(racine, EXCEPTIONS), encoding="utf-8") as f:
-            scripts, masques, _ = directives(f.read())
+            scripts, masques, filtres, _ = directives(f.read())
     except OSError:
-        return racine, [], []
-    return racine, scripts, masques
+        return racine, [], [], {}
+    return racine, scripts, masques, filtres
+
+def noms_filtre(racine, globs):
+    """Noms admis : partie couverte par le `*` du dernier composant de chaque glob, pour les fichiers réguliers."""
+    noms = set()
+    for g in globs:
+        pre, suf = g.rsplit("/", 1)[-1].split("*")
+        for f in glob.glob(g, root_dir=racine):
+            if not os.path.isfile(os.path.join(racine, f)):
+                continue
+            b = os.path.basename(f)
+            nom = b[len(pre):len(b) - len(suf)]
+            if re.fullmatch(NOM_FILTRE, nom):
+                noms.add(nom)
+    return sorted(noms)
 
 def lit_exceptions(texte):
     """([(glob, empreinte|*, date, raison)], avertissements)."""
@@ -592,10 +628,30 @@ def hote_non_local(texte):
             return hote or auto
     return None
 
+def hors_guillemets(s):
+    """`s` où chaque segment '…' ou "…" est remplacé par un blanc ; None si un guillemet n'est pas fermé
+    si un segment "…" contient $, ` ou \\ (substitution possible),
+    ou si un segment est collé à un caractère non blanc (mot reconstitué)."""
+    sortie, i = [], 0
+    while i < len(s):
+        q = s[i]
+        if q in "'\"":
+            j = s.find(q, i + 1)
+            if j < 0 or (q == '"' and re.search(r"[$`\\]", s[i:j])):
+                return None
+            if (i > 0 and not s[i - 1].isspace()) or (j + 1 < len(s) and not s[j + 1].isspace()):
+                return None
+            sortie.append(" ")
+            i = j + 1
+        else:
+            sortie.append(q)
+            i += 1
+    return "".join(sortie)
+
 def controle_banc(cmd, cwd):
     """Vrai si la commande est l'invocation exacte d'un script de banc déclaré et intact ; refuse (exit 2) une commande
     qui le cite autrement ou dont une condition échoue ; None si aucun script déclaré n'est en cause."""
-    racine, scripts, _ = directives_du_depot(cwd)
+    racine, scripts, _, filtres = directives_du_depot(cwd)
     if not scripts:
         return None
     r = os.path.realpath(racine)
@@ -603,15 +659,17 @@ def controle_banc(cmd, cwd):
     base0 = cwd or os.getcwd()
     # formes admises autour du script : `cd <racine> &&` devant ; `2>&1` et un seul `| tail|head|grep <args sûrs>` derrière
     avec_cd = False
-    m = re.match(r"cd\s+([^\s'\"`$;&|<>()\\]+)\s*&&\s*(.*)", s, re.S)
+    nl = "\n" in s or "\r" in s  # un saut de ligne enchaînerait une autre commande : aucune forme admise
+    m = None if nl else re.match(r"cd\s+([^\s'\"`$;&|<>()\\]+)\s*&&\s*(.*)", s, re.S)
     if m:
         cible = os.path.realpath(os.path.join(base0, os.path.expanduser(m.group(1))))
         if cible == r:
             avec_cd, s = True, m.group(2)
-    filtre = None
-    m = re.fullmatch(r"(\S+?)(\s+2>&1)?(?:\s*\|\s*((?:tail|head|grep)(?:\s+[^$`;&|<>\n]*)?))?\s*", s)
-    if m and (m.group(2) or m.group(3)):
-        s, filtre = m.group(1), m.group(3)
+    filtre, arg = None, None
+    m = None if nl else re.fullmatch(
+        rf"(\S+?)(?:[ \t]+({NOM_FILTRE}))?(\s+2>&1)?(?:\s*\|\s*((?:tail|head|grep)(?:\s+[^$`;&|<>\n]*)?))?\s*", s)
+    if m and (m.group(2) or m.group(3) or m.group(4)):
+        s, arg, filtre = m.group(1), m.group(2), m.group(4)
     for chemin, sha in scripts:
         abs_ = os.path.join(r, chemin)
         if s not in (chemin, "./" + chemin):
@@ -633,22 +691,42 @@ def controle_banc(cmd, cwd):
         hote = hote_non_local(contenu.decode("utf-8", "replace"))
         if hote:
             refuse(f"⛔ Bloqué par garde-secret : cible non locale ({hote}) dans {chemin}.")
+        if arg is not None:
+            if not filtres.get(chemin):
+                refuse(f"⛔ Bloqué par garde-secret : script de banc ({chemin}) : aucune cible de filtre déclarée "
+                       "(directive `filtre`) ; lance-le sans argument.")
+            noms = noms_filtre(r, filtres[chemin])
+            if arg not in noms:
+                refuse(f"⛔ Bloqué par garde-secret : cible de filtre inconnue ({arg}) pour {chemin} ; admises : "
+                       + ", ".join(noms[:20]) + ".")
         return (filtre, r) if filtre else True  # le filtre éventuel reste soumis aux contrôles de chemins (cwd = racine)
     base = cwd or os.getcwd()
-    sans_guil = cmd.replace("'", "").replace('"', "")
-    cands = set()
-    for c in candidats(cmd) + candidats(sans_guil):
-        c = developpe(c)
-        cibles = glob.glob(c, root_dir=base) if re.search(r"[*?\[]", c) else []
-        for x in cibles + [c]:
-            cands.add(os.path.realpath(os.path.join(base, x)))
-    for chemin, _ in scripts:
-        abs_ = os.path.join(r, chemin)
-        nom = re.escape(chemin.rsplit("/", 1)[-1])
-        if re.search(rf"(?<![\w.-]){nom}(?![\w.-])", cmd + "\n" + sans_guil) or abs_ in cands:
-            refuse(f"⛔ Bloqué par garde-secret : script de banc déclaré : lance-le tel quel, depuis la racine "
-                   f"({chemin}), ou après `cd <racine> &&`, avec au plus `2>&1` et un seul `| tail|head|grep <args>` "
-                   "(sans $ ` ; & | > <) ; pour le lire, utilise l'outil Read.")
+
+    def cite(t):
+        """Vrai si le texte cite un script déclaré (mot du nom, ou chemin résolu vers le script)."""
+        sans_guil = t.replace("'", "").replace('"', "")
+        cands = set()
+        for c in candidats(t) + candidats(sans_guil):
+            c = developpe(c)
+            cibles = glob.glob(c, root_dir=base) if re.search(r"[*?\[]", c) else []
+            for x in cibles + [c]:
+                cands.add(os.path.realpath(os.path.join(base, x)))
+        for chemin, _ in scripts:
+            nom = re.escape(chemin.rsplit("/", 1)[-1])
+            if re.search(rf"(?<![\w.-]){nom}(?![\w.-])", t + "\n" + sans_guil) or os.path.join(r, chemin) in cands:
+                return chemin
+        return None
+
+    chemin = cite(cmd)
+    if chemin:
+        # mention tolérée : texte entre guillemets d'un `gh issue|pr create|edit|comment` ou d'un `git commit`
+        h = hors_guillemets(cmd.strip())
+        if (h is not None and re.match(r"(gh (issue|pr) (create|edit|comment)|git commit)( |$)", h)
+                and not re.search(r"[;&|<>()$`\\#\n\r]", h) and not cite(h)):
+            return None
+        refuse(f"⛔ Bloqué par garde-secret : script de banc déclaré : lance-le tel quel, depuis la racine "
+               f"({chemin}), ou après `cd <racine> &&`, avec au plus une cible de filtre déclarée `[<filtre>]`, "
+               "`2>&1` et un seul `| tail|head|grep <args>` (sans $ ` ; & | > <) ; pour le lire, utilise l'outil Read.")
     return None
 
 def pre(data):
@@ -672,7 +750,7 @@ def pre(data):
         if chemin:
             cible = os.path.realpath(chemin if os.path.isabs(chemin) else os.path.join(cwd, chemin))
             for dossier in {cwd, os.path.dirname(cible)}:
-                racine, scripts, _ = directives_du_depot(dossier) if os.path.isdir(dossier) else (None, [], [])
+                racine, scripts, _, _ = directives_du_depot(dossier) if os.path.isdir(dossier) else (None, [], [], {})
                 if racine and any(cible == os.path.join(os.path.realpath(racine), c) for c, _ in scripts):
                     refuse("⛔ Bloqué par garde-secret : script de banc épinglé : modification réservée à l'utilisateur.")
             controle_chemin(chemin, cwd)
@@ -741,7 +819,7 @@ def valeurs_connues(cwd):
         ajoute(k, v)
     for nom in (".env", ".env.local"):
         valeurs_env(os.path.join(cwd, nom), ajoute)
-    racine, _, masques = directives_du_depot(cwd)
+    racine, _, masques, _ = directives_du_depot(cwd)
     for g in masques:
         for rel in glob.glob(g, root_dir=racine):
             f = os.path.join(racine, rel)
