@@ -789,6 +789,11 @@ SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
 vaut "depend : --empreintes, absent" 1; grep -q 'ligne 3 : outils/a.ts : absent' <<<"$SORTIE" && ok "depend : --empreintes, motif absent" || ko "depend : --empreintes, motif absent"
 d=$(depot bd19); SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
 vaut "depend : --empreintes, sans fichier" 0
+for l in 'depend scripts/banc.sh ../x 2026-11-26 r' 'depend scripts/banc.sh' 'depend scripts/banc.sh outils/a.ts' 'depend scripts/autre.sh outils/a.ts 2026-11-26 r'; do
+  d=$(banc_dep bd20); printf '%s\n' "$l" >> "$d/.garde-secret-exceptions"
+  SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+  [ "$CODE" = 1 ] && grep -q '^ligne 5 : ' <<<"$SORTIE" && ! grep -q 'empreintes à jour' <<<"$SORTIE" && ok "depend : --empreintes, signale « $l »" || ko "depend : --empreintes, signale « $l » ($CODE)"
+done
 
 # ---------- FIN ----------
 exit $((ECHECS > 0))

@@ -442,6 +442,7 @@ def empreintes(depot):
         return 0
     aujourdhui = date.today().isoformat()
     ecart, avec_dep, scripts = False, set(), []
+    declares = {q[1] for q in (x.split(None, 2) for x in texte.splitlines()) if len(q) > 1 and q[0] == "script"}
     for n, l in enumerate(texte.splitlines(), 1):
         mot = l.split(None, 1)[:1]
         if mot not in (["script"], ["depend"]):
@@ -449,6 +450,14 @@ def empreintes(depot):
         dep = mot == ["depend"]
         p = l.split(None, 5 if dep else 4)
         i = 2 if dep else 1  # indice du chemin vérifié
+        if dep and (len(p) < 3 or not chemin_relatif_sur(p[1]) or not chemin_relatif_sur(p[2])):
+            print(f"ligne {n} : ligne mal formée")
+            ecart = True
+            continue
+        if dep and p[1] not in declares:
+            print(f"ligne {n} : script {p[1]} non déclaré par `script`, ligne ignorée")
+            ecart = True
+            continue
         if len(p) <= i or not chemin_relatif_sur(p[i]):
             continue
         if dep and chemin_relatif_sur(p[1]):
