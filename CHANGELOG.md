@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.6.0 — 2026-11-26
+
+- garde-secret : directive `depend <script> <chemin> <sha256> <date> <raison>` ; l'empreinte des fichiers et dossiers dont dépend un script de banc est contrôlée à chaque lancement (refus nommant les fichiers modifiés), et `--empreintes` affiche les lignes à jour sans écrire le fichier (#33).
+
 ## 3.5.1 — 2026-11-26
 
 - `contre-test.sh` : la base Rust se compile dans `$R/target/contre-test` (sauf `CARGO_TARGET_DIR` déjà défini) au lieu du `target/` partagé, dont les artefacts plus récents que les sources faisaient échouer `cargo test` sur la branche (#40) ; les `node_modules` non suivis des sous-dossiers (workspaces npm) sont liés dans le clone, en plus de celui de la racine (#41).

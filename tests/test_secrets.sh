@@ -768,6 +768,27 @@ hk Edit "$d" file_path "$d/outils/a.ts" new_string 'x'; vaut "depend : écriture
 hk Write "$d" file_path "$d/outils/a.ts" content 'x'; vaut "depend : écriture, Write d'une dépendance" 0
 hk Edit "$d" file_path "$d/scripts/banc.sh" new_string 'x'; bloque "depend : écriture, Edit du script"
 d=$(banc bd15); hk Bash "$d" command 'scripts/banc.sh'; passe "depend : script sans depend inchangé"
+d=$(banc_dep bd16)
+av=$(sha "$d/.garde-secret-exceptions"); SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+vaut "depend : --empreintes, tout à jour" 0; grep -q 'empreintes à jour' <<<"$SORTIE" && ok "depend : --empreintes, message à jour" || ko "depend : --empreintes, message à jour"
+printf ' ' >> "$d/outils/a.ts"
+SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+vaut "depend : --empreintes, dépendance modifiée" 1
+NOUV="$(sha "$d/outils/a.ts")"
+grep -q "^ligne 3 : depend scripts/banc.sh outils/a.ts $NOUV $(date +%F) lancé\$" <<<"$SORTIE" && ok "depend : --empreintes, ligne à recopier" || ko "depend : --empreintes, ligne à recopier ($SORTIE)"
+[ "$(grep -c '^ligne' <<<"$SORTIE")" = 1 ] && ok "depend : --empreintes, une seule ligne" || ko "depend : --empreintes, une seule ligne"
+[ "$av" = "$(sha "$d/.garde-secret-exceptions")" ] && ok "depend : --empreintes, fichier inchangé" || ko "depend : --empreintes, fichier inchangé"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : --empreintes, refus avant recopie"
+ligne=$(grep '^ligne 3' <<<"$SORTIE" | sed 's/^ligne 3 : //')
+sed -i "3s|.*|$ligne|" "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'scripts/banc.sh'; passe "depend : --empreintes, ligne recopiée"
+d=$(banc bd17); SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+grep -q 'scripts/banc.sh : aucune dépendance déclarée' <<<"$SORTIE" && [ "$CODE" = 0 ] && ok "depend : --empreintes, script sans depend" || ko "depend : --empreintes, script sans depend ($CODE)"
+d=$(banc_dep bd18); rm "$d/outils/a.ts"
+SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+vaut "depend : --empreintes, absent" 1; grep -q 'ligne 3 : outils/a.ts : absent' <<<"$SORTIE" && ok "depend : --empreintes, motif absent" || ko "depend : --empreintes, motif absent"
+d=$(depot bd19); SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+vaut "depend : --empreintes, sans fichier" 0
 
 # ---------- FIN ----------
 exit $((ECHECS > 0))

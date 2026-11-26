@@ -431,7 +431,57 @@ def resume_ci(blocs, avert, ajoutees):
     with open(chemin, "a", encoding="utf-8") as f:
         f.write("\n".join(l) + "\n")
 
+def empreintes(depot):
+    """Mode `--empreintes` : affiche les lignes `script` et `depend` à jour, sans jamais écrire le fichier. Code 0 si tout est à jour."""
+    racine = racine_locale(depot)
+    try:
+        with open(os.path.join(racine, EXCEPTIONS), encoding="utf-8") as f:
+            texte = f.read()
+    except (OSError, TypeError):
+        print("aucune directive")
+        return 0
+    aujourdhui = date.today().isoformat()
+    ecart, avec_dep, scripts = False, set(), []
+    for n, l in enumerate(texte.splitlines(), 1):
+        mot = l.split(None, 1)[:1]
+        if mot not in (["script"], ["depend"]):
+            continue
+        dep = mot == ["depend"]
+        p = l.split(None, 5 if dep else 4)
+        i = 2 if dep else 1  # indice du chemin vérifié
+        if len(p) <= i or not chemin_relatif_sur(p[i]):
+            continue
+        if dep and chemin_relatif_sur(p[1]):
+            avec_dep.add(p[1])
+        if not dep:
+            scripts.append(p[1])
+        emp, motif = empreinte_chemin(os.path.join(racine, p[i]))
+        if emp is None:
+            print(f"ligne {n} : {p[i]} : {motif}")
+            ecart = True
+            continue
+        debut = i + 1  # indice de l'empreinte
+        ok = (len(p) > debut + 2 and p[debut] == emp and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[debut + 1]))
+        if ok:
+            try:
+                date.fromisoformat(p[debut + 1])
+            except ValueError:
+                ok = False
+        if not ok:
+            raison = p[debut + 2] if len(p) > debut + 2 else "<raison>"
+            tete = f"depend {p[1]} " if dep else "script "
+            print(f"ligne {n} : {tete}{p[i]} {emp} {aujourdhui} {raison}")
+            ecart = True
+    for sc in scripts:
+        if sc not in avec_dep:
+            print(f"{sc} : aucune dépendance déclarée")
+    if not ecart:
+        print("empreintes à jour")
+    return 1 if ecart else 0
+
 def commande(args):
+    if args.empreintes:
+        return empreintes(os.path.abspath(args.depot or os.getcwd()))
     v = vm()
     depot = os.path.abspath(args.depot or os.getcwd())
     racine = racine_de(depot)
@@ -983,6 +1033,7 @@ def main():
     ap.add_argument("--cible")
     ap.add_argument("--hook", choices=("pre", "post", "stop"))
     ap.add_argument("--ci", action="store_true")
+    ap.add_argument("--empreintes", action="store_true")
     args = ap.parse_args()
     global MODE
     MODE = "ci" if args.ci else (args.hook or "cli")
