@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.5.0 — 2026-11-26
+
+- garde-secret : directive `filtre <script> <glob> <date> <raison>` ; un script de banc déclaré accepte un argument, une cible `[a-z0-9-]` tirée des fichiers qui correspondent au glob, pour itérer sur une seule cible. Citer le nom du script dans le texte entre guillemets d'un `gh issue|pr create|edit|comment` ou d'un `git commit` n'est plus refusé. `codeur` : itère sur une cible, suite complète une fois avant de rendre (#42).
+
 ## 3.4.2 — 2026-11-26
 
 - `livrer` : suivi de la CI via `gh run list --json` (REST, compatible jeton fin) au lieu de `gh pr checks --watch`, par une boucle `until` en arrière-plan ; le 403 « Upgrade to GitHub Pro » des rulesets/protection est reconnu (« plan gratuit : checks obligatoires indisponibles ») ; un run `queued` depuis plus de 5 min (mesuré par la boucle, filtrée sur le commit) est signalé, tout comme le plafond de 10 min atteint ; toute conclusion hors `success`/`skipped`/`neutral` est rouge (« runner occupé ou hors ligne ») avec la commande de revérification (#46).

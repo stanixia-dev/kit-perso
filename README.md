@@ -122,7 +122,7 @@ Le scan lit chaque commit un par un (un secret retiré au commit suivant reste d
 | Pre : chemin protégé | bloque | — | bloque |
 | Pre : contenu écrit | bloque | avertit | bloque |
 | Pre Bash : chemin ou texte de la commande | bloque | — | bloque |
-| Pre Bash : script de banc | laisse passer l'invocation exacte d'un script déclaré et intact ; refuse toute autre mention | — | passe |
+| Pre Bash : script de banc | laisse passer l'invocation admise (au plus une cible de filtre déclarée) d'un script déclaré et intact ; refuse toute autre mention hors texte de `gh issue\|pr` / `git commit` | — | passe |
 | Pre Bash : scan avant commit, push, PR | bloque | avertit ; scan incomplet (budget de 10 s) : avertit, mais bloque `git push` et `gh pr create` | bloque |
 | Post : sortie | masque + alerte | — | sortie intacte |
 | Stop, SubagentStop | bloque une fois, puis avertit | — | passe |
@@ -140,19 +140,25 @@ Tests : `bash tests/test_secrets.sh` (appelé par `tests/test_hooks.sh`), `HOME`
 
 ### Scripts de banc
 
-Pour lancer une commande de test qui consomme des identifiants de banc local (`.banc/*.env`) sans que l'agent les lise, l'utilisateur déclare dans `.garde-secret-exceptions` deux directives (un premier mot `script` ou `masque` ; ce ne sont ni des exceptions ni des lignes invalides) :
+Pour lancer une commande de test qui consomme des identifiants de banc local (`.banc/*.env`) sans que l'agent les lise, l'utilisateur déclare dans `.garde-secret-exceptions` trois directives (un premier mot `script`, `masque` ou `filtre` ; ce ne sont ni des exceptions ni des lignes invalides) :
 
 ```
 script scripts/captures-banc.sh <sha256> 2026-11-04 captures Playwright du banc local
 masque .banc/*.env 2026-11-04 identifiants jetables du banc local
+filtre scripts/captures-banc.sh tests/e2e/*.spec.ts 2026-11-26 une cible à la fois
 ```
+
+(le glob `tests/e2e/*.spec.ts` n'est qu'un exemple.)
 
 - `script <chemin> <sha256> <AAAA-MM-JJ> <raison>` : chemin relatif à la racine (`[A-Za-z0-9._/-]+`, sans `..`), empreinte complète de 64 hex donnée par `sha256sum <chemin>`. Empreinte ou date mal formée : exécution refusée.
 - `masque <glob> <AAAA-MM-JJ> <raison>` : les valeurs de ces fichiers (clés au nom de secret : `PASSW`, `TOKEN`…, comme pour `.env`) rejoignent les valeurs masquées dans toute sortie.
+- `filtre <script> <glob> <AAAA-MM-JJ> <raison>` : `<script>` est le chemin d'une directive `script` du même fichier ; le dernier composant du glob contient exactement un `*` et aucun `?`, `[` ou `]`. Le nom d'une cible est la partie couverte par le `*` (`*.spec.ts` sur `connexion.spec.ts` donne `connexion`) ; seuls les noms qui valent `[a-z0-9][a-z0-9-]*` sont admis. Plusieurs lignes pour un même script : union. La liste est relue à chaque appel. Ligne mal formée ou script non déclaré : avertissement, aucun argument admis. Le nom est passé au script en `$1` (à citer `"$1"` dans le script).
 
-Flux : l'agent écrit le script ; l'utilisateur le relit, calcule l'empreinte et l'ajoute ; toute modification du script oblige à mettre l'empreinte à jour. Le hook ne laisse passer que la commande exacte `scripts/banc.sh` ou `./scripts/banc.sh` (aucun argument, redirection, pipe, préfixe ni interpréteur), depuis la racine du dépôt, sans lien symbolique, si l'empreinte correspond et si toute URL du script vise `127.0.0.1`, `localhost` ou `[::1]`. Toute autre commande Bash qui cite le script est refusée (`cat` compris : l'outil Read reste permis) ; Edit et Write du script sont refusés ; la lecture directe de `.banc/*.env` reste bloquée.
+Flux : l'agent écrit le script ; l'utilisateur le relit, calcule l'empreinte et l'ajoute ; toute modification du script oblige à mettre l'empreinte à jour. Le hook ne laisse passer que l'invocation `[cd <racine> && ]scripts/banc.sh|./scripts/banc.sh[ <filtre>][ 2>&1][ | tail|head|grep <args sûrs>]` (arguments du filtre de lecture sans `$ ` ; & | > <`, aucun saut de ligne, préfixe ni interpréteur), où `<filtre>` est au plus un nom de cible déclaré par `filtre`, séparé par des espaces ou tabulations ; depuis la racine du dépôt, sans lien symbolique, si l'empreinte correspond et si toute URL du script vise `127.0.0.1`, `localhost` ou `[::1]`. Toute autre commande Bash qui cite le script est refusée (`cat` compris : l'outil Read reste permis) ; Edit et Write du script sont refusés ; la lecture directe de `.banc/*.env` reste bloquée.
 
-Résiduels assumés : un script non déclaré qui source un `.env` passe le filtre Pre (le hook ne lit pas les scripts), seul le masquage rattrape les valeurs connues affichées en clair ; le code lancé par le script épinglé (`package.json`, config Playwright, tests, `node_modules/.bin`) reste modifiable par l'agent, qui peut lui faire afficher une valeur encodée ou l'envoyer sur le réseau ; les cibles en `127.0.0.1` ne sont pas vérifiables (seul le texte du script épinglé est contrôlé) ; le script peut être remplacé avant ou pendant l'exécution (processus en arrière-plan, `mv` ou `git checkout` du dossier, et bash relit le script pendant qu'il s'exécute) ; une mention indirecte du script par variable (`f=scripts/banc.sh; bash $f`) n'est pas détectée.
+Mention tolérée : citer le nom du script dans le texte entre guillemets simples, ou doubles sans `$`, backtick ni `\`, d'un `gh issue|pr create|edit|comment` ou d'un `git commit` n'est pas refusé, à condition que le reste de la commande n'ait ni `; & | < > ( ) $ ` \ #` ni saut de ligne et ne cite pas le script. Les autres commandes (`echo`, `printf`, heredoc, `gh -R o/r issue create`) restent refusées : passer par `--body-file`.
+
+Résiduels assumés : l'agent peut créer un fichier qui correspond au glob d'un `filtre` et ajouter ainsi un nom à la liste (l'argument reste un jeton `[a-z0-9-]`, sans effet sur le shell) ; le script épinglé, relu par l'utilisateur, décide seul de ce qu'il fait de `$1` ; un script non déclaré qui source un `.env` passe le filtre Pre (le hook ne lit pas les scripts), seul le masquage rattrape les valeurs connues affichées en clair ; le code lancé par le script épinglé (`package.json`, config Playwright, tests, `node_modules/.bin`) reste modifiable par l'agent, qui peut lui faire afficher une valeur encodée ou l'envoyer sur le réseau ; les cibles en `127.0.0.1` ne sont pas vérifiables (seul le texte du script épinglé est contrôlé) ; le script peut être remplacé avant ou pendant l'exécution (processus en arrière-plan, `mv` ou `git checkout` du dossier, et bash relit le script pendant qu'il s'exécute) ; une mention indirecte du script par variable (`f=scripts/banc.sh; bash $f`) n'est pas détectée.
 
 ## Verrouillage (à appliquer par l'utilisateur)
 

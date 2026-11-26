@@ -1,5 +1,5 @@
 # Spec — garde-secret : argument de filtre pour le script de banc
-Statut : en cours
+Statut : livrée
 Tickets : #42
 
 ## 1. Objectif
@@ -82,19 +82,19 @@ Dans ce cas `controle_banc` rend `None`, et les contrôles suivants (`bash_chemi
 7. CHANGELOG : `## 3.5.0 — <date de livraison>`, une entrée qui cite #42 ; `plugin.json` en `3.5.0`. Clôture et archivage selon `agents/codeur.md`.
 
 ## 6. Critères d'acceptation
-- [ ] `scripts/banc.sh connexion`, `./scripts/banc.sh entites`, `scripts/banc.sh⇥connexion`, `scripts/banc.sh connexion 2>&1 | tail -n 20`, et `cd <racine> && scripts/banc.sh connexion` lancé d'un sous-dossier → 0 sans sortie — test : `bash tests/test_secrets.sh` (cas « banc filtre : … »)
-- [ ] Glob à préfixe (`filtre scripts/banc.sh outils/test_*.py`) : `scripts/banc.sh api` admis pour `outils/test_api.py` — test : `bash tests/test_secrets.sh` (cas « banc filtre : préfixe »)
-- [ ] Cible créée après la déclaration (`nouveau.spec.ts`) : admise sans changer l'empreinte — test : `bash tests/test_secrets.sh` (cas « banc filtre : cible ajoutée »)
-- [ ] (négatif) `scripts/banc.sh inconnu` → 2, et le message cite `connexion` — test : `bash tests/test_secrets.sh` (cas « banc filtre : cible inconnue »)
-- [ ] (négatif) Script déclaré sans `filtre`, `scripts/banc.sh connexion` → 2 « aucune cible de filtre » — test : `bash tests/test_secrets.sh` (cas « banc filtre : sans directive »)
-- [ ] (négatif) (non-régression) Toutes les formes « refusées » de la section 7 (filtre) → 2, sans valeur du banc dans les messages — test : `bash tests/test_secrets.sh` (cas « banc filtre : refus … »)
-- [ ] (négatif) Avec argument : script modifié, `scripts` en lien symbolique, URL non locale, sous-dossier sans `cd` → 2, avec le motif existant — test : `bash tests/test_secrets.sh` (cas « banc filtre : contrôle … »)
-- [ ] (négatif) Directive `filtre` mal formée (glob `../x/*.ts`, deux `*` ou `?` dans le dernier composant, script non déclaré, date invalide) → avertissement, argument refusé — test : `bash tests/test_secrets.sh` (cas « directives »)
-- [ ] (non-régression) `scripts/banc.sh`, `scripts/banc.sh 2>&1` et tous les cas banc existants inchangés — test : `bash tests/test_secrets.sh`
-- [ ] Mentions tolérées → 0 : `gh issue create --title t --body 'lance scripts/banc.sh connexion'`, `gh pr edit 3 --body "voir banc.sh"`, `gh issue comment 1 --body 'banc.sh'`, `git commit -m 'Corrige scripts/banc.sh'` — test : `bash tests/test_secrets.sh` (cas « banc mention : … »)
-- [ ] (négatif) Mentions toujours refusées → 2 (liste « mention refusée » de la section 7) — test : `bash tests/test_secrets.sh` (cas « banc mention refusée : … »)
-- [ ] Aucun terme ni chemin propre à un projet dans le hook, `agents/codeur.md` et le README hors exemple — test : manuel (`git diff main...HEAD -- hooks agents README.md | grep -in parcours` vide)
-- [ ] `agents/codeur.md`, README, CHANGELOG 3.5.0 et `plugin.json` à jour ; `git diff --stat main...HEAD -- .github/workflows` vide — test : manuel (relecture du diff)
+- [x] `scripts/banc.sh connexion`, `./scripts/banc.sh entites`, `scripts/banc.sh⇥connexion`, `scripts/banc.sh connexion 2>&1 | tail -n 20`, et `cd <racine> && scripts/banc.sh connexion` lancé d'un sous-dossier → 0 sans sortie — test : `bash tests/test_secrets.sh` (cas « banc filtre : … »)
+- [x] Glob à préfixe (`filtre scripts/banc.sh outils/test_*.py`) : `scripts/banc.sh api` admis pour `outils/test_api.py` — test : `bash tests/test_secrets.sh` (cas « banc filtre : préfixe »)
+- [x] Cible créée après la déclaration (`nouveau.spec.ts`) : admise sans changer l'empreinte — test : `bash tests/test_secrets.sh` (cas « banc filtre : cible ajoutée »)
+- [x] (négatif) `scripts/banc.sh inconnu` → 2, et le message cite `connexion` — test : `bash tests/test_secrets.sh` (cas « banc filtre : cible inconnue »)
+- [x] (négatif) Script déclaré sans `filtre`, `scripts/banc.sh connexion` → 2 « aucune cible de filtre » — test : `bash tests/test_secrets.sh` (cas « banc filtre : sans directive »)
+- [x] (négatif) (non-régression) Toutes les formes « refusées » de la section 7 (filtre) → 2, sans valeur du banc dans les messages — test : `bash tests/test_secrets.sh` (cas « banc filtre : refus … »)
+- [x] (négatif) Avec argument : script modifié, `scripts` en lien symbolique, URL non locale, sous-dossier sans `cd` → 2, avec le motif existant — test : `bash tests/test_secrets.sh` (cas « banc filtre : contrôle … »)
+- [x] (négatif) Directive `filtre` mal formée (glob `../x/*.ts`, deux `*` ou `?` dans le dernier composant, script non déclaré, date invalide) → avertissement, argument refusé — test : `bash tests/test_secrets.sh` (cas « directives »)
+- [x] (non-régression) `scripts/banc.sh`, `scripts/banc.sh 2>&1` et tous les cas banc existants inchangés — test : `bash tests/test_secrets.sh`
+- [x] Mentions tolérées → 0 : `gh issue create --title t --body 'lance scripts/banc.sh connexion'`, `gh pr edit 3 --body "voir banc.sh"`, `gh issue comment 1 --body 'banc.sh'`, `git commit -m 'Corrige scripts/banc.sh'` — test : `bash tests/test_secrets.sh` (cas « banc mention : … »)
+- [x] (négatif) Mentions toujours refusées → 2 (liste « mention refusée » de la section 7) — test : `bash tests/test_secrets.sh` (cas « banc mention refusée : … »)
+- [x] Aucun terme ni chemin propre à un projet dans le hook, `agents/codeur.md` et le README hors exemple — test : manuel (`git diff main...HEAD -- hooks agents README.md | grep -in parcours` vide)
+- [x] `agents/codeur.md`, README, CHANGELOG 3.5.0 et `plugin.json` à jour ; `git diff --stat main...HEAD -- .github/workflows` vide — test : manuel (relecture du diff)
 
 ## 7. Tests
 Commande du projet :
@@ -130,6 +130,6 @@ Cas à ajouter dans `test_secrets.sh`, avec les helpers `banc`, `hk`, `passe`, `
 - [x] L2 — mention textuelle tolérée (étape 4)
   Fichiers : hooks/garde-secret.py, tests/test_secrets.sh
   Fait quand : cas « banc mention » verts — `bash tests/test_hooks.sh`
-- [ ] L3 — codeur, README, 3.5.0, clôture (étapes 5-7)
+- [x] L3 — codeur, README, 3.5.0, clôture (étapes 5-7)
   Fichiers : agents/codeur.md, README.md, CHANGELOG.md, .claude-plugin/plugin.json
   Fait quand : suite complète verte — `bash tests/test_hooks.sh && python3 -m py_compile hooks/*.py && claude plugin validate --strict .`
