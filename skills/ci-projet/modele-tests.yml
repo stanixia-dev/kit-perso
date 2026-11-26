@@ -5,5 +5,8 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: kit-perso-tests-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
 # JOBS-TESTS

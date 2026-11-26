@@ -97,7 +97,7 @@ python3 "$G" --depot "$TMP/tout" --ref $SHA --sortie "$TMP/n0" >"$TMP/stdout0" 2
 grep -q 'engines.node' "$TMP/err0" && ok "avis sans engines.node" || ko "avis sans engines.node"
 mkdepot "$TMP/eng"; echo '{"engines":{"node":">=26"}}' > "$TMP/eng/package.json"; g -C "$TMP/eng" add -A; g -C "$TMP/eng" commit -q -m e
 python3 "$G" --depot "$TMP/eng" --ref $SHA --sortie "$TMP/n1" >/dev/null 2>"$TMP/err"
-[ "$(cat "$TMP/n1/.nvmrc")" = 26 ] && [ ! -s "$TMP/err" ] && ok ".nvmrc = 26 depuis engines" || ko ".nvmrc depuis engines"
+[ "$(cat "$TMP/n1/.nvmrc")" = 26 ] && ! grep -qv '^genere-ci : CI de tests' "$TMP/err" && ok ".nvmrc = 26 depuis engines" || ko ".nvmrc depuis engines"
 echo '{"engines":{"node":"^22.12.0"}}' > "$TMP/eng/package.json"
 python3 "$G" --depot "$TMP/eng" --ref $SHA --sortie "$TMP/n1" >/dev/null 2>&1
 [ "$(cat "$TMP/n1/.nvmrc")" = 22 ] && ok ".nvmrc = 22 depuis ^22.12.0" || ko ".nvmrc ^22.12.0"
@@ -135,5 +135,59 @@ done
 grep -q 'CI :' "$S" && ok "specs : ligne CI :" || ko "specs : ligne CI :"
 grep -q 'pas de CI configurée' "$L" && grep -q 'CI configurée mais pas déclenchée' "$L" && ok "livrer : deux messages de suivi" || ko "livrer : messages de suivi"
 [ "$(grep -n 'Contrôle de la CI' "$L" | cut -d: -f1)" -lt "$(grep -n 'git push -u' "$L" | cut -d: -f1)" ] && ok "livrer : détection avant le push" || ko "livrer : ordre"
+
+# concurrency : dans tests seulement (le dossier $O a été vidé du fichier tests plus haut : régénération)
+python3 "$G" --depot "$TMP/tout" --ref $SHA --sortie "$O" >/dev/null 2>&1
+grep -q '^concurrency:' "$T" && grep -qF 'group: kit-perso-tests-${{ github.ref }}' "$T" && grep -q 'cancel-in-progress: true' "$T" && ! grep -q 'concurrency' "$D" \
+  && ok "concurrency dans tests, absente de deps" || ko "concurrency"
+
+# cache hébergé (défaut) : actions/cache épinglé, rust et npm (avec package-lock.json seulement)
+PINCACHE='uses: actions/cache@[0-9a-f]{40} # v[0-9]'
+sed -n '/^  rust:/,/^  node:/p' "$T" > "$TMP/rust.yml"
+grep -qE "$PINCACHE" "$TMP/rust.yml" && grep -q '~/.cargo/registry/index' "$TMP/rust.yml" && grep -q '~/.cargo/git/db' "$TMP/rust.yml" && grep -q '^ *target$' "$TMP/rust.yml" \
+  && grep -qF "key: cargo-\${{ runner.os }}-\${{ hashFiles('Cargo.lock') }}" "$TMP/rust.yml" && ! grep -q CARGO_TARGET_DIR "$TMP/rust.yml" \
+  && [ "$(grep -n 'actions/cache' "$TMP/rust.yml" | head -1 | cut -d: -f1)" -lt "$(grep -n 'rustup' "$TMP/rust.yml" | head -1 | cut -d: -f1)" ] \
+  && ! grep -qE 'actions/cache' "$TMP/node.yml" && grep -q 'runs-on: ubuntu-24.04' "$T" \
+  && ok "cache hébergé : rust (npm absent sans package-lock.json)" || ko "cache hébergé rust"
+mkdepot "$TMP/npm" package.json package-lock.json
+python3 "$G" --depot "$TMP/npm" --ref $SHA --sortie "$TMP/on" >/dev/null 2>&1
+sed -n '/^  node:/,$p' "$TMP/on/kit-perso-tests.yml" > "$TMP/npmjob.yml"
+l_c=$(grep -n 'actions/cache' "$TMP/npmjob.yml" | head -1 | cut -d: -f1); l_v=$(grep -n 'verifie-runtime' "$TMP/npmjob.yml" | head -1 | cut -d: -f1); l_i=$(grep -n 'run: npm ci' "$TMP/npmjob.yml" | cut -d: -f1)
+grep -qE "$PINCACHE" "$TMP/npmjob.yml" && grep -q 'path: ~/.npm' "$TMP/npmjob.yml" && grep -qF "key: npm-\${{ runner.os }}-\${{ hashFiles('package-lock.json') }}" "$TMP/npmjob.yml" \
+  && grep -q 'package-manager-cache: false' "$TMP/npmjob.yml" && [ -n "$l_c" ] && [ "$l_c" -gt "$l_v" ] && [ "$l_c" -lt "$l_i" ] \
+  && ok "cache hébergé : npm avec package-lock.json" || ko "cache hébergé npm"
+
+# .kit-perso-ci : runs-on auto-hébergé, répertoire persistant
+mkdepot "$TMP/cfg" Cargo.toml Cargo.lock package.json
+printf '# commentaire\n\nruns-on self-hosted linux x64 homelab\n' > "$TMP/cfg/.kit-perso-ci"
+python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/oc" >/dev/null 2>"$TMP/errc"
+TC="$TMP/oc/kit-perso-tests.yml"
+grep -q 'runs-on: ubuntu-24.04' "$TMP/oc/kit-perso-deps.yml" && ! grep -q 'self-hosted' "$TMP/oc/kit-perso-deps.yml" \
+  && [ "$(grep -c '^    runs-on: \[self-hosted, linux, x64, homelab\]$' "$TC")" = 2 ] && ! grep -q 'actions/cache' "$TC" \
+  && [ "$(grep -c 'CARGO_TARGET_DIR=$(dirname "$GITHUB_WORKSPACE")/kit-perso-target' "$TC")" = 1 ] \
+  && sed -n '/^  rust:/,/^  node:/p' "$TC" | awk '/actions\/checkout/{c=NR} /CARGO_TARGET_DIR/{t=NR} /rustup/{r=NR} END{exit !(c && t>c && r>t)}' \
+  && grep -q 'répertoire persistant' "$TMP/errc" && ok "runs-on auto-hébergé, répertoire persistant" || ko "runs-on auto-hébergé"
+printf 'runs-on ubuntu-latest\n' > "$TMP/cfg/.kit-perso-ci"
+python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/od" >/dev/null 2>&1
+grep -q '^    runs-on: ubuntu-latest$' "$TMP/od/kit-perso-tests.yml" && grep -q 'actions/cache' "$TMP/od/kit-perso-tests.yml" && ok "runs-on d'un seul label, cache hébergé" || ko "runs-on un label"
+
+# refus .kit-perso-ci : sortie 2, rien d'écrit
+refuse_cfg() { # $1 = libellé, $2 = contenu
+  printf '%b' "$2" > "$TMP/cfg/.kit-perso-ci"; rm -rf "$TMP/oe"
+  python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/oe" >/dev/null 2>"$TMP/erre"; local c=$?
+  [ "$c" = 2 ] && [ ! -e "$TMP/oe" ] && grep -q '^genere-ci : .kit-perso-ci ligne [0-9]* : ' "$TMP/erre" && ok "refus .kit-perso-ci : $1" || ko "refus .kit-perso-ci : $1 (exit $c)"
+}
+refuse_cfg "directive inconnue" 'cache oui\n'
+refuse_cfg "runs-on double" 'runs-on a\nruns-on b\n'
+refuse_cfg "runs-on vide" 'runs-on\n'
+refuse_cfg "label invalide" 'runs-on a$b\n'
+refuse_cfg "motif invalide" 'chemins rust /abs/**\n'
+refuse_cfg "chemins sans motif" 'chemins rust\n'
+refuse_cfg "job non généré" 'chemins python x/**\n'
+refuse_cfg "job en double" 'chemins rust a/**\nchemins rust b/**\n'
+# --sans-tests ne lit pas la config
+printf 'n importe quoi\n' > "$TMP/cfg/.kit-perso-ci"
+python3 "$G" --depot "$TMP/cfg" --ref $SHA --sans-tests --sortie "$TMP/os" >/dev/null 2>&1; c=$?
+[ "$c" = 0 ] && [ -f "$TMP/os/kit-perso-deps.yml" ] && [ ! -e "$TMP/os/kit-perso-tests.yml" ] && ok "sans tests : config non lue" || ko "sans tests : config lue"
 
 exit $((ECHECS > 0))
