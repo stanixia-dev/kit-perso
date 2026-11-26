@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.6.1 — 2026-11-26
+
+- Brief : ligne facultative `Autorisations : <autorisation explicite, date>` reportée par l'orchestrateur ; `codeur` s'arrête et le signale au rapport si une action est refusée malgré une autorisation listée, sans contournement (#44).
+
 ## 3.6.0 — 2026-11-26
 
 - garde-secret : directive `depend <script> <chemin> <sha256> <date> <raison>` ; l'empreinte des fichiers et dossiers dont dépend un script de banc est contrôlée à chaque lancement (refus nommant les fichiers modifiés), et `--empreintes` affiche les lignes à jour sans écrire le fichier (#33).
