@@ -74,6 +74,7 @@ exige scripts/banc.sh packages/kit/* 2026-11-26 composants partagés
 ## 4. Fichiers
 - `hooks/garde-secret.py` — modifier — `DIRECTIVES` (+ `exige`), `exigences`, option `--exige` dans `main`/`commande`, docstring d'en-tête (modes).
 - `tests/test_secrets.sh` — modifier — section « banc exigé » (cas de la section 6).
+- `tests/test_hooks.sh` — modifier — garde-fou : le dépôt du kit ne change pas pendant les tests.
 - `agents/relecteur.md` — modifier — `description:` (recopier les lignes `Banc :` du codeur dans le brief), puce « Banc exigé », ligne `Banc :` dans le format du rapport.
 - `agents/codeur.md` — modifier — puce « Banc exigé », ligne `Banc :` dans le rapport final.
 - `skills/livrer/SKILL.md` — modifier — contrôle `--exige` après l'étape 2, section « Banc » du corps.
