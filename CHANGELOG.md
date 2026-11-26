@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.5.1 — 2026-11-26
+
+- `contre-test.sh` : la base Rust se compile dans `$R/target/contre-test` (sauf `CARGO_TARGET_DIR` déjà défini) au lieu du `target/` partagé, dont les artefacts plus récents que les sources faisaient échouer `cargo test` sur la branche (#40) ; les `node_modules` non suivis des sous-dossiers (workspaces npm) sont liés dans le clone, en plus de celui de la racine (#41).
+
 ## 3.5.0 — 2026-11-26
 
 - garde-secret : directive `filtre <script> <glob> <date> <raison>` ; un script de banc déclaré accepte un argument, une cible `[a-z0-9-]` tirée des fichiers qui correspondent au glob, pour itérer sur une seule cible. Citer le nom du script dans le texte entre guillemets d'un `gh issue|pr create|edit|comment` ou d'un `git commit` n'est plus refusé. `codeur` : itère sur une cible, suite complète une fois avant de rendre (#42).

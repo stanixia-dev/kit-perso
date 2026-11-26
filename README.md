@@ -209,6 +209,7 @@ Le statut n'a que deux valeurs, `en cours` et `livrée`. La validation de la spe
 
 Chaque critère d'acceptation se termine par `— test : <commande>` ; `(négatif)`, `(non-régression)` et `(fumée)` précisent sa nature (voir `agents/specs.md`). Le codeur écrit les tests d'abord et les voit échouer (`tests rouges avant : oui/non` au rapport).
 Le relecteur lance `scripts/contre-test.sh [--base <ref>] [--fichiers <pathspec>]... -- <commande>` : il rejoue les fichiers de test nouveaux ou modifiés sur la `merge-base`, dans un clone jetable. Sorties : 0 rouge sur la base (attendu), 1 vert (les tests ne prouvent rien), 2 erreur, 3 aucun fichier de test.
+En Rust, la base se compile dans `target/contre-test` (sauf `CARGO_TARGET_DIR` déjà défini), pour ne pas polluer le `target/` partagé ; en npm, les `node_modules` non suivis des sous-dossiers (workspaces) sont liés dans le clone comme celui de la racine.
 Exceptions : cas `(non-régression)`, `Contre-test : non applicable (raison)` (refactor, doc). Limites : tests écrits dans le fichier source (non séparables) ; base qui échoue pour une raison d'environnement (contre-test non concluant).
 
 ## Tickets
