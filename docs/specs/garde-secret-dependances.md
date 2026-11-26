@@ -115,7 +115,7 @@ Cas dans `test_secrets.sh` (helpers `banc`, `hk`, `bloque`, `passe`, `sans_secre
 - **Q1 — `depend` obligatoire ?** Par défaut, un `script` sans `depend` reste admis, par compatibilité. L'oubli de déclarer une dépendance reste alors silencieux. L'alternative serait d'exiger au moins une ligne `depend` (ou `depend <script> aucune …`) par script, mais toutes les déclarations existantes casseraient. Recommandation : garder le défaut ; `--empreintes` signale déjà chaque script sans `depend`.
 
 ## Lots
-- [ ] L1 — directive `depend` et contrôle au lancement (étapes 1-3)
+- [x] L1 — directive `depend` et contrôle au lancement (étapes 1-3)
   Fichiers : hooks/garde-secret.py, tests/test_secrets.sh, tests/test_hooks.sh
   Fait quand : cas « directives », « depend » (Bash, écriture) et non-régression verts — `bash tests/test_hooks.sh`
 - [ ] L2 — `--empreintes`, doc, version 3.6.0, clôture (étapes 4-6)
