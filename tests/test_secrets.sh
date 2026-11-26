@@ -671,21 +671,129 @@ h = "a" * 64
 t = f"x.txt {'0'*12} 2026-11-04 r\nscript a.sh {h} 2026-11-04 r\nmasque .banc/*.env 2026-11-04 r\nscript ../x.sh {h} 2026-11-04 r\n"
 exc, av = m.lit_exceptions(t)
 assert exc == [("x.txt", "0"*12, "2026-11-04", "r")] and av == [], (exc, av)
-sc, ma, fi, av = m.directives(t)
-assert fi == {} and sc == [("a.sh", h)] and ma == [".banc/*.env"] and len(av) == 1 and "ligne 4" in av[0], (sc, ma, av)
+sc, ma, fi, de, av = m.directives(t)
+assert fi == {} and de == {} and sc == [("a.sh", h)] and ma == [".banc/*.env"] and len(av) == 1 and "ligne 4" in av[0], (sc, ma, av)
 assert m.couvre(exc, "a.sh") is False
 assert m.directives(f"script a.sh {h[:12]} 2026-11-04 r")[0] == [("a.sh", None)]
 sa = f"script a.sh {h} 2026-11-04 r\n"
 r = m.directives(sa + "filtre a.sh x/*.ts 2026-11-26 r\n")
-assert len(r) == 4 and r[2] == {"a.sh": ["x/*.ts"]} and r[3] == [], r
+assert len(r) == 5 and r[2] == {"a.sh": ["x/*.ts"]} and r[3] == {} and r[4] == [], r
 for l in ("filtre b.sh x/*.ts 2026-11-26 r", "filtre a.sh ../x/*.ts 2026-11-26 r", "filtre a.sh x/*a*.ts 2026-11-26 r",
           "filtre a.sh x/?.ts 2026-11-26 r", "filtre a.sh x/*.ts 2026-13-01 r"):
     r = m.directives(sa + l + "\n")
-    assert r[2] == {} and len(r[3]) == 1, (l, r)
+    assert r[2] == {} and len(r[4]) == 1, (l, r)
 assert m.directives("filtre a.sh x/*.ts 2026-11-26 r\n")[2] == {}
 exc, av = m.lit_exceptions(sa + "filtre a.sh x/*.ts 2026-11-26 r\n")
 assert exc == [] and av == [], (exc, av)
+
+sd = sa + f"depend a.sh outils/a.ts {h} 2026-11-26 r\n"
+r = m.directives(sd)
+assert r[3] == {"a.sh": [(2, "outils/a.ts", h)]} and r[4] == [], r
+exc, av = m.lit_exceptions(sd)
+assert exc == [] and av == [], (exc, av)
+r = m.directives(sa + f"depend a.sh outils/a.ts {h[:12]} 2026-11-26 r\n")
+assert r[3] == {"a.sh": [(2, "outils/a.ts", None)]} and len(r[4]) == 1, r
+r = m.directives(sa + f"depend a.sh outils/a.ts {h} 2026-13-01 r\n")
+assert r[3] == {"a.sh": [(2, "outils/a.ts", None)]} and len(r[4]) == 1, r
+r = m.directives(sa + f"depend a.sh ../x {h} 2026-11-26 r\n")
+assert r[3] == {"a.sh": [(2, None, None)]} and len(r[4]) == 1, r
+r = m.directives(sa + f"depend b.sh outils/a.ts {h} 2026-11-26 r\n")
+assert r[3] == {} and len(r[4]) == 1 and "b.sh" in r[4][0], r
 PY
+
+# ---------- scripts de banc : dépendances (depend) ----------
+emp_arbre() { # $1 = dossier ; empreinte d'arbre recalculée à part (implémentation de référence)
+  python3 - "$1" <<'PY'
+import hashlib, os, sys
+r = sys.argv[1]; e = []
+for dp, dn, fn in os.walk(r):
+    for f in fn:
+        p = os.path.join(dp, f)
+        e.append(os.path.relpath(p, r).encode() + b"\0" + hashlib.sha256(open(p, "rb").read()).hexdigest().encode() + b"\n")
+print(hashlib.sha256(b"".join(sorted(e))).hexdigest())
+PY
+}
+sha() { sha256sum "$1" | cut -d' ' -f1; }
+ecrit_dep() { # $1 = dépôt ; réécrit les 2 lignes depend selon l'état courant
+  local d=$1
+  { printf 'script scripts/banc.sh %s 2026-11-04 captures\nmasque .banc/*.env 2026-11-04 banc\n' "$(sha "$d/scripts/banc.sh")"
+    printf 'depend scripts/banc.sh outils/a.ts %s 2026-11-26 lancé\n' "$(sha "$d/outils/a.ts")"
+    printf 'depend scripts/banc.sh outils/lib %s 2026-11-26 modules\n' "$(emp_arbre "$d/outils/lib")"; } > "$d/.garde-secret-exceptions"
+}
+banc_dep() { # $1 = nom ; banc + outils/a.ts, outils/lib/{x,y}.ts et leurs lignes depend
+  local d; d=$(banc "$1")
+  mkdir -p "$d/outils/lib"
+  printf 'console.log(1)\n' > "$d/outils/a.ts"; printf 'x\n' > "$d/outils/lib/x.ts"; printf 'y\n' > "$d/outils/lib/y.ts"
+  ecrit_dep "$d"
+  echo "$d"
+}
+d=$(banc_dep bd1); hk Bash "$d" command 'scripts/banc.sh'; passe "depend : dépendances intactes"
+d=$(banc_dep bd2); printf ' ' >> "$d/outils/a.ts"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : fichier modifié"
+for mot in outils/a.ts modifié -- --empreintes; do grep -q -e "$mot" <<<"$ERREUR" && ok "depend : message contient $mot" || ko "depend : message contient $mot"; done
+sans_secret "depend : fichier modifié" "$BV"
+d=$(banc_dep bd3); printf 'z\n' > "$d/outils/lib/z.ts"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : dossier ajout"
+grep -q 'outils/lib' <<<"$ERREUR" && ok "depend : dossier ajout, message" || ko "depend : dossier ajout, message"
+d=$(banc_dep bd4); rm "$d/outils/lib/y.ts"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : dossier suppression"
+grep -q 'outils/lib' <<<"$ERREUR" && ok "depend : dossier suppression, message" || ko "depend : dossier suppression, message"
+d=$(banc_dep bd5); printf 'x2\n' > "$d/outils/lib/x.ts"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : dossier modif"
+grep -q 'outils/lib' <<<"$ERREUR" && ok "depend : dossier modif, message" || ko "depend : dossier modif, message"
+d=$(banc_dep bd6); rm "$d/outils/a.ts"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : absent"
+grep -q 'absent' <<<"$ERREUR" && ok "depend : absent, message" || ko "depend : absent, message"
+d=$(banc_dep bd7); ln -s ../../hors "$d/outils/lib/l"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : lien interne"
+grep -q 'lien' <<<"$ERREUR" && ok "depend : lien interne, message" || ko "depend : lien interne, message"
+d=$(banc_dep bd8); mv "$d/outils/a.ts" "$d/outils/b.ts"; ln -s b.ts "$d/outils/a.ts"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : lien"
+d=$(banc_dep bd9); sed -i 's/ [0-9a-f]\{52\}\([0-9a-f]\{12\}\) 2026-11-26 lancé/ \1 2026-11-26 lancé/' "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : mal formée (empreinte de 12 hex)"
+grep -q 'mal déclarée' <<<"$ERREUR" && ok "depend : mal formée, message" || ko "depend : mal formée, message"
+d=$(banc_dep bd10); sed -i 's/2026-11-26 lancé/2026-13-45 lancé/' "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : mal formée (date)"
+d=$(banc_dep bd11); printf 'depend scripts/autre.sh outils/a.ts %s 2026-11-26 r\ndepend scripts/autre.sh outils/a.ts 123456789abc 2026-11-26 r\n' "$(sha "$d/outils/a.ts")" >> "$d/.garde-secret-exceptions"
+printf ' ' >> "$d/outils/a.ts"; ecrit_dep "$d"; printf 'depend scripts/autre.sh outils/a.ts 123456789abc 2026-11-26 r\n' >> "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'scripts/banc.sh'; passe "depend : mal formée, script non déclaré sans effet"
+d=$(banc_dep bd12); printf ' ' >> "$d/outils/a.ts"; printf 'x2\n' > "$d/outils/lib/x.ts"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : plusieurs"
+{ grep -q 'outils/a.ts' <<<"$ERREUR" && grep -q 'outils/lib' <<<"$ERREUR" && [ "$(grep -c 'Bloqué' <<<"$ERREUR")" = 1 ]; } && ok "depend : plusieurs, un seul refus" || ko "depend : plusieurs, un seul refus"
+d=$(banc_dep bd13); for i in $(seq 1 1001); do : > "$d/outils/lib/f$i"; done
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : arbre trop grand"
+grep -q 'plus de 1000 fichiers' <<<"$ERREUR" && ok "depend : arbre trop grand, message" || ko "depend : arbre trop grand, message"
+d=$(banc_dep bd14)
+hk Edit "$d" file_path "$d/outils/a.ts" new_string 'x'; vaut "depend : écriture, Edit d'une dépendance" 0
+hk Write "$d" file_path "$d/outils/a.ts" content 'x'; vaut "depend : écriture, Write d'une dépendance" 0
+hk Edit "$d" file_path "$d/scripts/banc.sh" new_string 'x'; bloque "depend : écriture, Edit du script"
+d=$(banc bd15); hk Bash "$d" command 'scripts/banc.sh'; passe "depend : script sans depend inchangé"
+d=$(banc_dep bd16)
+av=$(sha "$d/.garde-secret-exceptions"); SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+vaut "depend : --empreintes, tout à jour" 0; grep -q 'empreintes à jour' <<<"$SORTIE" && ok "depend : --empreintes, message à jour" || ko "depend : --empreintes, message à jour"
+printf ' ' >> "$d/outils/a.ts"
+SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+vaut "depend : --empreintes, dépendance modifiée" 1
+NOUV="$(sha "$d/outils/a.ts")"
+grep -q "^ligne 3 : depend scripts/banc.sh outils/a.ts $NOUV $(date +%F) lancé\$" <<<"$SORTIE" && ok "depend : --empreintes, ligne à recopier" || ko "depend : --empreintes, ligne à recopier ($SORTIE)"
+[ "$(grep -c '^ligne' <<<"$SORTIE")" = 1 ] && ok "depend : --empreintes, une seule ligne" || ko "depend : --empreintes, une seule ligne"
+[ "$av" = "$(sha "$d/.garde-secret-exceptions")" ] && ok "depend : --empreintes, fichier inchangé" || ko "depend : --empreintes, fichier inchangé"
+hk Bash "$d" command 'scripts/banc.sh'; bloque "depend : --empreintes, refus avant recopie"
+ligne=$(grep '^ligne 3' <<<"$SORTIE" | sed 's/^ligne 3 : //')
+sed -i "3s|.*|$ligne|" "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'scripts/banc.sh'; passe "depend : --empreintes, ligne recopiée"
+d=$(banc bd17); SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+grep -q 'scripts/banc.sh : aucune dépendance déclarée' <<<"$SORTIE" && [ "$CODE" = 0 ] && ok "depend : --empreintes, script sans depend" || ko "depend : --empreintes, script sans depend ($CODE)"
+d=$(banc_dep bd18); rm "$d/outils/a.ts"
+SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+vaut "depend : --empreintes, absent" 1; grep -q 'ligne 3 : outils/a.ts : absent' <<<"$SORTIE" && ok "depend : --empreintes, motif absent" || ko "depend : --empreintes, motif absent"
+d=$(depot bd19); SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+vaut "depend : --empreintes, sans fichier" 0
+for l in 'depend scripts/banc.sh ../x 2026-11-26 r' 'depend scripts/banc.sh' 'depend scripts/banc.sh outils/a.ts' 'depend scripts/autre.sh outils/a.ts 2026-11-26 r'; do
+  d=$(banc_dep bd20); printf '%s\n' "$l" >> "$d/.garde-secret-exceptions"
+  SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
+  [ "$CODE" = 1 ] && grep -q '^ligne 5 : ' <<<"$SORTIE" && ! grep -q 'empreintes à jour' <<<"$SORTIE" && ok "depend : --empreintes, signale « $l »" || ko "depend : --empreintes, signale « $l » ($CODE)"
+done
 
 # ---------- FIN ----------
 exit $((ECHECS > 0))

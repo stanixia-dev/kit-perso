@@ -3,7 +3,7 @@
 Modes : CLI (défaut), --hook pre (PreToolUse), --hook post (PostToolUse / PostToolUseFailure), --hook stop (Stop), --ci (strict).
 Le filtre de commandes est une aide ; les barrières sont le masquage de la sortie et le scan du résultat git.
 Sortie 2 + message sur stderr = refus. Aucun message ne contient une valeur de secret."""
-import argparse, fnmatch, glob, hashlib, importlib.util, json, math, os, re, sys, time
+import argparse, fnmatch, glob, hashlib, importlib.util, json, math, os, re, stat, sys, time
 from collections import Counter
 from datetime import date
 
@@ -123,7 +123,7 @@ def racine_de(dossier):
 
 # ---------- exceptions ----------
 
-DIRECTIVES = ("script", "masque", "filtre")
+DIRECTIVES = ("script", "masque", "filtre", "depend")
 # argument de filtre : `[a-z0-9-]+` sans tiret initial (jamais pris pour une option)
 NOM_FILTRE = r"[a-z0-9][a-z0-9-]*"
 
@@ -134,12 +134,26 @@ def chemin_relatif_sur(c, glob=False):
     return all(x not in ("", ".", "..") for x in c.split("/"))
 
 def directives(texte):
-    """([(chemin, sha256|None)], [glob], {script: [glob]}, avertissements) : directives `script`, `masque` et `filtre`."""
+    """([(chemin, sha256|None)], [glob], {script: [glob]}, {script: [(n, chemin|None, sha256|None)]}, avertissements) :
+    directives `script`, `masque`, `filtre` et `depend`."""
     scripts, masques, avert = [], [], []
-    filtres, lignes = {}, []
+    filtres, lignes, deps_l, deps = {}, [], [], {}
     for n, l in enumerate(texte.splitlines(), 1):
-        p = l.split(None, 4)
+        p = l.split(None, 5 if l.split(None, 1)[:1] == ["depend"] else 4)
         if not p or p[0] not in DIRECTIVES:
+            continue
+        if p[0] == "depend":
+            if len(p) < 2 or not chemin_relatif_sur(p[1]):
+                avert.append(f"{EXCEPTIONS} ligne {n} ignorée (depend : script relatif invalide)")
+                continue
+            chemin = p[2] if len(p) > 2 and chemin_relatif_sur(p[2]) else None
+            ok = chemin and len(p) >= 6 and re.fullmatch(r"[0-9a-f]{64}", p[3]) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[4])
+            if ok:
+                try:
+                    date.fromisoformat(p[4])
+                except ValueError:
+                    ok = False
+            deps_l.append((n, p[1], chemin, p[3] if ok else None))
             continue
         if p[0] == "script":
             if len(p) < 2 or not chemin_relatif_sur(p[1]):
@@ -184,7 +198,59 @@ def directives(texte):
             filtres.setdefault(script, []).append(g)
         else:
             avert.append(f"{EXCEPTIONS} ligne {n} ignorée (filtre : {script} n'est pas déclaré par `script`)")
-    return scripts, masques, filtres, avert
+    for n, script, chemin, sha in deps_l:
+        if script not in declares:
+            avert.append(f"{EXCEPTIONS} ligne {n} ignorée (depend : {script} n'est pas déclaré par `script`)")
+            continue
+        if sha is None:
+            avert.append(f"{EXCEPTIONS} ligne {n} : dépendance mal déclarée, exécution de {script} refusée")
+        deps.setdefault(script, []).append((n, chemin, sha))
+    return scripts, masques, filtres, deps, avert
+
+MAX_FICHIERS = 1000
+
+def empreinte_arbre(abs_):
+    """(sha256, None) ou (None, motif) : empreinte d'un dossier (voir la spec), sans suivre les liens."""
+    entrees = []
+    erreur = []
+    for dossier, dirs, fichiers in os.walk(abs_, followlinks=False, onerror=lambda e: erreur.append(e)):
+        for nom in dirs + fichiers:
+            try:
+                mode = os.lstat(os.path.join(dossier, nom)).st_mode
+            except OSError:
+                return None, "absent"
+            if stat.S_ISLNK(mode) or not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
+                return None, "lien ou fichier spécial"
+        for nom in fichiers:
+            chemin = os.path.join(dossier, nom)
+            if len(entrees) >= MAX_FICHIERS:
+                return None, f"plus de {MAX_FICHIERS} fichiers"
+            try:
+                with open(chemin, "rb") as f:
+                    h = hashlib.sha256(f.read()).hexdigest()
+            except OSError:
+                return None, "absent"
+            rel = os.path.relpath(chemin, abs_).replace(os.sep, "/")
+            entrees.append(os.fsencode(rel) + b"\0" + h.encode() + b"\n")
+    if erreur:
+        return None, "absent"
+    return hashlib.sha256(b"".join(sorted(entrees))).hexdigest(), None
+
+def empreinte_chemin(abs_):
+    """(sha256, None) ou (None, motif) : sha256 du contenu d'un fichier régulier, empreinte d'arbre d'un dossier."""
+    try:
+        mode = os.lstat(abs_).st_mode
+    except OSError:
+        return None, "absent"
+    if stat.S_ISDIR(mode):
+        return empreinte_arbre(abs_)
+    if not stat.S_ISREG(mode):
+        return None, "lien ou fichier spécial"
+    try:
+        with open(abs_, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest(), None
+    except OSError:
+        return None, "absent"
 
 def racine_locale(cwd):
     """Premier dossier ancêtre de realpath(cwd) qui contient `.git` ; sans appeler git."""
@@ -198,16 +264,16 @@ def racine_locale(cwd):
         d = parent
 
 def directives_du_depot(cwd):
-    """(racine, scripts, masques, filtres) du dépôt de cwd ; rien sans racine ni fichier."""
+    """(racine, scripts, masques, filtres, deps) du dépôt de cwd ; rien sans racine ni fichier."""
     racine = racine_locale(cwd)
     if not racine:
-        return None, [], [], {}
+        return None, [], [], {}, {}
     try:
         with open(os.path.join(racine, EXCEPTIONS), encoding="utf-8") as f:
-            scripts, masques, filtres, _ = directives(f.read())
+            scripts, masques, filtres, deps, _ = directives(f.read())
     except OSError:
-        return racine, [], [], {}
-    return racine, scripts, masques, filtres
+        return racine, [], [], {}, {}
+    return racine, scripts, masques, filtres, deps
 
 def noms_filtre(racine, globs):
     """Noms admis : partie couverte par le `*` du dernier composant de chaque glob, pour les fichiers réguliers."""
@@ -365,7 +431,66 @@ def resume_ci(blocs, avert, ajoutees):
     with open(chemin, "a", encoding="utf-8") as f:
         f.write("\n".join(l) + "\n")
 
+def empreintes(depot):
+    """Mode `--empreintes` : affiche les lignes `script` et `depend` à jour, sans jamais écrire le fichier. Code 0 si tout est à jour."""
+    racine = racine_locale(depot)
+    try:
+        with open(os.path.join(racine, EXCEPTIONS), encoding="utf-8") as f:
+            texte = f.read()
+    except (OSError, TypeError):
+        print("aucune directive")
+        return 0
+    aujourdhui = date.today().isoformat()
+    ecart, avec_dep, scripts = False, set(), []
+    declares = {q[1] for q in (x.split(None, 2) for x in texte.splitlines()) if len(q) > 1 and q[0] == "script"}
+    for n, l in enumerate(texte.splitlines(), 1):
+        mot = l.split(None, 1)[:1]
+        if mot not in (["script"], ["depend"]):
+            continue
+        dep = mot == ["depend"]
+        p = l.split(None, 5 if dep else 4)
+        i = 2 if dep else 1  # indice du chemin vérifié
+        if dep and (len(p) < 3 or not chemin_relatif_sur(p[1]) or not chemin_relatif_sur(p[2])):
+            print(f"ligne {n} : ligne mal formée")
+            ecart = True
+            continue
+        if dep and p[1] not in declares:
+            print(f"ligne {n} : script {p[1]} non déclaré par `script`, ligne ignorée")
+            ecart = True
+            continue
+        if len(p) <= i or not chemin_relatif_sur(p[i]):
+            continue
+        if dep and chemin_relatif_sur(p[1]):
+            avec_dep.add(p[1])
+        if not dep:
+            scripts.append(p[1])
+        emp, motif = empreinte_chemin(os.path.join(racine, p[i]))
+        if emp is None:
+            print(f"ligne {n} : {p[i]} : {motif}")
+            ecart = True
+            continue
+        debut = i + 1  # indice de l'empreinte
+        ok = (len(p) > debut + 2 and p[debut] == emp and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[debut + 1]))
+        if ok:
+            try:
+                date.fromisoformat(p[debut + 1])
+            except ValueError:
+                ok = False
+        if not ok:
+            raison = p[debut + 2] if len(p) > debut + 2 else "<raison>"
+            tete = f"depend {p[1]} " if dep else "script "
+            print(f"ligne {n} : {tete}{p[i]} {emp} {aujourdhui} {raison}")
+            ecart = True
+    for sc in scripts:
+        if sc not in avec_dep:
+            print(f"{sc} : aucune dépendance déclarée")
+    if not ecart:
+        print("empreintes à jour")
+    return 1 if ecart else 0
+
 def commande(args):
+    if args.empreintes:
+        return empreintes(os.path.abspath(args.depot or os.getcwd()))
     v = vm()
     depot = os.path.abspath(args.depot or os.getcwd())
     racine = racine_de(depot)
@@ -648,10 +773,15 @@ def hors_guillemets(s):
             i += 1
     return "".join(sortie)
 
+def aide_empreintes(racine):
+    """Seconde ligne des refus d'empreinte : comment l'utilisateur obtient les lignes à jour."""
+    return ("Demande à l'utilisateur de relire ces fichiers puis de mettre à jour les empreintes ; lignes à jour : "
+            f"python3 {os.path.abspath(__file__)} --empreintes --depot {racine}")
+
 def controle_banc(cmd, cwd):
     """Vrai si la commande est l'invocation exacte d'un script de banc déclaré et intact ; refuse (exit 2) une commande
     qui le cite autrement ou dont une condition échoue ; None si aucun script déclaré n'est en cause."""
-    racine, scripts, _, filtres = directives_du_depot(cwd)
+    racine, scripts, _, filtres, deps = directives_du_depot(cwd)
     if not scripts:
         return None
     r = os.path.realpath(racine)
@@ -687,10 +817,26 @@ def controle_banc(cmd, cwd):
             refuse(f"⛔ Bloqué par garde-secret : script de banc ({chemin}) illisible ou absent.")
         if sha is None or hashlib.sha256(contenu).hexdigest() != sha:
             refuse(f"⛔ Bloqué par garde-secret : script modifié depuis sa déclaration ({chemin}) : demande à "
-                   "l'utilisateur de le relire et de mettre à jour l'empreinte.")
+                   "l'utilisateur de le relire et de mettre à jour l'empreinte.\n" + aide_empreintes(r))
         hote = hote_non_local(contenu.decode("utf-8", "replace"))
         if hote:
             refuse(f"⛔ Bloqué par garde-secret : cible non locale ({hote}) dans {chemin}.")
+        en_cause = []
+        for n, dep, attendu in deps.get(chemin, []):
+            if dep is None or attendu is None:
+                refuse(f"⛔ Bloqué par garde-secret : dépendance mal déclarée (ligne {n} de {EXCEPTIONS}) : "
+                       f"exécution de `{chemin}` refusée.")
+            d_abs = os.path.join(r, dep)
+            if os.path.realpath(d_abs) != d_abs:
+                refuse(f"⛔ Bloqué par garde-secret : dépendance `{dep}` derrière un lien symbolique.")
+            emp, motif = empreinte_chemin(d_abs)
+            if emp is None:
+                en_cause.append(f"{dep} ({motif})")
+            elif emp != attendu:
+                en_cause.append(f"{dep} (modifié)")
+        if en_cause:
+            refuse(f"⛔ Bloqué par garde-secret : dépendance de {chemin} modifiée depuis sa déclaration : "
+                   + ", ".join(en_cause) + ".\n" + aide_empreintes(r))
         if arg is not None:
             if not filtres.get(chemin):
                 refuse(f"⛔ Bloqué par garde-secret : script de banc ({chemin}) : aucune cible de filtre déclarée "
@@ -750,7 +896,7 @@ def pre(data):
         if chemin:
             cible = os.path.realpath(chemin if os.path.isabs(chemin) else os.path.join(cwd, chemin))
             for dossier in {cwd, os.path.dirname(cible)}:
-                racine, scripts, _, _ = directives_du_depot(dossier) if os.path.isdir(dossier) else (None, [], [], {})
+                racine, scripts, _, _, _ = directives_du_depot(dossier) if os.path.isdir(dossier) else (None, [], [], {}, {})
                 if racine and any(cible == os.path.join(os.path.realpath(racine), c) for c, _ in scripts):
                     refuse("⛔ Bloqué par garde-secret : script de banc épinglé : modification réservée à l'utilisateur.")
             controle_chemin(chemin, cwd)
@@ -819,7 +965,7 @@ def valeurs_connues(cwd):
         ajoute(k, v)
     for nom in (".env", ".env.local"):
         valeurs_env(os.path.join(cwd, nom), ajoute)
-    racine, _, masques, _ = directives_du_depot(cwd)
+    racine, _, masques, _, _ = directives_du_depot(cwd)
     for g in masques:
         for rel in glob.glob(g, root_dir=racine):
             f = os.path.join(racine, rel)
@@ -896,6 +1042,7 @@ def main():
     ap.add_argument("--cible")
     ap.add_argument("--hook", choices=("pre", "post", "stop"))
     ap.add_argument("--ci", action="store_true")
+    ap.add_argument("--empreintes", action="store_true")
     args = ap.parse_args()
     global MODE
     MODE = "ci" if args.ci else (args.hook or "cli")
