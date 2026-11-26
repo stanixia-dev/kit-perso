@@ -26,8 +26,8 @@ python3 "$G" --depot "$TMP/tout" --ref $SHA --sortie "$O" >"$TMP/stdout" 2>/dev/
 [ -f "$D" ] && grep -q "^  deps:" "$D" || ko "job deps manquant"
 [ -f "$T" ] && for j in rust node python; do grep -q "^  $j:" "$T" || ko "job $j manquant"; done
 grep -q "ref: $SHA" "$D" && grep -q 'repository: stanixia-dev/kit-perso' "$D" && ! grep -q '^  \(rust\|node\|python\):' "$D" && ok "deps seul dans kit-perso-deps.yml, SHA" || ko "SHA ou repository"
-python3 "$G" --depot "$TMP/tout" --ref $SHA --sortie "$O" 2>/dev/null | grep -q 'Require status checks : `deps`, `rust`, `node`, `python` (' \
-  && ok "checks : deps et jobs de tests seulement" || ko "checks listent autre chose que les jobs"
+python3 "$G" --depot "$TMP/tout" --ref $SHA --sortie "$O" 2>/dev/null | grep -q 'Require status checks : `deps`, `resume` (' \
+  && ok "checks : deps et resume" || ko "checks : deps et resume"
 grep -q -- '--locked' "$T" && grep -q 'npm install' "$T" && ok "variantes lockfile" || ko "variantes lockfile"
 head -1 "$D" | grep -q "^# Généré par kit-perso 3\..* kit figé à $SHA\$" && head -1 "$T" | grep -q '^# Généré par' && ok "1re ligne" || ko "1re ligne"
 
@@ -163,7 +163,7 @@ printf '# commentaire\n\nruns-on self-hosted linux x64 homelab\n' > "$TMP/cfg/.k
 python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/oc" >/dev/null 2>"$TMP/errc"
 TC="$TMP/oc/kit-perso-tests.yml"
 grep -q 'runs-on: ubuntu-24.04' "$TMP/oc/kit-perso-deps.yml" && ! grep -q 'self-hosted' "$TMP/oc/kit-perso-deps.yml" \
-  && [ "$(grep -c '^    runs-on: \[self-hosted, linux, x64, homelab\]$' "$TC")" = 2 ] && ! grep -q 'actions/cache' "$TC" \
+  && [ "$(grep -c '^    runs-on: \[self-hosted, linux, x64, homelab\]$' "$TC")" = 3 ] && ! grep -q 'actions/cache' "$TC" \
   && [ "$(grep -c 'CARGO_TARGET_DIR=$(dirname "$GITHUB_WORKSPACE")/kit-perso-target' "$TC")" = 1 ] \
   && sed -n '/^  rust:/,/^  node:/p' "$TC" | awk '/actions\/checkout/{c=NR} /CARGO_TARGET_DIR/{t=NR} /rustup/{r=NR} END{exit !(c && t>c && r>t)}' \
   && grep -q 'répertoire persistant' "$TMP/errc" && ok "runs-on auto-hébergé, répertoire persistant" || ko "runs-on auto-hébergé"
@@ -189,5 +189,61 @@ refuse_cfg "job en double" 'chemins rust a/**\nchemins rust b/**\n'
 printf 'n importe quoi\n' > "$TMP/cfg/.kit-perso-ci"
 python3 "$G" --depot "$TMP/cfg" --ref $SHA --sans-tests --sortie "$TMP/os" >/dev/null 2>&1; c=$?
 [ "$c" = 0 ] && [ -f "$TMP/os/kit-perso-deps.yml" ] && [ ! -e "$TMP/os/kit-perso-tests.yml" ] && ok "sans tests : config non lue" || ko "sans tests : config lue"
+
+# structure : sans config, rust seul, web seul, mixte filtré ; resume toujours dernier
+nomsjobs() { sed -n '/^jobs:/,$p' "$1" | grep -E '^  [a-z]+:$' | tr -d ' :' | tr '\n' ' '; }
+python3 "$G" --depot "$TMP/tout" --ref $SHA --sortie "$TMP/s0" >/dev/null 2>&1
+S0="$TMP/s0/kit-perso-tests.yml"
+[ "$(nomsjobs "$S0")" = "rust node python resume " ] && ! grep -qE '^    (needs|if):' <(sed '/^  resume:/,$d' "$S0") && grep -q '^    if: ${{ !cancelled() }}$' "$S0" \
+  && grep -q '^    needs: \[rust, node, python\]$' "$S0" && ! grep -q '^  filtre:' "$S0" && ok "sans config : aucun filtre, resume présent" || ko "sans config : aucun filtre, resume présent"
+mkdepot "$TMP/rs" Cargo.toml; mkdepot "$TMP/ws" package.json
+python3 "$G" --depot "$TMP/rs" --ref $SHA --sortie "$TMP/s1" >/dev/null 2>&1; python3 "$G" --depot "$TMP/ws" --ref $SHA --sortie "$TMP/s2" >/dev/null 2>&1
+[ "$(nomsjobs "$TMP/s1/kit-perso-tests.yml")" = "rust resume " ] && grep -q '^    needs: \[rust\]$' "$TMP/s1/kit-perso-tests.yml" && ok "structure rust seul" || ko "structure rust seul"
+[ "$(nomsjobs "$TMP/s2/kit-perso-tests.yml")" = "node resume " ] && grep -q '^    needs: \[node\]$' "$TMP/s2/kit-perso-tests.yml" && ok "structure web seul" || ko "structure web seul"
+printf 'chemins rust crates/** Cargo.toml\nchemins node ui/** package.json\n' > "$TMP/cfg/.kit-perso-ci"
+python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/s3" >/dev/null 2>"$TMP/errs3"
+S3="$TMP/s3/kit-perso-tests.yml"
+[ "$(nomsjobs "$S3")" = "filtre rust node resume " ] \
+  && grep -qF "          FILTRES: '{\"rust\": [\"crates/**\", \"Cargo.toml\"], \"node\": [\"ui/**\", \"package.json\"]}'" "$S3" \
+  && [ "$(grep -c '^    needs: filtre$' "$S3")" = 2 ] && grep -qF "    if: \${{ needs.filtre.outputs.rust == 'true' }}" "$S3" && grep -qF "    if: \${{ needs.filtre.outputs.node == 'true' }}" "$S3" \
+  && grep -q '^    needs: \[filtre, rust, node\]$' "$S3" && grep -q '^    if: ${{ !cancelled() }}$' "$S3" && grep -q 'fetch-depth: 2' "$S3" \
+  && grep -q 'filtre-chemins.py' "$S3" && grep -q 'filtres : rust (crates/\*\* Cargo.toml), node (ui/\*\* package.json)' "$TMP/errs3" \
+  && ok "structure mixte filtrée" || ko "structure mixte filtrée"
+sed -n '/^  resume:/,$p' "$S3" > "$TMP/resume.yml"
+! grep -q 'uses:' "$TMP/resume.yml" && ! grep -q '\${{.*}}' <(grep 'run:' "$TMP/resume.yml") && ok "resume : sans checkout ni expression dans un run" || ko "resume : sécurité"
+printf 'runs-on self-hosted a\nchemins node ui/**\n' > "$TMP/cfg/.kit-perso-ci"
+python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/s4" >/dev/null 2>&1
+S4="$TMP/s4/kit-perso-tests.yml"
+[ "$(nomsjobs "$S4")" = "filtre rust node resume " ] && [ "$(grep -c '^    runs-on: \[self-hosted, a\]$' "$S4")" = 4 ] && ! grep -q 'needs: filtre' <(sed -n '/^  rust:/,/^  node:/p' "$S4") \
+  && ok "filtre et resume sur le runner déclaré, job non filtré sans needs" || ko "runner de filtre et resume"
+
+# filtre-chemins.py : dépôt jetable avec commit de fusion (comme le checkout d'une PR : HEAD^1 = base)
+F="$RACINE/skills/ci-projet/filtre-chemins.py"
+FJ='{"rust":["crates/**","Cargo.toml"],"node":["ui/**","package.json"]}'
+mkdepot "$TMP/fl" Cargo.toml
+FB=$(g -C "$TMP/fl" rev-parse HEAD)
+g -C "$TMP/fl" switch -q -c f1; mkdir -p "$TMP/fl/ui"; echo a > "$TMP/fl/ui/a.js"; g -C "$TMP/fl" add -A; g -C "$TMP/fl" commit -q -m ui
+g -C "$TMP/fl" switch -q main; g -C "$TMP/fl" merge -q --no-ff f1 -m fusion-ui; FU=$(g -C "$TMP/fl" rev-parse HEAD)
+g -C "$TMP/fl" switch -q -c f2 "$FB"; echo n > "$TMP/fl/NOTES"; g -C "$TMP/fl" add -A; g -C "$TMP/fl" commit -q -m notes
+g -C "$TMP/fl" switch -q main; g -C "$TMP/fl" merge -q --no-ff f2 -m fusion-notes; FN=$(g -C "$TMP/fl" rev-parse HEAD)
+g -C "$TMP/fl" switch -q -c f3 "$FN"; g -C "$TMP/fl" commit -q --allow-empty -m vide
+filtre() { # $1 = commit à extraire, $2 = BASE, $3 = FILTRES ; résultat dans $TMP/fout (stdout du script dans $TMP/fmsg) ; code retour du script
+  rm -f "$TMP/fout"; g -C "$TMP/fl" checkout -q --detach "$1"
+  ( cd "$TMP/fl" && BASE=$2 FILTRES=$3 GITHUB_OUTPUT="$TMP/fout" python3 "$F" ) >"$TMP/fmsg" 2>&1
+}
+filtre "$FU" "$FB" "$FJ"; grep -qx 'node=true' "$TMP/fout" && grep -qx 'rust=false' "$TMP/fout" && grep -q 'rust : sauté' "$TMP/fmsg" \
+  && ok "filtre : node seul saute rust" || ko "filtre : node seul"
+filtre "$FN" "$FU" "$FJ"; grep -qx 'node=true' "$TMP/fout" && grep -qx 'rust=true' "$TMP/fout" && grep -q 'non classé NOTES' "$TMP/fmsg" \
+  && ok "filtre : fichier non classé lance tout" || ko "filtre : fichier non classé"
+filtre "$FU" "" "$FJ"; grep -qx 'node=true' "$TMP/fout" && grep -qx 'rust=true' "$TMP/fout" && ok "filtre : push lance tout" || ko "filtre : push"
+filtre "$FU" "$FN" "$FJ"; grep -qx 'node=true' "$TMP/fout" && grep -qx 'rust=true' "$TMP/fout" && ok "filtre : base différente lance tout" || ko "filtre : base différente"
+EMPTY=$(g -C "$TMP/fl" rev-parse f3); filtre "$EMPTY" "$FN" "$FJ"; grep -qx 'node=true' "$TMP/fout" && grep -qx 'rust=true' "$TMP/fout" && grep -q 'diff vide' "$TMP/fmsg" \
+  && ok "filtre : diff vide lance tout" || ko "filtre : diff vide"
+bad=0
+for mauvais in '' 'pas du json' '[]' '{}' '{"rust":"x"}' '{"rust":[]}' '{"rust":[1]}'; do
+  filtre "$FU" "$FB" "$mauvais"; c=$?
+  [ "$c" = 2 ] && [ ! -s "$TMP/fout" ] || { ko "filtre : FILTRES invalide ($mauvais)"; bad=1; }
+done
+( cd "$TMP/fl" && env -u GITHUB_OUTPUT BASE=$FB FILTRES="$FJ" python3 "$F" ) >/dev/null 2>&1; [ $? = 2 ] && [ "$bad" = 0 ] && ok "filtre : FILTRES invalide refusé" || ko "filtre : GITHUB_OUTPUT absent"
 
 exit $((ECHECS > 0))

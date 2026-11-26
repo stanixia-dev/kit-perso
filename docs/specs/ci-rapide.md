@@ -121,7 +121,7 @@ bash tests/test_hooks.sh
 - [x] L1 — Concurrence, `.kit-perso-ci` (runs-on) et cache des deux modes (étapes 1-3)
   Fichiers : `skills/ci-projet/modele-tests.yml`, `skills/ci-projet/genere-ci.py`, `tests/test_ci_projet.sh`
   Fait quand : cas concurrency, runs-on, cache et refus verts — `bash tests/test_ci_projet.sh`
-- [ ] L2 — Filtre par chemins et job `resume` (étapes 4-5)
+- [x] L2 — Filtre par chemins et job `resume` (étapes 4-5)
   Fichiers : `skills/ci-projet/filtre-chemins.py`, `skills/ci-projet/genere-ci.py`, `tests/test_ci_projet.sh`
   Fait quand : cas filtre, structure et checks verts — `bash tests/test_ci_projet.sh`
 - [ ] L3 — Documentation, version, clôture (étape 6)

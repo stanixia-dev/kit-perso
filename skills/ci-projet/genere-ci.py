@@ -89,8 +89,10 @@ def lit_config(depot, noms):
 
 def job(nom, etapes, env=None, cfg=CFG_DEFAUT):
     """etapes : str (run, guillemeté si besoin), ("brut", str) (run tel quel) ou ("bloc", [lignes]) (étape uses:)."""
-    lignes = [f"  {nom}:",
-              f"    runs-on: {runs_on(cfg)}",
+    lignes = [f"  {nom}:"]
+    if nom in cfg["chemins"]:  # job filtré : tourne seulement si `filtre` le décide
+        lignes += ["    needs: filtre", f"    if: ${{{{ needs.filtre.outputs.{nom} == 'true' }}}}"]
+    lignes += [f"    runs-on: {runs_on(cfg)}",
               "    timeout-minutes: 15",
               "    permissions:",
               "      contents: read"]
@@ -108,6 +110,27 @@ def job(nom, etapes, env=None, cfg=CFG_DEFAUT):
         else:
             lignes.append(f"      - run: {json.dumps(e)}" if re.search(r"[:#&*!|>'\"%@`{}\[\],]", e) else f"      - run: {e}")
     return "\n".join(lignes)
+
+def job_filtre(sha, cfg, noms):
+    filtres = {n: cfg["chemins"][n] for n in noms if n in cfg["chemins"]}
+    kit = ["      - uses: " + CHECKOUT, "        with:", "          repository: stanixia-dev/kit-perso",
+           f"          ref: {sha}", "          path: .kit-perso", "          persist-credentials: false"]
+    return "\n".join([
+        "  filtre:", f"    runs-on: {runs_on(cfg)}", "    timeout-minutes: 5", "    permissions:", "      contents: read",
+        "    outputs:"] + [f"      {n}: ${{{{ steps.decide.outputs.{n} }}}}" for n in filtres] + [
+        "    steps:", "      - uses: " + CHECKOUT, "        with:", "          fetch-depth: 2",
+        "          persist-credentials: false"] + kit + [
+        "      - id: decide", "        env:", "          BASE: ${{ github.event.pull_request.base.sha }}",
+        f"          FILTRES: '{json.dumps(filtres)}'",
+        "        run: python3 .kit-perso/skills/ci-projet/filtre-chemins.py"])
+
+def job_resume(cfg, noms):
+    return "\n".join([
+        "  resume:", "    if: ${{ !cancelled() }}", "    needs: [" + ", ".join(noms) + "]",
+        f"    runs-on: {runs_on(cfg)}", "    timeout-minutes: 5", "    permissions:", "      contents: read", "    steps:",
+        "      - if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}",
+        "        run: exit 1",
+        '      - run: echo "jobs de tests verts ou sautés par le filtre"'])
 
 def etapes_runtime(sha):
     return [("bloc", ["      - uses: " + SETUP_NODE,
@@ -217,6 +240,9 @@ def main():
         noms_jobs = [re.match(r"  (\w+):", j).group(1) for j in jobs]
         cfg = lit_config(depot, noms_jobs)
         jobs = jobs_tests(depot, sha, cfg)
+        if cfg["chemins"]:
+            jobs.insert(0, job_filtre(sha, cfg, noms_jobs))
+        jobs.append(job_resume(cfg, (["filtre"] if cfg["chemins"] else []) + noms_jobs))
         filtres = ", ".join(f"{k} ({' '.join(v)})" for k, v in cfg["chemins"].items()) or "aucun filtre"
         print(f"genere-ci : CI de tests : runs-on {runs_on(cfg)}, cache {'actions/cache' if hebergeur(cfg) == 'hébergé' else 'répertoire persistant'}, "
               f"filtres : {filtres}", file=sys.stderr)
@@ -258,10 +284,10 @@ def main():
     copies = " && ".join([copies] + [f'cp -n "{os.path.join(sortie, n)}" {n}' for n in annexes])
     print(f'git switch main && git pull --ff-only && mkdir -p .github/workflows && {copies} '
           f'&& git add {cibles} && git commit -m "Ajoute la CI kit-perso {version} ({sha[:12]})" && git push origin main')
-    noms = "`deps`" + "".join(f", `{n}`" for n in (re.match(r"  (\w+):", j).group(1) for j in jobs))
+    noms = "`deps`, `resume`" if jobs else "`deps`"
     print("`deps` ne tourne qu'une fois ces workflows sur main. Ensuite : Settings > Rules > Rulesets > New branch ruleset, "
           f"cible `main`, Require status checks : {noms} (noms de jobs ; GitHub les affiche `kit-perso-deps / deps`, "
-          "`kit-perso-tests / <job>`). Mise à jour du kit : relancer /kit-perso:ci-projet et recopier.")
+          "`kit-perso-tests / resume`). Mise à jour du kit : relancer /kit-perso:ci-projet et recopier.")
 
 if __name__ == "__main__":
     main()
