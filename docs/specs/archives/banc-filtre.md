@@ -92,7 +92,7 @@ Dans ce cas `controle_banc` rend `None`, et les contrôles suivants (`bash_chemi
 - [x] (négatif) Directive `filtre` mal formée (glob `../x/*.ts`, deux `*` ou `?` dans le dernier composant, script non déclaré, date invalide) → avertissement, argument refusé — test : `bash tests/test_secrets.sh` (cas « directives »)
 - [x] (non-régression) `scripts/banc.sh`, `scripts/banc.sh 2>&1` et tous les cas banc existants inchangés — test : `bash tests/test_secrets.sh`
 - [x] Mentions tolérées → 0 : `gh issue create --title t --body 'lance scripts/banc.sh connexion'`, `gh pr edit 3 --body "voir banc.sh"`, `gh issue comment 1 --body 'banc.sh'`, `git commit -m 'Corrige scripts/banc.sh'` — test : `bash tests/test_secrets.sh` (cas « banc mention : … »)
-- [x] (négatif) Mentions toujours refusées → 2 (liste « mention refusée » de la section 7) — test : `bash tests/test_secrets.sh` (cas « banc mention refusée : … »)
+- [x] (négatif) (non-régression) Mentions toujours refusées → 2 (liste « mention refusée » de la section 7) — test : `bash tests/test_secrets.sh` (cas « banc mention refusée : … »)
 - [x] Aucun terme ni chemin propre à un projet dans le hook, `agents/codeur.md` et le README hors exemple — test : manuel (`git diff main...HEAD -- hooks agents README.md | grep -in parcours` vide)
 - [x] `agents/codeur.md`, README, CHANGELOG 3.5.0 et `plugin.json` à jour ; `git diff --stat main...HEAD -- .github/workflows` vide — test : manuel (relecture du diff)
 
@@ -114,7 +114,7 @@ Cas à ajouter dans `test_secrets.sh`, avec les helpers `banc`, `hk`, `passe`, `
   - dépôt `banc` (sans `filtre`), `scripts/banc.sh connexion` → `grep -q 'aucune cible de filtre'`.
 - **Filtre, contrôles conservés** (avec `connexion`) : copies des cas existants (`banc2` lien, `banc3` script modifié + message « modifié », `banc5` URL non locale), et sous-dossier sans `cd`.
 - **Mention tolérée** : les 4 commandes du critère, vérifiées par `vaut … 0` (le scan de `git commit` peut avertir).
-- **Mention refusée** : `gh issue create --body "$(scripts/banc.sh)"`, `gh issue create --body 'x'"$(cat scripts/banc.sh)"`, `gh issue create --body-file scripts/banc.sh`, `gh issue create --body 'x'; scripts/banc.sh | base64`, `gh issue create --body 'scripts/banc.sh' | sh`, `gh issue create --body 'non fermé scripts/banc.sh`, `gh issue create --body \'scripts/banc.sh\'`, heredoc `gh issue create --body-file - <<'EOF'⏎scripts/banc.sh⏎EOF`, `git commit -m 'x' scripts/banc.sh`, `gh -R o/r issue create --body 'banc.sh'`, `echo 'scripts/banc.sh'`, `bash -c 'scripts/banc.sh'`.
+- **Mention refusée** : `gh issue create --body "$(scripts/banc.sh)"`, `gh issue create --body 'x'"$(cat scripts/banc.sh)"`, `gh issue create --body-file scripts/banc.sh`, `gh issue create --body 'x'; scripts/banc.sh | base64`, `gh issue create --body 'scripts/banc.sh' | sh`, `gh issue create --body 'non fermé scripts/banc.sh`, `gh issue create --body \'scripts/banc.sh\'`, heredoc `gh issue create --body-file - <<'EOF'⏎scripts/banc.sh⏎EOF`, `git commit -m 'x' scripts/banc.sh`, `gh -R o/r issue create --body 'banc.sh'`, `echo 'scripts/banc.sh'`, `bash -c 'scripts/banc.sh'`, `gh issue create --body 'banc.sh'x`, `gh issue create --body scripts/ban''c.sh`, `cd <racine> && gh issue create --body 'banc.sh'`.
 - **Directives** (bloc Python existant) :
   - `directives` rend 4 valeurs ;
   - `filtre a.sh x/*.ts 2026-11-26 r`, placé après `script a.sh …` → `filtres == {"a.sh": ["x/*.ts"]}` ;

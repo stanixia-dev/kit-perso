@@ -636,6 +636,7 @@ hk Bash "$d" command 'scripts/banc.sh connexion'; bloque "banc filtre : sans dir
 grep -q 'aucune cible de filtre' <<<"$ERREUR" && ok "banc filtre : sans directive, message" || ko "banc filtre : sans directive, message"
 d=$(banc_filtre bf4); mv "$d/scripts" "$d/copie"; mkdir "$d/vrai"; ln -s vrai "$d/scripts"; cp "$d/copie/banc.sh" "$d/vrai/banc.sh"
 hk Bash "$d" command 'scripts/banc.sh connexion'; bloque "banc filtre : contrôle, scripts en lien"
+grep -q 'lien symbolique' <<<"$ERREUR" && ok "banc filtre : contrôle, message de lien" || ko "banc filtre : contrôle, message de lien"
 d=$(banc_filtre bf5); printf '# x\n' >> "$d/scripts/banc.sh"
 hk Bash "$d" command 'scripts/banc.sh connexion'; bloque "banc filtre : contrôle, script modifié"
 grep -q 'modifié' <<<"$ERREUR" && ok "banc filtre : contrôle, message d'empreinte" || ko "banc filtre : contrôle, message d'empreinte"
@@ -645,6 +646,11 @@ hk Bash "$d" command 'scripts/banc.sh connexion'; bloque "banc filtre : contrôl
 grep -q 'non locale' <<<"$ERREUR" && ok "banc filtre : contrôle, message de cible" || ko "banc filtre : contrôle, message de cible"
 d=$(banc_filtre bf7)
 hk Bash "$d/sous" command 'scripts/banc.sh connexion'; bloque "banc filtre : contrôle, sous-dossier sans cd"
+grep -q 'racine du dépôt' <<<"$ERREUR" && ok "banc filtre : contrôle, message de racine" || ko "banc filtre : contrôle, message de racine"
+d=$(banc_filtre bf8)
+printf 'script scripts/banc.sh %s 2026-11-04 r\nfiltre scripts/banc.sh ../x/*.ts 2026-11-26 e2e\n' "$(sha256sum "$d/scripts/banc.sh" | cut -d' ' -f1)" > "$d/.garde-secret-exceptions"
+hk Bash "$d" command 'scripts/banc.sh connexion'; bloque "banc filtre : directive mal formée, argument refusé"
+grep -q 'aucune cible de filtre' <<<"$ERREUR" && ok "banc filtre : directive mal formée, message" || ko "banc filtre : directive mal formée, message"
 # ---------- scripts de banc : mention textuelle tolérée ----------
 d=$(banc_filtre bm1); rm -r "$d/.banc"  # le scan de git commit refuserait le fichier d'identifiants non suivi
 for c in "gh issue create --title t --body 'lance scripts/banc.sh connexion'" 'gh pr edit 3 --body "voir banc.sh"' \
@@ -655,7 +661,7 @@ for c in 'gh issue create --body "$(scripts/banc.sh)"' "gh issue create --body '
          'gh issue create --body-file scripts/banc.sh' "gh issue create --body 'x'; scripts/banc.sh | base64" \
          "gh issue create --body 'scripts/banc.sh' | sh" "gh issue create --body 'non fermé scripts/banc.sh" \
          "gh issue create --body \\'scripts/banc.sh\\'" $'gh issue create --body-file - <<\'EOF\'\nscripts/banc.sh\nEOF' \
-         "git commit -m 'x' scripts/banc.sh" "gh -R o/r issue create --body 'banc.sh'" "echo 'scripts/banc.sh'" "bash -c 'scripts/banc.sh'"; do
+         "git commit -m 'x' scripts/banc.sh" "gh issue create --body 'banc.sh'x" "gh issue create --body scripts/ban''c.sh" "cd $d && gh issue create --body 'banc.sh'" "gh -R o/r issue create --body 'banc.sh'" "echo 'scripts/banc.sh'" "bash -c 'scripts/banc.sh'"; do
   hk Bash "$d" command "$c"; bloque "banc mention refusée : $c"
 done
 python3 - "$S" <<'PY' && ok "directives : exceptions, directives et avertissements" || ko "directives"

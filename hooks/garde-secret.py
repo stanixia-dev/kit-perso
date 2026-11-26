@@ -630,13 +630,16 @@ def hote_non_local(texte):
 
 def hors_guillemets(s):
     """`s` où chaque segment '…' ou "…" est remplacé par un blanc ; None si un guillemet n'est pas fermé
-    ou si un segment "…" contient $, ` ou \\ (substitution possible)."""
+    si un segment "…" contient $, ` ou \\ (substitution possible),
+    ou si un segment est collé à un caractère non blanc (mot reconstitué)."""
     sortie, i = [], 0
     while i < len(s):
         q = s[i]
         if q in "'\"":
             j = s.find(q, i + 1)
             if j < 0 or (q == '"' and re.search(r"[$`\\]", s[i:j])):
+                return None
+            if (i > 0 and not s[i - 1].isspace()) or (j + 1 < len(s) and not s[j + 1].isspace()):
                 return None
             sortie.append(" ")
             i = j + 1
@@ -717,7 +720,7 @@ def controle_banc(cmd, cwd):
     chemin = cite(cmd)
     if chemin:
         # mention tolérée : texte entre guillemets d'un `gh issue|pr create|edit|comment` ou d'un `git commit`
-        h = hors_guillemets(s)
+        h = hors_guillemets(cmd.strip())
         if (h is not None and re.match(r"(gh (issue|pr) (create|edit|comment)|git commit)( |$)", h)
                 and not re.search(r"[;&|<>()$`\\#\n\r]", h) and not cite(h)):
             return None
