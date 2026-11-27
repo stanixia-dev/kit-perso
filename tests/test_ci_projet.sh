@@ -165,14 +165,38 @@ mkdepot "$TMP/cfg" Cargo.toml Cargo.lock package.json
 printf '# commentaire\n\nruns-on self-hosted linux x64 homelab\n' > "$TMP/cfg/.kit-perso-ci"
 python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/oc" >/dev/null 2>"$TMP/errc"
 TC="$TMP/oc/kit-perso-tests.yml"
-grep -q 'runs-on: ubuntu-24.04' "$TMP/oc/kit-perso-deps.yml" && ! grep -q 'self-hosted' "$TMP/oc/kit-perso-deps.yml" \
-  && [ "$(grep -c '^    runs-on: \[self-hosted, linux, x64, homelab\]$' "$TC")" = 3 ] && ! grep -q 'actions/cache' "$TC" \
+[ "$(grep -c '^    runs-on: \[self-hosted, linux, x64, homelab\]$' "$TC")" = 3 ] && ! grep -q 'actions/cache' "$TC" \
   && [ "$(grep -c 'CARGO_TARGET_DIR=$(dirname "$GITHUB_WORKSPACE")/kit-perso-target' "$TC")" = 1 ] \
   && sed -n '/^  rust:/,/^  node:/p' "$TC" | awk '/actions\/checkout/{c=NR} /CARGO_TARGET_DIR/{t=NR} /rustup/{r=NR} END{exit !(c && t>c && r>t)}' \
   && grep -q 'répertoire persistant' "$TMP/errc" && ok "runs-on auto-hébergé, répertoire persistant" || ko "runs-on auto-hébergé"
 printf 'runs-on ubuntu-latest\n' > "$TMP/cfg/.kit-perso-ci"
-python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/od" >/dev/null 2>&1
+python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/od" >/dev/null 2>"$TMP/errd"
 grep -q '^    runs-on: ubuntu-latest$' "$TMP/od/kit-perso-tests.yml" && grep -q 'actions/cache' "$TMP/od/kit-perso-tests.yml" && ok "runs-on d'un seul label, cache hébergé" || ko "runs-on un label"
+
+# deps suit runs-on (L5)
+rm -f "$TMP/cfg/.kit-perso-ci"
+python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/odd" >/dev/null 2>&1
+DD="$TMP/oc/kit-perso-deps.yml"
+[ "$(diff "$TMP/odd/kit-perso-deps.yml" "$DD" | grep -c '^[<>]')" = 2 ] && grep -q '^    runs-on: \[self-hosted, linux, x64, homelab\]$' "$DD" \
+  && ! grep -q 'ubuntu-24.04\|__RUNS_ON__\|concurrency\|actions/cache' "$DD" && [ "$(grep -c 'persist-credentials: false' "$DD")" = 2 ] \
+  && grep -q 'deps (pull_request_target) y tourne aussi' "$TMP/errc" && ok "deps : runner déclaré" || ko "deps : runner déclaré"
+grep -q '^    runs-on: ubuntu-latest$' "$TMP/od/kit-perso-deps.yml" && ! grep -q 'y tourne aussi' "$TMP/errd" \
+  && ok "deps : un seul label, sans avertissement" || ko "deps : un seul label, sans avertissement"
+grep -q '^    runs-on: ubuntu-24.04$' "$TMP/odd/kit-perso-deps.yml" && ! grep -q '__RUNS_ON__' "$TMP/odd/kit-perso-deps.yml" && ok "deps : défaut ubuntu-24.04" || ko "deps : défaut ubuntu-24.04"
+printf 'runs-on self-hosted linux\n' > "$TMP/cfg/.kit-perso-ci"
+python3 "$G" --depot "$TMP/cfg" --ref $SHA --sans-tests --sortie "$TMP/ost" >/dev/null 2>&1; c=$?
+[ "$c" = 0 ] && grep -q '^    runs-on: ubuntu-24.04$' "$TMP/ost/kit-perso-deps.yml" && [ ! -e "$TMP/ost/kit-perso-tests.yml" ] && ok "sans tests : deps sur ubuntu-24.04 malgré runs-on" || ko "sans tests : deps sur ubuntu-24.04 malgré runs-on"
+printf 'runs-on a$b\n' > "$TMP/cfg/.kit-perso-ci"; rm -rf "$TMP/olab"
+python3 "$G" --depot "$TMP/cfg" --ref $SHA --sortie "$TMP/olab" >/dev/null 2>&1; c=$?
+[ "$c" = 2 ] && [ ! -e "$TMP/olab" ] && ok "refus .kit-perso-ci : label invalide (aucun workflow)" || ko "refus .kit-perso-ci : label invalide (aucun workflow)"
+python3 - <<'PY' "$RACINE/README.md" && ok "README : deps suit runs-on" || ko "README : deps suit runs-on"
+import sys,re
+t=open(sys.argv[1],encoding="utf-8").read()
+assert "reste sur `ubuntu-24.04`" not in t
+m=[l for l in t.splitlines() if "deps" in l and "auto-hébergé" in l and "persist-credentials: false" in l]
+assert m and any("dépôt privé" in l and "fork" in l for l in m)
+PY
+printf 'runs-on self-hosted linux x64 homelab\n' > "$TMP/cfg/.kit-perso-ci"
 
 # refus .kit-perso-ci : sortie 2, rien d'écrit
 refuse_cfg() { # $1 = libellé, $2 = contenu

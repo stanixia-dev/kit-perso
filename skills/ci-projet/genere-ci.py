@@ -246,9 +246,12 @@ def main():
         filtres = ", ".join(f"{k} ({' '.join(v)})" for k, v in cfg["chemins"].items()) or "aucun filtre"
         print(f"genere-ci : CI de tests : runs-on {runs_on(cfg)}, cache {'actions/cache' if hebergeur(cfg) == 'hébergé' else 'répertoire persistant'}, "
               f"filtres : {filtres}", file=sys.stderr)
+        if hebergeur(cfg) == "auto-hébergé":
+            print("genere-ci : runner auto-hébergé : deps (pull_request_target) y tourne aussi ; "
+                  "à réserver à un dépôt privé (README « CI rapide »).", file=sys.stderr)
     os.makedirs(sortie, exist_ok=True)
     fichiers = [DEPS]
-    ecrits = {DEPS: entete + modele("modele-deps.yml").replace("__SHA_KIT__", sha)}
+    ecrits = {DEPS: entete + modele("modele-deps.yml").replace("__SHA_KIT__", sha).replace("__RUNS_ON__", runs_on(cfg))}
     if jobs:
         fichiers.append(TESTS)
         ecrits[TESTS] = entete + modele("modele-tests.yml").replace(MARQUEUR + "\n", "".join(j + "\n" for j in jobs))
