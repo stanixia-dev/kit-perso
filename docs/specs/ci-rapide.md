@@ -99,7 +99,7 @@ Noms de cas = libellés `ok` de `bash tests/test_ci_projet.sh`.
 - [x] Le filtre lance tout si `BASE` est vide, si `HEAD^1` ≠ `BASE` ou si le diff est vide — test : `bash tests/test_ci_projet.sh` (filtre : push lance tout ; filtre : base différente lance tout ; filtre : diff vide lance tout)
 - [x] (négatif) `FILTRES` invalide ou `GITHUB_OUTPUT` absent : sortie 2, rien d'ajouté à la sortie — test : `bash tests/test_ci_projet.sh` (filtre : FILTRES invalide refusé)
 - [x] (négatif) `.kit-perso-ci` avec directive inconnue, `runs-on` double, motif invalide ou job non généré : sortie 2, rien d'écrit — test : `bash tests/test_ci_projet.sh` (refus .kit-perso-ci : …)
-- [x] (négatif) `--sans-tests` ignore un `.kit-perso-ci` invalide (seul `deps`, sortie 0) — test : `bash tests/test_ci_projet.sh` (sans tests : config non lue)
+- [x] (négatif, non-régression) `--sans-tests` ignore un `.kit-perso-ci` invalide (seul `deps`, sortie 0) — test : `bash tests/test_ci_projet.sh` (sans tests : config non lue)
 - [x] (non-régression) Propriétés de sécurité (un événement par workflow, actions épinglées, `persist-credentials: false` sur chaque checkout, pas de `${{` dans un `run`, pas de `secrets.`), job node et ligne run de `deps` inchangés — test : `bash tests/test_ci_projet.sh` (propriétés de sécurité…, job node…, ligne run du job deps sort 0)
 - [x] (non-régression) Toute la suite du kit passe — test : `bash tests/test_hooks.sh`
 - [ ] Sur un projet réel, après copie par l'utilisateur : une PR qui ne touche que les chemins `node` affiche `rust` sauté et `resume` vert ; deux pushs rapprochés annulent la 1re exécution — test : manuel (onglet Checks de la PR)
