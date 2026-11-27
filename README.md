@@ -1,6 +1,6 @@
 # kit-perso
 
-Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, garde-secret, rappel-clear) et les skills (livrer, ticket, ci-projet) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
+Plugin Claude Code personnel de stanixia-dev, qui sert aussi de marketplace. Il regroupe les agents (specs, codeur, relecteur, explorateur), les hooks (garde-git, garde-deps, verifie-manifestes, garde-secret, rappel-clear) et les skills (livrer, ticket, ci-projet, archiver-memoire) à installer une fois pour tous les projets, au lieu de les recopier dans chaque `~/.claude`.
 
 ## Installation
 
@@ -17,7 +17,7 @@ Ou en deux temps dans une session :
 /plugin install kit-perso@kit-perso
 ```
 
-Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 3 skills, 5 hooks (PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; les skills `/kit-perso:livrer`, `/kit-perso:ticket` et `/kit-perso:ci-projet`.
+Vérification : `claude plugin details kit-perso@kit-perso` liste 4 agents, 4 skills, 5 hooks (PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop). Les agents s'appellent `kit-perso:codeur`, etc. ; les skills `/kit-perso:livrer`, `/kit-perso:ticket`, `/kit-perso:ci-projet` et `/kit-perso:archiver-memoire`.
 
 ## Mise à jour
 
@@ -246,6 +246,25 @@ Milestones : `gh api repos/{owner}/{repo}/milestones -f title=v1` (créer), `gh 
 `garde-git` bloque aussi `gh repo set-default` et `gh alias set|import`, et `create` refuse `--parent`, `--blocking` et `--blocked-by`.
 
 Résiduels : `git config alias.x …` puis `git x` (l'alias n'est pas résolu) ; `git -C <dépôt>` ou `--git-dir` vers un dépôt dont la configuration exécute du code (hooks, `core.sshCommand`) ; `cd` vers un autre dépôt avant `gh issue create` ; `gh api` : lecture libre, écriture limitée aux milestones de tout dépôt accessible au jeton ; l'auteur du ticket commenté n'est pas vérifié par un hook (règle du skill).
+
+## Mémoire
+
+La mémoire automatique de Claude Code (`~/.claude/projects/<projet>/memory/`) ne doit garder que le durable. Le kit fournit la règle, que l'utilisateur colle dans son `~/.claude/CLAUDE.md` (le kit n'y touche pas) :
+
+```
+## Mémoire
+- La mémoire garde le durable : décisions et leur raison, conventions, autorisations explicites (avec date), chantier en cours en 2-3 lignes, backlog court.
+- Pas de numéros de PR, de lots ni d'historique de livraison : GitHub (PR, milestones) les garde.
+- Une ligne d'index de MEMORY.md tient en 150 caractères au plus ; un fichier mémoire, en 3 Ko au plus.
+- À la clôture d'un chantier (milestone fermé) : lance /kit-perso:archiver-memoire, puis remets la mémoire du chantier à 2-3 lignes.
+```
+
+L'archive est une copie du dossier `memory/` dans `historique/<date>-memoire/` (suffixe `-2`, `-3`… si elle existe), à côté de `memory/` : Claude Code ne la charge jamais, on restaure par un `cp -r`. Le dossier mémoire est celui du dépôt (partagé entre worktrees) ; `--memoire` est prioritaire et le dossier doit s'appeler `memory`.
+
+Le skill `/kit-perso:archiver-memoire` (invocable par le modèle : il n'écrit qu'une copie) lance le script, montre les lignes d'index de plus de 150 caractères et les fichiers de plus de 3 Ko, puis propose une réécriture au durable.
+Il n'écrit dans `memory/` qu'après un « oui » explicite et ne supprime rien.
+
+Tests : `bash tests/test_archiver_memoire.sh` (appelé par `tests/test_hooks.sh`), `HOME` et dossiers mémoire jetables.
 
 ## Cache du plugin
 
