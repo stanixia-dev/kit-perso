@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Garde-secret : l'agent ne lit pas ~/.ssh, ~/.config/gh ni les .env, n'affiche et n'écrit aucun token, n'en commite aucun.
-Modes : CLI (défaut), --hook pre (PreToolUse), --hook post (PostToolUse / PostToolUseFailure), --hook stop (Stop), --ci (strict).
+Modes : CLI (défaut), --empreintes (empreintes à jour), --exige (bancs exigés par le diff), --hook pre (PreToolUse), --hook post (PostToolUse / PostToolUseFailure), --hook stop (Stop), --ci (strict).
 Le filtre de commandes est une aide ; les barrières sont le masquage de la sortie et le scan du résultat git.
 Sortie 2 + message sur stderr = refus. Aucun message ne contient une valeur de secret."""
-import argparse, fnmatch, glob, hashlib, importlib.util, json, math, os, re, stat, sys, time
+import argparse, fnmatch, glob, hashlib, importlib.util, json, math, os, re, stat, subprocess, sys, time
 from collections import Counter
 from datetime import date
 
@@ -123,7 +123,7 @@ def racine_de(dossier):
 
 # ---------- exceptions ----------
 
-DIRECTIVES = ("script", "masque", "filtre", "depend")
+DIRECTIVES = ("script", "masque", "filtre", "depend", "exige")
 # argument de filtre : `[a-z0-9-]+` sans tiret initial (jamais pris pour une option)
 NOM_FILTRE = r"[a-z0-9][a-z0-9-]*"
 
@@ -154,6 +154,8 @@ def directives(texte):
                 except ValueError:
                     ok = False
             deps_l.append((n, p[1], chemin, p[3] if ok else None))
+            continue
+        if p[0] == "exige":  # lue par `exigences`, sans effet ici
             continue
         if p[0] == "script":
             if len(p) < 2 or not chemin_relatif_sur(p[1]):
@@ -206,6 +208,28 @@ def directives(texte):
             avert.append(f"{EXCEPTIONS} ligne {n} : dépendance mal déclarée, exécution de {script} refusée")
         deps.setdefault(script, []).append((n, chemin, sha))
     return scripts, masques, filtres, deps, avert
+
+def exigences(texte, declares):
+    """({script: [glob]}, avertissements) : directives `exige <script> <glob> AAAA-MM-JJ raison`."""
+    res, avert = {}, []
+    for n, l in enumerate(texte.splitlines(), 1):
+        p = l.split(None, 4)
+        if not p or p[0] != "exige":
+            continue
+        ok = len(p) >= 5 and chemin_relatif_sur(p[1]) and chemin_relatif_sur(p[2], True) \
+            and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p[3])
+        if ok:
+            try:
+                date.fromisoformat(p[3])
+            except ValueError:
+                ok = False
+        if not ok:
+            avert.append(f"{EXCEPTIONS} ligne {n} ignorée (exige : attendu script glob AAAA-MM-JJ raison)")
+        elif p[1] not in declares:
+            avert.append(f"{EXCEPTIONS} ligne {n} ignorée (exige : {p[1]} n'est pas déclaré par `script`)")
+        else:
+            res.setdefault(p[1], []).append(p[2])
+    return res, avert
 
 MAX_FICHIERS = 1000
 
@@ -488,7 +512,43 @@ def empreintes(depot):
         print("empreintes à jour")
     return 1 if ecart else 0
 
+def exige(depot, base):
+    """Mode `--exige` : bancs exigés par les fichiers du diff base...HEAD. Code 0, ou 2 si git échoue."""
+    v = vm()
+    racine = racine_de(depot)
+    if not racine:
+        print(f"{depot} n'est pas un dépôt git", file=sys.stderr)
+        return 2
+    base = base or v.base_par_defaut(racine)
+    r = subprocess.run(["git", "-C", racine, "diff", "--name-only", "-z", "--no-renames", f"{base}...HEAD"],
+                       capture_output=True, text=True, errors="surrogateescape")
+    if r.returncode != 0:
+        print(f"git diff {base}...HEAD a échoué : {r.stderr.strip()}", file=sys.stderr)
+        return 2
+    fichiers = [f for f in r.stdout.split("\0") if f]
+    try:
+        with open(os.path.join(racine, EXCEPTIONS), encoding="utf-8") as f:
+            texte = f.read()
+    except FileNotFoundError:
+        texte = ""
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"{EXCEPTIONS} illisible : {e}", file=sys.stderr)
+        return 2
+    declares = {c for c, _ in directives(texte)[0]}
+    globs, avert = exigences(texte, declares)
+    for a in avert:
+        print(f"⚠ {a}")
+    lignes = []
+    for script in sorted(globs):
+        c = sorted(f for f in fichiers if any(fnmatch.fnmatchcase(f, g) for g in globs[script]))
+        if c:
+            lignes.append(f"exige {script} : {len(c)} fichier(s) ({', '.join(c[:3])}{', …' if len(c) > 3 else ''})")
+    print("\n".join(lignes) if lignes else "aucun banc exigé")
+    return 0
+
 def commande(args):
+    if args.exige:
+        return exige(os.path.abspath(args.depot or os.getcwd()), args.base)
     if args.empreintes:
         return empreintes(os.path.abspath(args.depot or os.getcwd()))
     v = vm()
@@ -1043,6 +1103,7 @@ def main():
     ap.add_argument("--hook", choices=("pre", "post", "stop"))
     ap.add_argument("--ci", action="store_true")
     ap.add_argument("--empreintes", action="store_true")
+    ap.add_argument("--exige", action="store_true")
     args = ap.parse_args()
     global MODE
     MODE = "ci" if args.ci else (args.hook or "cli")

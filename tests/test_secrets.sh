@@ -2,17 +2,30 @@
 # Tests de garde-secret.py sur des dépôts jetables. Lancer depuis n'importe où.
 # Aucun jeton en clair : ils sont construits à l'exécution (concaténation). HOME est un dossier jetable.
 set -u
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
 RACINE=$(cd "$(dirname "$0")/.." && pwd)
 S="$RACINE/hooks/garde-secret.py"
 ECHECS=0
 ok() { echo "OK    $1"; }
 ko() { echo "ECHEC $1"; ECHECS=$((ECHECS + 1)); }
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+# Garde-fou : le dépôt du kit ne doit pas bouger pendant les tests (branche, HEAD, arbre de travail)
+ETAT_KIT_DEBUT=$(git -C "$RACINE" branch --show-current; git -C "$RACINE" rev-parse HEAD; git -C "$RACINE" status --porcelain)
+verifie_kit() {
+  local fin; fin=$(git -C "$RACINE" branch --show-current; git -C "$RACINE" rev-parse HEAD; git -C "$RACINE" status --porcelain)
+  [ "$fin" = "$ETAT_KIT_DEBUT" ] || { echo "ECHEC le dépôt du kit a changé pendant les tests (branche, HEAD ou arbre)"; return 1; }
+}
+TMP=$(mktemp -d) && [ -d "$TMP" ] || exit 1
+trap 'rc=$?; rm -rf "$TMP"; verifie_kit || rc=1; exit $rc' EXIT
 export HOME="$TMP/home"
 mkdir -p "$HOME/.ssh" "$HOME/.config/gh"
 unset GITHUB_STEP_SUMMARY
 g() { git -c user.name=t -c user.email=t@t "$@"; }
+# Garde-fou : refuse de lancer git ailleurs que dans un dépôt jetable (jamais le dépôt du kit)
+case "$TMP" in "$RACINE"|"$RACINE"/*) echo "ABANDON : dossier temporaire dans le dépôt du kit"; exit 1 ;; esac
+sur() { # $1 = dossier ; quitte si ce n'est pas la racine d'un dépôt situé sous $TMP
+  case "$1" in "$TMP"/?*) ;; *) echo "ABANDON : dépôt hors du dossier temporaire (« $1 »)"; exit 1 ;; esac
+  [ "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" = "$1" ] || { echo "ABANDON : « $1 » n'est pas un dépôt jetable"; exit 1; }
+}
 
 # ---------- jetons de test ----------
 A36=abcdefghijklmnopqrstuvwxyz0123456789
@@ -95,7 +108,7 @@ depot() { # $1 = nom ; dépôt avec un commit initial sur main, affiche son chem
   git -C "$d" init -q -b main
   echo base > "$d/LISEZMOI"
   git -C "$d" add -A
-  g -C "$d" commit -qm init
+  g -C "$d" commit -qm init >/dev/null
   echo "$d"
 }
 valide() { git -C "$1" add -A && g -C "$1" commit -qm "$2"; }
@@ -794,6 +807,58 @@ for l in 'depend scripts/banc.sh ../x 2026-11-26 r' 'depend scripts/banc.sh' 'de
   SORTIE=$(python3 "$S" --empreintes --depot "$d" 2>&1); CODE=$?
   [ "$CODE" = 1 ] && grep -q '^ligne 5 : ' <<<"$SORTIE" && ! grep -q 'empreintes à jour' <<<"$SORTIE" && ok "depend : --empreintes, signale « $l »" || ko "depend : --empreintes, signale « $l » ($CODE)"
 done
+
+# ---------- banc exigé ----------
+exb() { # $1 = nom, $2.. = lignes ajoutées à .garde-secret-exceptions ; branche claude/x créée, fichiers à ajouter ensuite
+  local d; d=$(banc "$1"); shift
+  for l in "$@"; do printf '%s\n' "$l" >> "$d/.garde-secret-exceptions"; done
+  sur "$d"
+  git -C "$d" checkout -q -b claude/x >/dev/null 2>&1
+  echo "$d"
+}
+fic() { # $1 = dépôt, $2.. = fichiers ajoutés puis commités
+  local d=$1; shift
+  sur "$d"
+  for f in "$@"; do mkdir -p "$d/$(dirname "$f")"; echo x > "$d/$f"; done
+  git -C "$d" add -- "$@" && g -C "$d" commit -qm ajout
+}
+d=$(exb ex1 'exige scripts/banc.sh web/* 2026-11-26 interface'); fic "$d" web/a.ts
+lance "$d" --exige --base main
+vaut "exige : chemin couvert" 0
+[ "$SORTIE" = "exige scripts/banc.sh : 1 fichier(s) (web/a.ts)" ] && ok "exige : sortie chemin couvert" || ko "exige : sortie chemin couvert ($SORTIE)"
+d=$(exb ex2 'exige scripts/banc.sh web/* 2026-11-26 a' 'exige scripts/banc.sh lib/* 2026-11-26 b'); sur "$d"; fic "$d" web/a.ts web/b.ts lib/c.ts lib/d.ts
+lance "$d" --exige --base main
+[ "$SORTIE" = "exige scripts/banc.sh : 4 fichier(s) (lib/c.ts, lib/d.ts, web/a.ts, …)" ] && ok "exige : union" || ko "exige : union ($SORTIE)"
+d=$(exb ex3 'exige scripts/banc.sh web/* 2026-11-26 a'); sur "$d"; fic "$d" web/sous/b.ts
+lance "$d" --exige --base main
+[ "$SORTIE" = "exige scripts/banc.sh : 1 fichier(s) (web/sous/b.ts)" ] && ok "exige : sous-dossier" || ko "exige : sous-dossier ($SORTIE)"
+d=$(exb ex4 'exige scripts/banc.sh web/* 2026-11-26 a'); sur "$d"; fic "$d" doc/a.md
+lance "$d" --exige --base main
+vaut "exige : hors glob, code" 0
+[ "$SORTIE" = "aucun banc exigé" ] && ok "exige : hors glob" || ko "exige : hors glob ($SORTIE)"
+d=$(depot ex5); sur "$d"; git -C "$d" checkout -q -b claude/x; fic "$d" web/a.ts
+lance "$d" --exige --base main
+vaut "exige : sans fichier, code" 0
+[ "$SORTIE" = "aucun banc exigé" ] && ok "exige : sans fichier" || ko "exige : sans fichier ($SORTIE)"
+i=0
+for l in 'exige scripts/autre.sh web/* 2026-11-26 r' 'exige scripts/banc.sh ../x 2026-11-26 r' 'exige scripts/banc.sh web/* 2026-13-45 r' 'exige scripts/banc.sh web/*'; do
+  i=$((i + 1)); d=$(exb ex6$i "$l"); sur "$d"; fic "$d" web/a.ts
+  lance "$d" --exige --base main
+  [ "$CODE" = 0 ] && grep -q '^⚠ ' <<<"$SORTIE" && grep -q '^aucun banc exigé$' <<<"$SORTIE" && ok "exige : ligne ignorée « $l »" || ko "exige : ligne ignorée « $l » ($CODE $SORTIE)"
+done
+d=$(exb ex7 'exige scripts/banc.sh web/* 2026-11-26 a'); sur "$d"; fic "$d" web/a.ts
+lance "$d" --exige --base inconnue
+vaut "exige : base inconnue" 2
+grep -q 'a échoué' <<<"$ERREUR" && ok "exige : base inconnue, message" || ko "exige : base inconnue, message ($ERREUR)"
+# une ligne exige valide n'est ni une exception invalide (lit_exceptions) ni un masque (directives)
+LIGNE_EXIGE='exige lib/*.txt 2026-11-26 r'
+RES=$(python3 -c 'import importlib.util, sys
+s = importlib.util.spec_from_file_location("gs", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+t = sys.argv[2] + "\n"
+exc, av = m.lit_exceptions(t)
+_, masques, _, _, av2 = m.directives(t)
+print(len(exc), len(av), len(masques), len(av2))' "$S" "$LIGNE_EXIGE")
+[ "$RES" = "0 0 0 0" ] && ok "exige : pas une exception, pas un masque" || ko "exige : pas une exception, pas un masque ($RES)"
 
 # ---------- FIN ----------
 exit $((ECHECS > 0))

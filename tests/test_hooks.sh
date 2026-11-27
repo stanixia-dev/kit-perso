@@ -2,6 +2,15 @@
 # Tests des hooks par stdin JSON. Lancer depuis n'importe où.
 set -u
 cd "$(dirname "$0")/.." || exit 1
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
+RACINE=$(pwd)
+# Garde-fou : le dépôt du kit ne doit pas bouger pendant les tests (branche, HEAD, arbre de travail)
+ETAT_KIT_DEBUT=$(git -C "$RACINE" branch --show-current; git -C "$RACINE" rev-parse HEAD; git -C "$RACINE" status --porcelain)
+verifie_kit() {
+  local fin; fin=$(git -C "$RACINE" branch --show-current; git -C "$RACINE" rev-parse HEAD; git -C "$RACINE" status --porcelain)
+  [ "$fin" = "$ETAT_KIT_DEBUT" ] || { echo "ECHEC le dépôt du kit a changé pendant les tests (branche, HEAD ou arbre)"; return 1; }
+}
+trap 'rc=$?; verifie_kit || rc=1; exit $rc' EXIT
 ECHECS=0
 ok() { echo "OK    $1"; }
 ko() { echo "ECHEC $1"; ECHECS=$((ECHECS + 1)); }

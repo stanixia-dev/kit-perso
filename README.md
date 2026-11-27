@@ -140,7 +140,7 @@ Tests : `bash tests/test_secrets.sh` (appelé par `tests/test_hooks.sh`), `HOME`
 
 ### Scripts de banc
 
-Pour lancer une commande de test qui consomme des identifiants de banc local (`.banc/*.env`) sans que l'agent les lise, l'utilisateur déclare dans `.garde-secret-exceptions` quatre directives (un premier mot `script`, `masque`, `filtre` ou `depend` ; ce ne sont ni des exceptions ni des lignes invalides) :
+Pour lancer une commande de test qui consomme des identifiants de banc local (`.banc/*.env`) sans que l'agent les lise, l'utilisateur déclare dans `.garde-secret-exceptions` cinq directives (un premier mot `script`, `masque`, `filtre`, `depend` ou `exige` ; ce ne sont ni des exceptions ni des lignes invalides) :
 
 ```
 script scripts/captures-banc.sh <sha256> 2026-11-04 captures Playwright du banc local
@@ -149,15 +149,22 @@ filtre scripts/captures-banc.sh tests/e2e/*.spec.ts 2026-11-26 une cible à la f
 depend scripts/captures-banc.sh tests/e2e/session.ts <sha256> 2026-11-26 lancé par le script
 depend scripts/captures-banc.sh tests/e2e/lib <sha256> 2026-11-26 modules importés (dossier)
 depend scripts/captures-banc.sh package.json <sha256> 2026-11-26 commande npm run
+exige scripts/captures-banc.sh web/* 2026-11-26 interface web
+exige scripts/captures-banc.sh packages/kit/* 2026-11-26 composants partagés
 ```
 
-(le glob `tests/e2e/*.spec.ts` n'est qu'un exemple.)
+(les globs `tests/e2e/*.spec.ts`, `web/*` et `packages/kit/*` ne sont que des exemples : le kit ne contient aucun chemin de projet.)
 
 - `script <chemin> <sha256> <AAAA-MM-JJ> <raison>` : chemin relatif à la racine (`[A-Za-z0-9._/-]+`, sans `..`), empreinte complète de 64 hex donnée par `sha256sum <chemin>`. Empreinte ou date mal formée : exécution refusée.
 - `masque <glob> <AAAA-MM-JJ> <raison>` : les valeurs de ces fichiers (clés au nom de secret : `PASSW`, `TOKEN`…, comme pour `.env`) rejoignent les valeurs masquées dans toute sortie.
 - `filtre <script> <glob> <AAAA-MM-JJ> <raison>` : `<script>` est le chemin d'une directive `script` du même fichier ; le dernier composant du glob contient exactement un `*` et aucun `?`, `[` ou `]`. Le nom d'une cible est la partie couverte par le `*` (`*.spec.ts` sur `connexion.spec.ts` donne `connexion`) ; seuls les noms qui valent `[a-z0-9][a-z0-9-]*` sont admis. Plusieurs lignes pour un même script : union. La liste est relue à chaque appel. Ligne mal formée ou script non déclaré : avertissement, aucun argument admis. Le nom est passé au script en `$1` (à citer `"$1"` dans le script).
 
 - `depend <script> <chemin> <sha256> <AAAA-MM-JJ> <raison>` : fichiers ou dossiers dont dépend un script déclaré (`<script>` est le chemin d'une directive `script` du même fichier, sinon la ligne est ignorée avec un avertissement). `<chemin>` : relatif, sans joker. Fichier : `sha256sum <chemin>` ; dossier : empreinte d'arbre (parcours sans exclusion, liens symboliques et fichiers spéciaux refusés, 1000 fichiers au plus), donnée par `--empreintes`. Plusieurs lignes par script, toutes vérifiées au lancement ; ligne mal formée : exécution refusée. Un script sans `depend` se comporte comme avant. L'agent garde le droit d'éditer les dépendances ; c'est le lancement qui est refusé tant que l'empreinte diverge (le message nomme les fichiers).
+
+- `exige <script> <glob> <AAAA-MM-JJ> <raison>` : si le diff de la branche (`git diff --name-only --no-renames <base>...HEAD`) touche un fichier qui correspond au glob (`fnmatch` sur le chemin relatif ; `*` couvre aussi `/`, donc `web/*` couvre tout `web/`), le relecteur exige que la suite complète de `<script>` (directive `script` du même fichier, sinon la ligne est ignorée avec un avertissement) ait tourné, verte, sur le HEAD relu. Plusieurs lignes par script : union. Ligne mal formée : avertissement, ligne ignorée (le relecteur la signale en mineur). Sans directive `exige`, rien ne change.
+  - `python3 hooks/garde-secret.py --exige [--base <ref>] [--depot <dossier>]` liste les scripts exigés et les premiers fichiers concernés, ou `aucun banc exigé` ; code 2 si la base est inconnue ou si ce n'est pas un dépôt git.
+  - Le codeur lance la suite après son dernier commit et met au rapport `Banc : <script> — <N> réussis / <M> échecs sur <sha>`. L'orchestrateur recopie ces lignes dans le brief du relecteur ; si la ligne manque ou si son SHA diffère du HEAD, le relecteur relance la suite lui-même. Lancement impossible : bloquant « banc exigé non lancé » ; suite rouge : bloquant « banc rouge », sans échappatoire (une suite rouge sur `main` bloque toute PR qui touche les globs). `livrer` refuse s'il n'a pas de ligne verte sur le HEAD, et ajoute à la PR une section Banc : `Banc : <N> réussis / <M> échecs sur <sha court>`.
+  - Limite : aucun hook n'écrit de trace d'exécution ; la ligne `Banc :` du codeur n'est pas vérifiable (seul son SHA est comparé au HEAD), seule une exécution par le relecteur l'est. Suite possible, non faite : un job CI qui lance le banc sur un runner dédié.
 
 Flux de mise à jour des dépendances : l'agent modifie une dépendance, le lancement est refusé ; l'utilisateur relit le diff, lance `python3 hooks/garde-secret.py --empreintes [--depot <dossier>]` (affiche les lignes `script` et `depend` à jour, signale les chemins absents et les scripts sans `depend`, code 1 s'il y a un écart, n'écrit jamais le fichier) et recopie les lignes. Conseils : épingler la fermeture des imports et le `package.json` des commandes `npm run` ; pour Python, épingler le dossier et lancer avec `PYTHONDONTWRITEBYTECODE=1` (un `.pyc` planté peut remplacer un `.py` épinglé).
 
@@ -198,9 +205,10 @@ Les hooks protègent déjà les réglages Claude (`~/.claude/settings*.json`, `*
 Pas de `Read(**/.env.*)` : un refus l'emporte sur tout et rendrait `.env.example` illisible.
 
 
-## Brief du codeur
+## Briefs
 
 - Le brief de l'orchestrateur au codeur, avec ou sans lots (`Objectif`, `Branche`, `Fichiers`, `Contraintes`, `Fait quand`) peut porter une ligne `Autorisations : <ce que l'utilisateur a explicitement autorisé, avec la date>` (`aucune` sinon), reportée de la mémoire de l'orchestrateur ; elle n'autorise pas à contourner un hook ou un refus : si une action reste refusée, le codeur s'arrête et le signale au rapport.
+- Le brief de l'orchestrateur au relecteur reprend les lignes `Banc : <script> — … sur <sha>` du rapport du codeur, quand il y en a (voir « Scripts de banc »).
 
 ## Flux avec lots
 

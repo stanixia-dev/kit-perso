@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.7.0 — 2026-11-26
+
+- Banc exigé : directive `exige <script> <glob> <date> <raison>` de `.garde-secret-exceptions` et option `garde-secret.py --exige` ; si le diff touche un glob déclaré, le relecteur bloque tant que la suite n'a pas tourné verte sur le HEAD (ligne `Banc :` du codeur ou relancement), `livrer` ajoute une section Banc à la PR. Sans directive, rien ne change (#43).
+
 ## 3.6.2 — 2026-11-26
 
 - `codeur` : chaque commit contient le correctif et son test (`git show --stat` avant de rendre) ; le rapport donne le SHA du HEAD testé et le temps passé en boucles tests/banc. README : section « Brief du codeur » (la ligne `Autorisations` vaut avec ou sans lots) et nettoyage manuel du cache du plugin (#48).
