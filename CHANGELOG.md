@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.9.0 — 2026-11-26
+
+- ci-projet : fichier facultatif `.kit-perso-ci` (`runs-on`, `chemins <job> <motif>…`), cache Cargo et npm (`actions/cache` épinglé sur runner hébergé, répertoire persistant `CARGO_TARGET_DIR` sur runner auto-hébergé), job `filtre` fail-safe (`filtre-chemins.py`), job `resume` toujours généré (checks à exiger : `deps` + `resume`) et `concurrency` dans `kit-perso-tests.yml`. README : section « CI rapide » et 2e runner (#47).
+
 ## 3.8.0 — 2026-11-26
 
 - Mémoire durable : règle à coller dans `~/.claude/CLAUDE.md` (README, section « Mémoire ») et skill `/kit-perso:archiver-memoire`, qui copie `memory/` dans `historique/<date>-memoire/`, signale les lignes d'index de plus de 150 caractères et les fichiers de plus de 3 Ko, et propose une réécriture au durable après accord (#45).
