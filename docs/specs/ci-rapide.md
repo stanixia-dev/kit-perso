@@ -125,5 +125,5 @@ bash tests/test_hooks.sh
   Fichiers : `skills/ci-projet/filtre-chemins.py`, `skills/ci-projet/genere-ci.py`, `tests/test_ci_projet.sh`
   Fait quand : cas filtre, structure et checks verts — `bash tests/test_ci_projet.sh`
 - [x] L3 — Documentation, version, clôture (étape 6)
-  Fichiers : `README.md`, `skills/ci-projet/SKILL.md`, `CHANGELOG.md`, `.claude-plugin/plugin.json`
+  Fichiers : `README.md`, `skills/ci-projet/SKILL.md`, `CHANGELOG.md`, `.claude-plugin/plugin.json`, `tests/test_ci_projet.sh`
   Fait quand : suite complète verte — `bash tests/test_hooks.sh`
