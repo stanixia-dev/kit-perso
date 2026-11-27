@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.10.0 — 2026-11-27
+
+- ci-projet : le job `deps` de `kit-perso-deps.yml` suit la ligne `runs-on` de `.kit-perso-ci` (défaut `ubuntu-24.04` ; inchangé avec `--sans-tests`) ; avertissement stderr en mode auto-hébergé. README : puce « `deps` sur runner auto-hébergé » (#47).
+
 ## 3.9.0 — 2026-11-26
 
 - ci-projet : fichier facultatif `.kit-perso-ci` (`runs-on`, `chemins <job> <motif>…`), cache Cargo et npm (`actions/cache` épinglé sur runner hébergé, répertoire persistant `CARGO_TARGET_DIR` sur runner auto-hébergé), job `filtre` fail-safe (`filtre-chemins.py`), job `resume` toujours généré (checks à exiger : `deps` + `resume`) et `concurrency` dans `kit-perso-tests.yml`. README : section « CI rapide » et 2e runner (#47).

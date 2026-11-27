@@ -7,7 +7,7 @@ jobs:
   # pull_request_target exécute le workflow de main : la PR ne peut ni changer le SHA du kit ni retirer ce contrôle.
   # Le code de la PR n'est jamais exécuté, seulement lu par git.
   deps:
-    runs-on: ubuntu-24.04
+    runs-on: __RUNS_ON__
     timeout-minutes: 5
     permissions:
       contents: read

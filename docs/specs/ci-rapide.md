@@ -112,12 +112,12 @@ Noms de cas = libellés `ok` de `bash tests/test_ci_projet.sh`.
 - [x] (négatif, non-régression) `--sans-tests` ignore un `.kit-perso-ci` invalide (seul `deps`, sortie 0) — test : `bash tests/test_ci_projet.sh` (sans tests : config non lue)
 - [x] (non-régression) Propriétés de sécurité (un événement par workflow, actions épinglées, `persist-credentials: false` sur chaque checkout, pas de `${{` dans un `run`, pas de `secrets.`), job node et ligne run de `deps` inchangés — test : `bash tests/test_ci_projet.sh` (propriétés de sécurité…, job node…, ligne run du job deps sort 0)
 - [x] (non-régression) Toute la suite du kit passe — test : `bash tests/test_hooks.sh`
-- [ ] (L5) `runs-on self-hosted linux x64 homelab` : `kit-perso-deps.yml` a `runs-on: [self-hosted, linux, x64, homelab]`, ne contient ni `ubuntu-24.04` ni `__RUNS_ON__`, et ne diffère du `deps` par défaut que par cette ligne (donc ni `concurrency`, ni `actions/cache`, toujours deux `persist-credentials: false`) ; stderr contient `deps (pull_request_target) y tourne aussi` — test : `bash tests/test_ci_projet.sh` (deps : runner déclaré)
-- [ ] (L5) `runs-on ubuntu-latest` : `deps` a `runs-on: ubuntu-latest` et stderr n'a pas l'avertissement auto-hébergé — test : `bash tests/test_ci_projet.sh` (deps : un seul label, sans avertissement)
-- [ ] (L5, non-régression) Sans `.kit-perso-ci` : `deps` a `runs-on: ubuntu-24.04` et aucun `__RUNS_ON__` — test : `bash tests/test_ci_projet.sh` (deps : défaut ubuntu-24.04)
-- [ ] (L5, négatif, non-régression) `--sans-tests` avec un `.kit-perso-ci` valide `runs-on self-hosted …` : config non lue, `deps` sur `ubuntu-24.04`, sortie 0 — test : `bash tests/test_ci_projet.sh` (sans tests : deps sur ubuntu-24.04 malgré runs-on)
-- [ ] (L5, négatif, non-régression) Label invalide dans `runs-on` : sortie 2, ni `kit-perso-deps.yml` ni `kit-perso-tests.yml` écrits — test : `bash tests/test_ci_projet.sh` (refus .kit-perso-ci : label invalide)
-- [ ] (L5) README : la phrase « `deps` reste sur `ubuntu-24.04` » a disparu ; la puce sur `deps` auto-hébergé cite `persist-credentials: false`, « dépôt privé » et « fork » — test : `bash tests/test_ci_projet.sh` (README : deps suit runs-on)
+- [x] (L5) `runs-on self-hosted linux x64 homelab` : `kit-perso-deps.yml` a `runs-on: [self-hosted, linux, x64, homelab]`, ne contient ni `ubuntu-24.04` ni `__RUNS_ON__`, et ne diffère du `deps` par défaut que par cette ligne (donc ni `concurrency`, ni `actions/cache`, toujours deux `persist-credentials: false`) ; stderr contient `deps (pull_request_target) y tourne aussi` — test : `bash tests/test_ci_projet.sh` (deps : runner déclaré)
+- [x] (L5) `runs-on ubuntu-latest` : `deps` a `runs-on: ubuntu-latest` et stderr n'a pas l'avertissement auto-hébergé — test : `bash tests/test_ci_projet.sh` (deps : un seul label, sans avertissement)
+- [x] (L5, non-régression) Sans `.kit-perso-ci` : `deps` a `runs-on: ubuntu-24.04` et aucun `__RUNS_ON__` — test : `bash tests/test_ci_projet.sh` (deps : défaut ubuntu-24.04)
+- [x] (L5, négatif, non-régression) `--sans-tests` avec un `.kit-perso-ci` valide `runs-on self-hosted …` : config non lue, `deps` sur `ubuntu-24.04`, sortie 0 — test : `bash tests/test_ci_projet.sh` (sans tests : deps sur ubuntu-24.04 malgré runs-on)
+- [x] (L5, négatif, non-régression) Label invalide dans `runs-on` : sortie 2, ni `kit-perso-deps.yml` ni `kit-perso-tests.yml` écrits — test : `bash tests/test_ci_projet.sh` (refus .kit-perso-ci : label invalide)
+- [x] (L5) README : la phrase « `deps` reste sur `ubuntu-24.04` » a disparu ; la puce sur `deps` auto-hébergé cite `persist-credentials: false`, « dépôt privé » et « fork » — test : `bash tests/test_ci_projet.sh` (README : deps suit runs-on)
 - [ ] Sur un projet réel, après copie par l'utilisateur : une PR qui ne touche que les chemins `node` affiche `rust` sauté et `resume` vert ; deux pushs rapprochés annulent la 1re exécution ; `deps` tourne sur le runner auto-hébergé (nom du runner dans l'étape « Set up job » du job `deps`) — test : manuel (onglet Checks de la PR)
 
 ## Tests
@@ -147,7 +147,7 @@ bash tests/test_hooks.sh
 
 > Coupure PR
 
-- [ ] L5 — `deps` sur le `runs-on` déclaré, doc et version 3.10.0 (étapes 7-8)
+- [x] L5 — `deps` sur le `runs-on` déclaré, doc et version 3.10.0 (étapes 7-8)
   Fichiers : `skills/ci-projet/modele-deps.yml`, `skills/ci-projet/genere-ci.py`, `tests/test_ci_projet.sh`, `README.md`, `CHANGELOG.md`, `.claude-plugin/plugin.json`
   Fait quand : cas « deps : … », « sans tests : deps sur ubuntu-24.04 malgré runs-on », « refus .kit-perso-ci : label invalide » et « README : deps suit runs-on » verts, suite complète verte — `bash tests/test_ci_projet.sh && bash tests/test_hooks.sh`
 
