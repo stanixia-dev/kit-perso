@@ -1,6 +1,6 @@
 # Mémoire durable et archivage de l'historique
 
-Statut : en cours
+Statut : livrée
 Tickets : #45
 
 ## Objectif
@@ -87,7 +87,7 @@ Interdit à la skill : supprimer un fichier de `memory/` ou de `historique/` san
 - [x] Sans `--memoire` : le dossier mémoire est dérivé du dépôt (le même depuis un worktree et un sous-dossier), et d'un dossier hors git, `/tmp/a.b` donnant `-tmp-a-b` — test : `bash tests/test_archiver_memoire.sh` (cas « dérivation »)
 - [x] (non-régression) La commande de la skill depuis le cache du plugin n'est bloquée ni par `garde-deps` ni par `garde-git` — test : `bash tests/test_hooks.sh`
 - [x] Le plugin se valide avec 4 skills, et le README contient le bloc de règle exact de la section Conception — test : `claude plugin validate --strict . && grep -q 'Une ligne d.index de MEMORY.md tient en 150 caractères au plus' README.md`
-- [ ] La skill n'écrit dans `memory/` qu'après un « oui » de l'utilisateur et ne supprime rien — test : manuel (lancer `/kit-perso:archiver-memoire` dans un projet de test, répondre « non » : `memory/` est inchangé) ; vérification manuelle par l'utilisateur après fusion
+- [x] La skill n'écrit dans `memory/` qu'après un « oui » de l'utilisateur et ne supprime rien — test : manuel (lancer `/kit-perso:archiver-memoire` dans un projet de test, répondre « non » : `memory/` est inchangé) ; vérifié par l'utilisateur le 2026-11-27 (seule la copie dans `historique/` est créée)
 - [x] `plugin.json` en 3.8.0, CHANGELOG à jour, aucun nom de projet propre dans le kit — test : manuel (`grep -rniw hive skills agents hooks README.md` ne renvoie rien de nouveau)
 
 ## Tests
@@ -100,7 +100,7 @@ claude plugin validate --strict .
 
 ## Questions ouvertes
 
-- Version : la branche `claude/parcours-banc` vise 3.7.0 et modifie aussi le README (« Scripts de banc », section « Brief du codeur » renommée), le CHANGELOG et `plugin.json`. Cette spec vise 3.8.0. Si elle est fusionnée la première, il faudra la ramener à 3.7.0 et rebaser l'autre branche ; les conflits sur le haut du CHANGELOG et sur `plugin.json` sont certains.
+- Version : résolue, 3.8.0 (la 3.7.0 de `claude/parcours-banc` a été fusionnée avant).
 
 ## Lots
 
