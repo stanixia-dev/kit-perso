@@ -245,8 +245,8 @@ EMPTY=$(g -C "$TMP/fl" rev-parse f3); filtre "$EMPTY" "$FN" "$FJ"; grep -qx 'nod
 bad=0
 for mauvais in '' 'pas du json' '[]' '{}' '{"rust":"x"}' '{"rust":[]}' '{"rust":[1]}'; do
   filtre "$FU" "$FB" "$mauvais"; c=$?
-  [ "$c" = 2 ] && [ ! -s "$TMP/fout" ] || { ko "filtre : FILTRES invalide ($mauvais)"; bad=1; }
+  [ "$c" = 2 ] && [ ! -s "$TMP/fout" ] && [ -f "$F" ] && grep -q 'filtre-chemins :' "$TMP/fmsg" || { ko "filtre : FILTRES invalide ($mauvais)"; bad=1; }
 done
-( cd "$TMP/fl" && env -u GITHUB_OUTPUT BASE=$FB FILTRES="$FJ" python3 "$F" ) >/dev/null 2>&1; [ $? = 2 ] && [ "$bad" = 0 ] && ok "filtre : FILTRES invalide refusé" || ko "filtre : GITHUB_OUTPUT absent"
+( cd "$TMP/fl" && env -u GITHUB_OUTPUT BASE=$FB FILTRES="$FJ" python3 "$F" ) >"$TMP/fmsg" 2>&1; [ $? = 2 ] && [ -f "$F" ] && grep -q 'filtre-chemins :' "$TMP/fmsg" && [ "$bad" = 0 ] && ok "filtre : FILTRES invalide refusé" || ko "filtre : GITHUB_OUTPUT absent"
 
 exit $((ECHECS > 0))
