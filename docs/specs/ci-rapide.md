@@ -127,3 +127,9 @@ bash tests/test_hooks.sh
 - [x] L3 — Documentation, version, clôture (étape 6)
   Fichiers : `README.md`, `skills/ci-projet/SKILL.md`, `CHANGELOG.md`, `.claude-plugin/plugin.json`, `tests/test_ci_projet.sh`
   Fait quand : suite complète verte — `bash tests/test_hooks.sh`
+
+> Coupure PR
+
+- [ ] L4 — Validation manuelle sur un projet réel, après fusion (critère d'acceptation manuel)
+  Fichiers : `docs/specs/ci-rapide.md` (cocher le critère manuel, `Statut : livrée`, `git mv` vers `docs/specs/archives/`)
+  Fait quand : l'utilisateur confirme dans l'onglet Checks d'une PR du projet que `rust` est sauté, `resume` vert, et qu'un 2e push annule la 1re exécution
