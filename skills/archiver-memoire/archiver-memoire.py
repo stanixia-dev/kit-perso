@@ -86,10 +86,15 @@ def main():
     while os.path.lexists(cible):
         n += 1
         cible = f"{base}-{n}"
+    hist_neuf = not os.path.lexists(hist)
     try:
         os.makedirs(hist, exist_ok=True)
         shutil.copytree(m, cible, symlinks=True)
     except OSError as e:
+        # « rien d'écrit » : on retire l'archive partielle et historique/ s'il vient d'être créé.
+        shutil.rmtree(cible, ignore_errors=True)
+        if hist_neuf:
+            shutil.rmtree(hist, ignore_errors=True)
         refus(f"échec d'écriture : {e}")
 
     sortie = [f"Mémoire : {m}", f"Archive : {cible} ({len(liste)} fichiers)"]
